@@ -13,7 +13,7 @@ More details can be found in [xxx]()
 
 ### Build through sources
 1. Download the source code.
-- You can simply download from [xxx]()
+- You can simply download from [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.1.0.zip)
 - You can clone the source codes
 ```bash
 git clone https://github.com/volcengine/ve-tos-cpp-sdk
