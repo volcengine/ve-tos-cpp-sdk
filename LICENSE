@@ -186,7 +186,7 @@
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+   Copyright 2021 Bytedance Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -199,3 +199,10 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+   Third party files or components:
+   Google C++ Testing Framework (https://github.com/google/googletest/), Copyright 2008, Google Inc.
+   SPDX license identifier: BSD-3-Clause
+   ======
+   nlohmann.json.decomposed (https://github.com/nlohmann/json), Copyright (c) <year> <copyright holders>
+   SPDX license identifier: MIT
