@@ -1,8 +1,0 @@
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/install/strip.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/install.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/list_install_components.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/rebuild_cache.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/edit_cache.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/demo.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/install/local.dir
-/Users/bytedance/CLionProjects/github.com/ve-tos-cpp-sdk/sdk/cmake-build-clang/CMakeFiles/ve-tos-cpp-sdk-lib.dir

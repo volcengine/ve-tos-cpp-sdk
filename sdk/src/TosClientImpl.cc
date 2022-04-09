@@ -7,6 +7,7 @@
 #include "transport/DefaultTransport.h"
 #include "transport/TransportConfig.h"
 #include "utils/MimeType.h"
+#include <cstring>
 
 using namespace VolcengineTos;
 
