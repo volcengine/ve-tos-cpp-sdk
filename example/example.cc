@@ -492,23 +492,6 @@ void preSignedUrl(const std::shared_ptr<TosClient> &client, const std::string & 
   std::cout << "the preSigned url is: " << res.result() << std::endl;
 }
 
-void testMultiThread(const std::shared_ptr<TosClient> &client, std::string bucket, std::string key) {
-  putObject(client, bucket, key);
-  getObject(client, bucket, key);
-  headObject(client, bucket, key);
-  deleteObject(client, bucket, key);
-  appendObject(client, bucket, key);
-  putObjectAcl(client, bucket, key);
-  getObjectAcl(client, bucket, key);
-  listObjects(client, bucket);
-  listObjectVersion(client, bucket);
-  deleteObjectVersion(client, bucket);
-  copyObject(client, bucket);
-  uploadPart(client, bucket, key);
-  uploadPartAbort(client, bucket, key);
-  listMultipart(client, bucket);
-  listUploadedParts(client, bucket, key);
-}
 int main(){
   std::string endpoint("your endpoint");
   std::string region("your region");
@@ -518,7 +501,21 @@ int main(){
   std::string key("your object key");
   InitializeClient();
   TosClient client(endpoint, region, ak, sk);
-  std::thread t1(testMultiThread, std::make_shared<TosClient>(client), bucket, key);
-  t1.join();
+  auto cli = std::make_shared<TosClient>(client);
+  putObject(cli, bucket, key);
+  getObject(cli, bucket, key);
+  headObject(cli, bucket, key);
+  deleteObject(cli, bucket, key);
+  appendObject(cli, bucket, key);
+  putObjectAcl(cli, bucket, key);
+  getObjectAcl(cli, bucket, key);
+  listObjects(cli, bucket);
+  listObjectVersion(cli, bucket);
+  deleteObjectVersion(cli, bucket);
+  copyObject(cli, bucket);
+  uploadPart(cli, bucket, key);
+  uploadPartAbort(cli, bucket, key);
+  listMultipart(cli, bucket);
+  listUploadedParts(cli, bucket, key);
   CloseClient();
 }
