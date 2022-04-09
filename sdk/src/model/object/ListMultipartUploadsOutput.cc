@@ -2,6 +2,40 @@
 #include "../src/external/json/json.hpp"
 using namespace nlohmann;
 
+VolcengineTos::UploadInfo parseUploadInfo(const json &j) {
+  VolcengineTos::UploadInfo info;
+  std::string tmp;
+  if (j.contains("Key")){
+    j.at("Key").get_to(tmp);
+    info.setKey(tmp);
+  }
+  if (j.contains("UploadId")) {
+    j.at("UploadId").get_to(tmp);
+    info.setUploadId(tmp);
+  }
+  if (j.contains("Owner")) {
+    VolcengineTos::Owner owner;
+    if (j.at("Owner").contains("ID")) {
+      j.at("Owner").at("ID").get_to(tmp);
+      owner.setId(tmp);
+    }
+    if (j.at("Owner").contains("DisplayName")) {
+      j.at("Owner").at("DisplayName").get_to(tmp);
+      owner.setDisplayName(tmp);
+    }
+    info.setOwner(owner);
+  }
+  if (j.contains("StorageClass")) {
+    j.at("StorageClass").get_to(tmp);
+    info.setStorageClass(tmp);
+  }
+  if (j.contains("Initiated")) {
+    j.at("Initiated").get_to(tmp);
+    info.setInitiated(tmp);
+  }
+  return info;
+}
+
 void VolcengineTos::ListMultipartUploadsOutput::fromJsonString(const std::string &input) {
   auto j = json::parse(input);
   if (j.contains("Bucket")) j.at("Bucket").get_to(bucket_);
@@ -16,9 +50,7 @@ void VolcengineTos::ListMultipartUploadsOutput::fromJsonString(const std::string
   if (j.contains("Uploads")) {
     auto ups = j.at("Uploads");
     for (auto & up : ups) {
-      UploadInfo ui;
-      ui.fromJsonString(up);
-      upload_.emplace_back(ui);
+      upload_.emplace_back(parseUploadInfo(up));
     }
   }
   if (j.contains("CommonPrefixes")) {

@@ -2,11 +2,9 @@
 
 #include <string>
 #include "model/acl/Owner.h"
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class ListedObjectVersion {
 public:
-  void fromJsonString(const nlohmann::json & version);
   const std::string &getEtag() const { return etag_; }
   void setEtag(const std::string &etag) { etag_ = etag; }
   bool isLatest() const { return isLatest_; }

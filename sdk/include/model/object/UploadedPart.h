@@ -1,11 +1,9 @@
 #pragma once
 
 #include <string>
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class UploadedPart {
 public:
-  void fromJsonString(const nlohmann::json & object);
   int getPartNumber() const { return partNumber_; }
   void setPartNumber(int partNumber) { partNumber_ = partNumber; }
   const std::string &getLastModified() const { return lastModified_; }

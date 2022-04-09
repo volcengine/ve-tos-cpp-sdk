@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include "model/RequestInfo.h"
 #include "UploadInfo.h"
 #include "UploadCommonPrefix.h"
