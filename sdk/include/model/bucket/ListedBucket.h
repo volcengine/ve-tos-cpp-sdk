@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class ListedBucket {
 public:
@@ -11,7 +10,17 @@ public:
   const std::string &getExtranetEndpoint() const { return extranetEndpoint_; }
   const std::string &getIntranetEndpoint() const { return intranetEndpoint_; }
 
-  void fromJsonString(const nlohmann::json & buckets);
+  void setCreationDate(const std::string &creationDate) {
+    creationDate_ = creationDate;
+  }
+  void setName(const std::string &name) { name_ = name; }
+  void setLocation(const std::string &location) { location_ = location; }
+  void setExtranetEndpoint(const std::string &extranetEndpoint) {
+    extranetEndpoint_ = extranetEndpoint;
+  }
+  void setIntranetEndpoint(const std::string &intranetEndpoint) {
+    intranetEndpoint_ = intranetEndpoint;
+  }
 
 private:
   std::string creationDate_;

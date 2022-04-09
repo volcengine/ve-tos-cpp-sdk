@@ -6,22 +6,26 @@ void VolcengineTos::GetObjectAclOutput::fromJsonString(const std::string &input)
   auto j = json::parse(input);
   if (j.contains("VersionId")) j.at("VersionId").get_to(versionId_);
   if (j.contains("Owner")) {
-    std::string id;
-    if (j.at("Owner").contains("VersionId")) j.at("Owner").at("ID").get_to(id);
-    std::string displayName;
-    if (j.at("Owner").contains("DisplayName"))j.at("Owner").at("DisplayName").get_to(displayName);
-    owner_.setId(id);
-    owner_.setDisplayName(displayName);
+    if (j.at("Owner").contains("ID")) {
+      owner_.setId(j.at("Owner").at("ID").get<std::string>());
+    }
+    if (j.at("Owner").contains("DisplayName")) {
+      owner_.setDisplayName(j.at("Owner").at("DisplayName").get<std::string>());
+    }
   }
   json grants = j.at("Grants");
   for (auto & grant : grants) {
     Grant g;
     Grantee ge;
-    if (grant.contains("Grantee")) ge.fromJsonString(grant.at("Grantee"));
+    if (grant.contains("Grantee")) {
+      auto grantee = grant.at("Grantee");
+      if (grantee.contains("ID")) ge.setId(grantee.at("ID").get<std::string>());
+      if (grantee.contains("DisplayName")) ge.setDisplayName(grantee.at("DisplayName").get<std::string>());
+      if (grantee.contains("Type")) ge.setType(grantee.at("Type").get<std::string>());
+      if (grantee.contains("Canned")) ge.setUri(grantee.at("Canned").get<std::string>());
+    }
     g.setGrantee(ge);
-    std::string permission;
-    if (grant.contains("Permission")) grant.at("Permission").get_to(permission);
-    g.setPermission(permission);
+    if (grant.contains("Permission")) g.setPermission(grant.at("Permission").get<std::string>());
     grant_.emplace_back(g);
   }
 }

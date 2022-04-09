@@ -100,24 +100,17 @@ set(SDK_LIB
         src/external/json/json.hpp
         src/model/acl/ObjectAclRules.cc
         src/model/acl/GetObjectAclOutput.cc
-        src/model/acl/Grantee.cc
         src/model/bucket/ListBucketsOutput.cc
-        src/model/bucket/ListedBucket.cc
         src/model/object/GetObjectOutput.cc
         src/model/object/ObjectMeta.cc
-        src/model/object/ListedObject.cc
         src/model/object/ListObjectsOutput.cc
         src/model/object/ListObjectVersionsOutput.cc
-        src/model/object/ListedObjectVersion.cc
-        src/model/object/ListedDeleteMarkerEntry.cc
         src/model/object/CopyObjectOutput.cc
         src/model/object/UploadPartCopyOutput.cc
         src/model/object/MultipartUpload.cc
         src/model/object/CompleteMultipartUploadInput.cc
         src/model/object/ListUploadedPartsOutput.cc
-        src/model/object/UploadedPart.cc
         src/model/object/ListMultipartUploadsOutput.cc
-        src/model/object/UploadInfo.cc
         src/model/object/DeleteMultiObjectsInput.cc
         src/model/object/DeleteMultiObjectsOutput.cc
         src/TosRequest.cc
@@ -145,7 +138,6 @@ set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
         OUTPUT_NAME ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         )
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include)
-
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
 
 if (BUILD_SHARED_LIB)
