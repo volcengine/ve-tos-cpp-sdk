@@ -6,7 +6,7 @@ More details can be found in [document](https://www.volcengine.com/docs/6349/107
 ## Install
 ### Requirements
 - C++ 11 or later
-- CMake (version 3.11 or later)
+- CMake (version 3.1 or later)
 - Visual Studio 2013 or later
 - GCC 4.8 or later
 - Clang 3.3 or later
