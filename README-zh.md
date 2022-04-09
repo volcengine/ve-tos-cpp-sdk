@@ -1,6 +1,6 @@
 # 火山引擎 TOS C++ SDK
 TOS C++ SDK为C++开发者提供了访问火山引擎对象存储服务TOS（Tinder Object Storage）的系列接口。
-本文档将给出TOS桶和对象的基本操作代码，供开发者参考，具体API文档请参考[xxx]()
+本文档将给出TOS桶和对象的基本操作代码，供开发者参考，具体API文档请参考[官网文档](https://www.volcengine.com/docs/6349/107395)
 
 ## 安装
 ### 最低依赖
