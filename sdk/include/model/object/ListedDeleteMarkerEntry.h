@@ -2,11 +2,9 @@
 
 #include <string>
 #include "model/acl/Owner.h"
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class ListedDeleteMarkerEntry {
 public:
-  void fromJsonString(const nlohmann::json & marker);
   bool isLatest() const { return isLatest_; }
   void setIsLatest(bool isLatest) { isLatest_ = isLatest; }
   const std::string &getKey() const { return key_; }

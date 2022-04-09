@@ -2,11 +2,9 @@
 
 #include <string>
 #include "model/acl/Owner.h"
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class ListedObject {
 public:
-  void fromJsonString(const nlohmann::json & object);
   const std::string &getKey() const { return key_; }
   void setKey(const std::string &key) { key_ = key; }
   const std::string &getLastModified() const { return lastModified_; }

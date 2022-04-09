@@ -1,11 +1,9 @@
 #pragma once
 
 #include <string>
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class Grantee{
 public:
-  void fromJsonString(const nlohmann::json & grantee);
   const std::string &getId() const { return id_; }
   void setId(const std::string &id) { id_ = id; }
   const std::string &getDisplayName() const { return displayName_; }
