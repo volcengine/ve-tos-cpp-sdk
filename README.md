@@ -18,7 +18,7 @@ More details can be found in [document](https://www.volcengine.com/docs/6349/107
 ```bash
 git clone https://github.com/volcengine/ve-tos-cpp-sdk
 ```
-2. Build with CMake 3.11 or later
+2. Build with CMake 3.1 or later
 ```bash
 cd ve-tos-cpp-sdk
 mkdir build
