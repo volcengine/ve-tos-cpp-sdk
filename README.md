@@ -1,7 +1,7 @@
 # Volcengine TOS SDK for C++
 The TOS C++ SDK enables C++ developers to easily work with TOS(Tinder Object Storage) service in the volcengine.
 This document will show developers some basic examples about TOS bucket and object operation.
-More details can be found in [xxx]()
+More details can be found in [document](https://www.volcengine.com/docs/6349/107395)
 
 ## Install
 ### Requirements
