@@ -1,5 +1,4 @@
 #include <iostream>
-#include <thread>
 #include "TosClient.h"
 #include "auth/StaticCredentials.h"
 #include "model/acl/Acl.h"
