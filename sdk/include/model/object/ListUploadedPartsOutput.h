@@ -36,10 +36,10 @@ private:
   std::string bucket_;
   std::string key_;
   std::string uploadID_;
-  int partNumberMarker_;
-  int nextPartNumberMarker_;
-  int maxParts_;
-  bool isTruncated_;
+  int partNumberMarker_ = 0;
+  int nextPartNumberMarker_ = 0;
+  int maxParts_ = 0;
+  bool isTruncated_ = false;
   std::string storageClass_;
   Owner owner_;
   std::vector<UploadedPart> uploadedParts_;

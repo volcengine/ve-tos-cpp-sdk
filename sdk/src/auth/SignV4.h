@@ -42,7 +42,7 @@ public:
   static bool isSigningQuery(const std::string &key);
   std::map<std::string, std::string> signHeader(const std::shared_ptr<TosRequest> &req) override;
   std::map<std::string, std::string> signQuery(const std::shared_ptr<TosRequest> &req, std::chrono::duration<int> ttl) override;
-  static unsigned char * signingKey(const SignKeyInfo &info);
+//  std::string signingKey(const SignKeyInfo &info);
 
   static std::string uriEncode(const std::string& in, bool encodeSlash);
 

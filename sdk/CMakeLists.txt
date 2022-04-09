@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.11)
 project(ve-tos-cpp-sdk-lib VERSION 0.1.0)
+SET(CMAKE_BUILD_TYPE "Debug")
+SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
+SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 set(SDK_HEADER
         include/auth/Credential.h
         include/auth/Credentials.h
@@ -100,24 +103,17 @@ set(SDK_LIB
         src/external/json/json.hpp
         src/model/acl/ObjectAclRules.cc
         src/model/acl/GetObjectAclOutput.cc
-        src/model/acl/Grantee.cc
         src/model/bucket/ListBucketsOutput.cc
-        src/model/bucket/ListedBucket.cc
         src/model/object/GetObjectOutput.cc
         src/model/object/ObjectMeta.cc
-        src/model/object/ListedObject.cc
         src/model/object/ListObjectsOutput.cc
         src/model/object/ListObjectVersionsOutput.cc
-        src/model/object/ListedObjectVersion.cc
-        src/model/object/ListedDeleteMarkerEntry.cc
         src/model/object/CopyObjectOutput.cc
         src/model/object/UploadPartCopyOutput.cc
         src/model/object/MultipartUpload.cc
         src/model/object/CompleteMultipartUploadInput.cc
         src/model/object/ListUploadedPartsOutput.cc
-        src/model/object/UploadedPart.cc
         src/model/object/ListMultipartUploadsOutput.cc
-        src/model/object/UploadInfo.cc
         src/model/object/DeleteMultiObjectsInput.cc
         src/model/object/DeleteMultiObjectsOutput.cc
         src/TosRequest.cc
@@ -145,8 +141,42 @@ set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
         OUTPUT_NAME ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         )
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include)
+###### for test ######
+message(STATUS "Looking for OpenSSL")
+find_package(OpenSSL REQUIRED)
+if(NOT OPENSSL_FOUND)
+    message(FATAL_ERROR "Could not find openSSL")
+endif()
+message(STATUS "OpenSSL include: ${OPENSSL_INCLUDE_DIR}")
+message(STATUS "OpenSSL lib: ${OPENSSL_LIBRARIES}")
+set(CLIENT_SSL_LIBS ${OPENSSL_LIBRARIES})
+set(CLIENT_SSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
 
+message(STATUS "Looking for CURL")
+find_package(CURL)
+if(NOT CURL_FOUND)
+    message(FATAL_ERROR "Could not find curl")
+endif()
+message(STATUS "CURL include: ${CURL_INCLUDE_DIRS}")
+message(STATUS "CURL lib: ${CURL_LIBRARIES}")
+set(CLIENT_CURL_LIBS ${CURL_LIBRARIES})
+set(CLIENT_CURL_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
+###### end for test ######
+
+#找这个，快速替换
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
+
+###### for test ######
+add_executable(demo "Demo.cc")
+set_target_properties(demo PROPERTIES CXX_STANDARD 11)
+target_include_directories(demo PUBLIC include)
+target_include_directories(demo PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
+target_link_libraries(demo ${PROJECT_NAME}${STATIC_LIB_SUFFIX})
+target_link_libraries(demo ${CLIENT_SSL_LIBS})
+target_link_libraries(demo ${CLIENT_CURL_LIBS})
+#target_link_libraries(demo pthread)
+#target_compile_options(demo PRIVATE -pthread -lstdc++)
+###### end for test ######
 
 if (BUILD_SHARED_LIB)
     add_library(${PROJECT_NAME} SHARED ${SDK_LIB} ${SDK_HEADER})

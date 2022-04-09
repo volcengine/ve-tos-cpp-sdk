@@ -10,17 +10,25 @@
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 #include <cstring>
+#include <mutex>
+#include <thread>
 
 namespace VolcengineTos {
+std::mutex mt;
 SignV4::SignV4(const std::shared_ptr<Credentials> &credentials, std::string region)
   : region_(std::move(region)){
   credentials_ = credentials;
 }
 
-std::string transTimeToFormat(std::time_t t, const char * format, int size) {
+std::string transTimeToFormat(std::time_t &t, const char *format) {
   char timebuf[32] = {'\0'};
-  struct tm *gmttm = gmtime(&t);
-  strftime(timebuf, sizeof(timebuf), format, gmttm);
+  std::tm gmttm{};
+#ifdef _WIN32
+  gmtime_s(&gmttm, &t);
+#else
+  gmtime_r(&t, &gmttm);
+#endif
+  std::strftime(timebuf, sizeof(timebuf), format, &gmttm);
   std::string ret(timebuf);
   return ret;
 }
@@ -55,7 +63,7 @@ std::map<std::string, std::string> SignV4::signHeader(const std::shared_ptr<TosR
   // gen date for sign
   std::time_t now = utcTimeNow();
 //  std::time_t now = std::chrono::system_clock::to_std::time_t(now_);
-  const std::string& date = transTimeToFormat(now, iso8601Layout, 16);
+  const std::string& date = transTimeToFormat(now, iso8601Layout);
   signedHeader.emplace_back(StringUtils::toLower(v4Date), date);
   signedHeader.emplace_back("date", date);
   signedRes[v4Date] = date;
@@ -79,7 +87,7 @@ std::map<std::string, std::string> SignV4::signHeader(const std::shared_ptr<TosR
   std::string sig = this ->doSign(req->getMethod(), req->getPath(), contentSha256, signedHeader, signedQuery, now, cred);
   std::string credential;
   credential.append(cred.getAccessKeyId()).append("/")
-            .append(transTimeToFormat(now, yyyyMMdd, 8)).append("/")
+            .append(transTimeToFormat(now, yyyyMMdd)).append("/")
             .append(region_).append("/tos/request");
   auto keys = joinMapToString(signedHeader);
 
@@ -95,12 +103,12 @@ std::map<std::string, std::string> SignV4::signQuery(const std::shared_ptr<TosRe
   std::map<std::string, std::string> extra;
 
   std::time_t now = utcTimeNow();
-  std::string date = transTimeToFormat(now, iso8601Layout, 16);
+  std::string date = transTimeToFormat(now, iso8601Layout);
 
   Credential cred = credentials_->credential();
   std::string credential;
   credential.append(cred.getAccessKeyId()).append("/")
-            .append(transTimeToFormat(now, yyyyMMdd, 8)).append("/")
+            .append(transTimeToFormat(now, yyyyMMdd)).append("/")
             .append(region_).append("/tos/request");
   extra[v4Algorithm] = signPrefix;
   extra[v4Credential] = credential;
@@ -130,7 +138,7 @@ bool SignV4::isSigningHeader(const std::string &key, bool isSigningQuery){
   }
   bool isCT = std::strcmp("content-type", key.c_str()) == 0;
   bool isV4Prefix = StringUtils::startsWithIgnoreCase(key, v4Prefix);
-  return isCT && !isSigningQuery || isV4Prefix;
+  return (isCT && !isSigningQuery) || isV4Prefix;
 }
 
 bool SignV4::isSigningQuery(const std::string &key) {
@@ -175,20 +183,25 @@ std::vector<std::pair<std::string, std::string>> SignV4::signedQuery
   return signedRes;
 }
 
-unsigned char * SignV4::signingKey(const SignKeyInfo &info){
-  std::string sk(info.getCredential().getAccessKeySecret());
-  const std::string& date(info.getDate());
-  const std::string& region(info.getRegion());
-  auto unsignedDate = HMAC(EVP_sha256(), sk.c_str(), sk.length(),
-                           reinterpret_cast<const unsigned char *>(date.c_str()), date.length(), nullptr, nullptr);
-  auto unsignedRegion = HMAC(EVP_sha256(), unsignedDate, 32,
-                             reinterpret_cast<const unsigned char *>(region.c_str()), region.size(), nullptr, nullptr);
-  auto unsignedService = HMAC(EVP_sha256(), unsignedRegion, 32,
-                              reinterpret_cast<const unsigned char *>("tos"), 3, nullptr, nullptr);
-  auto unsignedOut = HMAC(EVP_sha256(), unsignedService, 32,
-                          reinterpret_cast<const unsigned char *>("request"), 7, nullptr, nullptr);
-  return unsignedOut;
-}
+//std::string SignV4::signingKey(const SignKeyInfo &info){
+//  const std::string& sk(info.getCredential().getAccessKeySecret());
+//  const std::string& date(info.getDate());
+//  const std::string& region(info.getRegion());
+//  unsigned int mdLen = 32;
+//  unsigned char unsignedDate[32];
+//  unsigned char unsignedRegion[32];
+//  unsigned char unsignedService[32];
+//  unsigned char unsignedOut[32];
+//  HMAC(EVP_sha256(), sk.c_str(), sk.size(),
+//       reinterpret_cast<const unsigned char *>(date.c_str()), date.size(), unsignedDate, &mdLen);
+//  HMAC(EVP_sha256(), unsignedDate, 32,
+//       reinterpret_cast<const unsigned char *>(region.c_str()), region.size(), unsignedRegion, &mdLen);
+//  HMAC(EVP_sha256(), unsignedRegion, 32,
+//        reinterpret_cast<const unsigned char *>("tos"), 3, unsignedService, &mdLen);
+//  HMAC(EVP_sha256(), unsignedService, 32,
+//       reinterpret_cast<const unsigned char *>("request"), 7, unsignedOut, &mdLen);
+//  std::string res(std::to_string(unsignedOut);
+//}
 
 std::string SignV4::uriEncode(const std::string& in, bool encodeSlash) {
   int hexCount = 0;
@@ -307,19 +320,32 @@ std::string SignV4::doSign(const std::string& method, const std::string& path, c
 
   buf.append(signPrefix).append(split);
 
-  buf.append(transTimeToFormat(now, iso8601Layout, 16)).append(split);
+  buf.append(transTimeToFormat(now, iso8601Layout)).append(split);
 
-  std::string date = transTimeToFormat(now, yyyyMMdd, 8);
+  std::string date = transTimeToFormat(now, yyyyMMdd);
   buf.append(date).append("/").append(region_).append("/tos/request").append(split);
 
-  unsigned char sum[64];
+  unsigned char sum[32];
   SHA256((unsigned char *)req.c_str(), req.length(), sum);
   std::string hexSum(StringUtils::stringToHex(sum, 32));
   buf.append(hexSum);
 
-  // signK change with date change
-  auto signK = signingKey(SignKeyInfo(date, region_, cred));
-  auto sig = HMAC(EVP_sha256(), signK, 32, (unsigned char *)buf.c_str(), buf.size(), nullptr, nullptr);
+  unsigned int mdLen = 32;
+  unsigned char unsignedDate[32];
+  HMAC(EVP_sha256(), cred.getAccessKeySecret().c_str(), cred.getAccessKeySecret().size(),
+       reinterpret_cast<const unsigned char *>(date.c_str()), date.size(), unsignedDate, &mdLen);
+  unsigned char unsignedRegion[32];
+  HMAC(EVP_sha256(), unsignedDate, 32,
+       reinterpret_cast<const unsigned char *>(region_.c_str()), region_.size(), unsignedRegion, &mdLen);
+  unsigned char unsignedService[32];
+  HMAC(EVP_sha256(), unsignedRegion, 32,
+       reinterpret_cast<const unsigned char *>("tos"), 3, unsignedService, &mdLen);
+  unsigned char signK[32];
+  HMAC(EVP_sha256(), unsignedService, 32,
+       reinterpret_cast<const unsigned char *>("request"), 7, signK, &mdLen);
+  unsigned char sig[32];
+  HMAC(EVP_sha256(), signK, 32,
+       reinterpret_cast<const unsigned char *>(buf.c_str()), buf.size(), sig, &mdLen);
   return StringUtils::stringToHex(sig, 32);
 }
 } // namespace VolcengineTos
