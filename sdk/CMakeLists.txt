@@ -141,42 +141,7 @@ set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
         OUTPUT_NAME ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         )
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include)
-###### for test ######
-message(STATUS "Looking for OpenSSL")
-find_package(OpenSSL REQUIRED)
-if(NOT OPENSSL_FOUND)
-    message(FATAL_ERROR "Could not find openSSL")
-endif()
-message(STATUS "OpenSSL include: ${OPENSSL_INCLUDE_DIR}")
-message(STATUS "OpenSSL lib: ${OPENSSL_LIBRARIES}")
-set(CLIENT_SSL_LIBS ${OPENSSL_LIBRARIES})
-set(CLIENT_SSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
-
-message(STATUS "Looking for CURL")
-find_package(CURL)
-if(NOT CURL_FOUND)
-    message(FATAL_ERROR "Could not find curl")
-endif()
-message(STATUS "CURL include: ${CURL_INCLUDE_DIRS}")
-message(STATUS "CURL lib: ${CURL_LIBRARIES}")
-set(CLIENT_CURL_LIBS ${CURL_LIBRARIES})
-set(CLIENT_CURL_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
-###### end for test ######
-
-#找这个，快速替换
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
-
-###### for test ######
-add_executable(demo "Demo.cc")
-set_target_properties(demo PROPERTIES CXX_STANDARD 11)
-target_include_directories(demo PUBLIC include)
-target_include_directories(demo PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
-target_link_libraries(demo ${PROJECT_NAME}${STATIC_LIB_SUFFIX})
-target_link_libraries(demo ${CLIENT_SSL_LIBS})
-target_link_libraries(demo ${CLIENT_CURL_LIBS})
-#target_link_libraries(demo pthread)
-#target_compile_options(demo PRIVATE -pthread -lstdc++)
-###### end for test ######
 
 if (BUILD_SHARED_LIB)
     add_library(${PROJECT_NAME} SHARED ${SDK_LIB} ${SDK_HEADER})
