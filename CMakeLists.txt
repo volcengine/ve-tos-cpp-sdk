@@ -1,8 +1,7 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 0.1.0
-        DESCRIPTION "Volcengine TOS cpp SDK"
+        VERSION 0.1.1
         LANGUAGES CXX)
 
 # project settings
