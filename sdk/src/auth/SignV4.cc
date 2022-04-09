@@ -10,11 +10,9 @@
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 #include <cstring>
-#include <mutex>
 #include <thread>
 
 namespace VolcengineTos {
-std::mutex mt;
 SignV4::SignV4(const std::shared_ptr<Credentials> &credentials, std::string region)
   : region_(std::move(region)){
   credentials_ = credentials;
