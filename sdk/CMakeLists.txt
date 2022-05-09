@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-project(ve-tos-cpp-sdk-lib VERSION 0.1.1)
+project(ve-tos-cpp-sdk-lib VERSION 0.1.2)
 set(SDK_HEADER
         include/auth/Credential.h
         include/auth/Credentials.h
