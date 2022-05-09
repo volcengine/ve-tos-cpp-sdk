@@ -58,9 +58,9 @@ public:
   std::shared_ptr<TosRequest> Build(const std::string & method, std::shared_ptr<std::iostream> content);
   std::shared_ptr<TosRequest> BuildWithCopySource(const std::string & method,
                                                   const std::string & srcBucket, const std::string & srcObject);
+  std::shared_ptr<TosRequest> build(const std::string & method);
 
 private:
-  std::shared_ptr<TosRequest> build(const std::string & method);
   std::shared_ptr<Signer> signer_;
   std::string scheme_;
   std::string host_;

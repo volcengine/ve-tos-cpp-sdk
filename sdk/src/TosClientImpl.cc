@@ -57,9 +57,6 @@ std::string isValidKey(const std::string& key) {
   if (key.empty()){
     return "tos: object name is empty";
   }
-  if (key[0] == '/' || key[key.size()-1] == '/' || key.find("//") != -1) {
-    return "tos: object name is illegal";
-  }
   return "";
 }
 
@@ -1254,7 +1251,7 @@ void TosClientImpl::listUploadedParts(RequestBuilder &rb, const std::string& upl
 void TosClientImpl::preSignedURL(RequestBuilder &rb, const std::string& method,
                                  const std::chrono::duration<int>& ttl,
                                  Outcome<TosError, std::string> &res) {
-  auto req = rb.Build(method, nullptr);
+  auto req = rb.build(method);
   auto query = signer_->signQuery(req, ttl);
   for (auto & iter : query) {
     req->setSingleQuery(iter.first, iter.second);
