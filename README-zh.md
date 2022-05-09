@@ -12,7 +12,7 @@ TOS C++ SDK为C++开发者提供了访问火山引擎对象存储服务TOS（Tin
 
 ### 通过源码编译
 1. 下载源码
-- 直接下载 [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.1.2.zip)
+- 直接下载 [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.1.3.zip)
 - 通过git克隆到本地
 ```bash
 git clone https://github.com/volcengine/ve-tos-cpp-sdk
