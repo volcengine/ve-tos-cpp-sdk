@@ -483,7 +483,7 @@ void preSignedUrl(const std::shared_ptr<TosClient> &client, const std::string & 
     return;
   }
   std::chrono::duration<int, std::ratio<100>> hs(3);
-  auto res = client->preSignedURL("Get", bucket, key, hs);
+  auto res = client->preSignedURL("GET", bucket, key, hs);
   if (!res.isSuccess()) {
     std::cout << "preSignedUrl error: " << output.error().String() << std::endl;
     return;
