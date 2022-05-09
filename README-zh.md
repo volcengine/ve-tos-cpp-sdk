@@ -5,19 +5,19 @@ TOS C++ SDK为C++开发者提供了访问火山引擎对象存储服务TOS（Tin
 ## 安装
 ### 最低依赖
 - C++ 11 及以上版本
-- CMake ( 3.11 及以上版本)
+- CMake ( 3.1 及以上版本)
 - Visual Studio 2013 及以上版本
 - GCC 4.8 及以上版本
 - Clang 3.3 及以上版本
 
 ### 通过源码编译
 1. 下载源码
-- 直接下载 [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.1.1.zip)
+- 直接下载 [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.1.2.zip)
 - 通过git克隆到本地
 ```bash
 git clone https://github.com/volcengine/ve-tos-cpp-sdk
 ```
-2. 使用 CMake 3.11 及以上版本构建
+2. 使用 CMake 3.1 及以上版本构建
 ```bash
 cd ve-tos-cpp-sdk
 mkdir build
