@@ -19,6 +19,8 @@ public:
   void setGrantWrite(const std::string &grantWrite) { grantWrite_ = grantWrite; }
   const std::string &getGrantWriteAcp() const { return grantWriteAcp_; }
   void setGrantWriteAcp(const std::string &grantWriteAcp) { grantWriteAcp_ = grantWriteAcp; }
+  const std::string &getStorageClass() const { return storageClass_; }
+  void setStorageClass(const std::string &storageClass) { storageClass_ = storageClass; }
 
 private:
   std::string bucket_;
@@ -28,5 +30,6 @@ private:
   std::string grantReadAcp_;
   std::string grantWrite_;
   std::string grantWriteAcp_;
+  std::string storageClass_;
 };
 } // namespace VolcengineTos

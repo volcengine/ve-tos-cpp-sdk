@@ -16,6 +16,10 @@ public:
   void setSseCustomerAlgorithm(const std::string &sseCustomerAlgorithm) { sseCustomerAlgorithm_ = sseCustomerAlgorithm; }
   const std::string &getSseCustomerMd5() const { return sseCustomerMD5_; }
   void setSseCustomerMd5(const std::string &sseCustomerMd5) { sseCustomerMD5_ = sseCustomerMd5; }
+  const std::string &getSseCustomerKey() const { return sseCustomerKey_; }
+  void setSseCustomerKey(const std::string &sseCustomerKey) {
+    sseCustomerKey_ = sseCustomerKey;
+  }
 
 private:
   RequestInfo requestInfo_;
@@ -24,5 +28,6 @@ private:
   std::string uploadID_;
   std::string sseCustomerAlgorithm_;
   std::string sseCustomerMD5_;
+  std::string sseCustomerKey_;
 };
 } // namespace VolcengineTos
