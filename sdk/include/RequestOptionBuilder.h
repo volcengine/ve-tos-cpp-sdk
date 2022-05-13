@@ -49,6 +49,12 @@ public:
     headers_[VolcengineTos::HEADER_SSE_CUSTOMER_KEY] = ssecKey;
     headers_[VolcengineTos::HEADER_SSE_CUSTOMER_KEY_MD5] = ssecKeyMD5;
   }
+  void withServerSideEncryption(const std::string &serverSideEncryption) {
+    headers_[VolcengineTos::HEADER_SSE] = serverSideEncryption;
+  }
+  void withStorageClass(const std::string &storageClass) {
+    headers_[VolcengineTos::HEADER_STORAGE_CLASS] = storageClass;
+  }
   void withIfModifiedSince(const std::time_t &since) {
     headers_[http::HEADER_IF_MODIFIED_SINCE] = std::to_string(since);
   }

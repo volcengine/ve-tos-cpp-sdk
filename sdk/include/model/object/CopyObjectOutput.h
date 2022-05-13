@@ -15,6 +15,8 @@ public:
   void setEtag(const std::string &etag) { etag_ = etag; }
   const std::string &getLastModified() const { return lastModified_; }
   void setLastModified(const std::string &lastModified) { lastModified_ = lastModified; }
+  const std::string &getCrc64() const { return crc64_; }
+  void setCrc64(const std::string &crc64) { crc64_ = crc64; }
 
 private:
   RequestInfo requestInfo_;
@@ -22,5 +24,6 @@ private:
   std::string sourceVersionID_;
   std::string etag_;
   std::string lastModified_;
+  std::string crc64_;
 };
 } // namespace VolcengineTos

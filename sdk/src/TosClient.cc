@@ -204,3 +204,16 @@ Outcome<TosError, std::string> TosClient::preSignedURL(const std::string &httpMe
                                                        std::chrono::duration<int> ttl, const RequestOptionBuilder &builder) {
   return tosClientImpl_->preSignedURL(httpMethod, bucket, objectKey, ttl);
 }
+Outcome<TosError, PutBucketPolicyOutput>
+TosClient::putBucketPolicy(const std::string &bucket,
+                           const std::string &policy) {
+  return tosClientImpl_->putBucketPolicy(bucket, policy);
+}
+Outcome<TosError, GetBucketPolicyOutput>
+TosClient::getBucketPolicy(const std::string &bucket) {
+  return tosClientImpl_->getBucketPolicy(bucket);
+}
+Outcome<TosError, DeleteBucketPolicyOutput>
+TosClient::deleteBucketPolicy(const std::string &bucket) {
+  return tosClientImpl_->deleteBucketPolicy(bucket);
+}

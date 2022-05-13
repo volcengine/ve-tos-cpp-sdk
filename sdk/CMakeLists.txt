@@ -33,6 +33,9 @@ set(SDK_HEADER
         include/model/bucket/ListedBucket.h
         include/model/bucket/CreateBucketOutput.h
         include/model/bucket/ListedOwner.h
+        include/model/bucket/DeleteBucketPolicyOutput.h
+        include/model/bucket/GetBucketPolicyOutput.h
+        include/model/bucket/PutBucketPolicyOutput.h
         include/model/object/AbortMultipartUploadInput.h
         include/model/object/AbortMultipartUploadOutput.h
         include/model/object/AppendObjectOutput.h
@@ -81,8 +84,7 @@ set(SDK_HEADER
         include/TosClient.h
         include/Config.h
         include/RequestBuilder.h
-        include/RequestOptionBuilder.h
-        src/TosClientImpl.h )
+        include/RequestOptionBuilder.h)
 set(SDK_LIB
         src/transport/http/HttpClient.cc
         src/transport/http/HttpRequest.cc
@@ -118,6 +120,7 @@ set(SDK_LIB
         src/TosClient.cc
         src/TosError.cc
         src/TosResponse.cc
+        src/TosClientImpl.h
         src/TosClientImpl.cc
         src/utils/MimeType.h )
 
