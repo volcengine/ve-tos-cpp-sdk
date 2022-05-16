@@ -43,6 +43,9 @@
 #include "model/object/ListMultipartUploadsOutput.h"
 #include "model/object/ListMultipartUploadsInput.h"
 #include "auth/StaticCredentials.h"
+#include "model/bucket/PutBucketPolicyOutput.h"
+#include "model/bucket/GetBucketPolicyOutput.h"
+#include "model/bucket/DeleteBucketPolicyOutput.h"
 
 namespace VolcengineTos {
 static const char* TOS_SDK_VERSION = "0.1.0";
@@ -81,40 +84,189 @@ public:
   Outcome<TosError, HeadBucketOutput> headBucket(const std::string& bucket);
   Outcome<TosError, DeleteBucketOutput> deleteBucket(const std::string& bucket);
   Outcome<TosError, ListBucketsOutput> listBuckets(const ListBucketsInput& input);
+  // 设置桶策略
+  Outcome<TosError, PutBucketPolicyOutput> putBucketPolicy(const std::string& bucket, const std::string &policy);
+  Outcome<TosError, GetBucketPolicyOutput> getBucketPolicy(const std::string& bucket);
+  Outcome<TosError, DeleteBucketPolicyOutput> deleteBucketPolicy(const std::string& bucket);
 
   Outcome<TosError, GetObjectOutput> getObject(const std::string& bucket, const std::string& objectKey);
+  // optional. setting withXXX properties.
+  //   withVersionID: which version of this object.
+  //   withRange: the range of content.
+  //   withIfModifiedSince: return if the object modified after the given date,
+  //     otherwise return status code 304.
+  //   withIfUnmodifiedSince, withIfMatch, withIfNoneMatch set If-Unmodified-Since, If-Match and If-None-Match.
   Outcome<TosError, GetObjectOutput> getObject(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, HeadObjectOutput> headObject(const std::string& bucket, const std::string& objectKey);
+  // optional. setting withXXX properties.
+  //   withVersionID: which version of this object.
+  //   withRange: the range of content.
+  //   withIfModifiedSince: return if the object modified after the given date,
+  //   otherwise return status code 304.
+  //   withIfUnmodifiedSince, withIfMatch, withIfNoneMatch set If-Unmodified-Since, If-Match and If-None-Match.
   Outcome<TosError, HeadObjectOutput> headObject(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, DeleteObjectOutput> deleteObject(const std::string& bucket, const std::string& objectKey);
+  // withVersionID: which version of this object will be deleted
   Outcome<TosError, DeleteObjectOutput> deleteObject(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, DeleteMultiObjectsOutput> deleteMultiObjects(const std::string& bucket, DeleteMultiObjectsInput& input);
   Outcome<TosError, DeleteMultiObjectsOutput> deleteMultiObjects(const std::string& bucket, DeleteMultiObjectsInput& input, const RequestOptionBuilder& builder);
   Outcome<TosError, PutObjectOutput> putObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content);
+  // optional. setting withXXX properties.
+  //   withContentType: set Content-Type.
+  //   withContentDisposition: set Content-Disposition.
+  //   withContentLanguage: set Content-Language.
+  //   withContentEncoding: set Content-Encoding.
+  //   withCacheControl: set Cache-Control.
+  //   withExpires: set Expires.
+  //   withMeta: set meta header(s).
+  //   withContentSHA256: set Content-Sha256.
+  //   withContentMD5: set Content-MD5.
+  //   withExpires: set Expires.
+  //   withServerSideEncryptionCustomer: set server side encryption options.
+  //   withACL, withACLGrantFullControl, withACLGrantRead, withACLGrantReadAcp,
+  //   withACLGrantWrite, withACLGrantWriteAcp set object acl.
+  //   withStorageClass set storage class, 'STANDARD|IA'
   Outcome<TosError, PutObjectOutput> putObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, const RequestOptionBuilder& builder);
 
   Outcome<TosError, AppendObjectOutput> appendObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, int64_t offset);
+  // optional. setting withXXX properties.
+  //   withContentType: set Content-Type.
+  //   withContentDisposition: set Content-Disposition.
+  //   withContentLanguage: set Content-Language.
+  //   withContentEncoding: set Content-Encoding.
+  //   withCacheControl: set Cache-Control.
+  //   withExpires: set Expires.
+  //   withMeta: set meta header(s).
+  //   withExpires: set Expires.
+  //   withACL, withACLGrantFullControl, withACLGrantRead, withACLGrantReadAcp,
+  //   withACLGrantWrite, withACLGrantWriteAcp set object acl.
+  //   withStorageClass set storage class, 'STANDARD|IA'
+  //   above options only take effect when offset parameter is 0.
+  //
+  //   withContentSHA256: set Content-Sha256.
+  //   withContentMD5: set Content-MD5.
   Outcome<TosError, AppendObjectOutput> appendObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, int64_t offset, const RequestOptionBuilder& builder);
 
+  // optional. setting withXXX properties.
+  //   withContentType set Content-Type.
+  //   withContentDisposition set Content-Disposition.
+  //   withContentLanguage set Content-Language.
+  //   withContentEncoding set Content-Encoding.
+  //   withCacheControl set Cache-Control.
+  //   withExpires set Expires.
+  //   withMeta set meta header(s).
+  //   withVersionID which version of this object will be set
   Outcome<TosError, SetObjectMetaOutput> setObjectMeta(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);
 
   Outcome<TosError, ListObjectsOutput> listObjects(const std::string& bucket, const ListObjectsInput& input);
   Outcome<TosError, ListObjectVersionsOutput> listObjectVersions(const std::string& bucket, const ListObjectVersionsInput& input);
 
   Outcome<TosError, CopyObjectOutput> copyObject(const std::string& bucket, const std::string& srcObjectKey, const std::string& dstObjectKey);
+  // optional. setting withXXX properties.
+  //   withVersionID the version id of source object.
+  //   withMetadataDirective copy source object metadata or replace with new object metadata.
+  //
+  //   withACL withACLGrantFullControl withACLGrantRead withACLGrantReadAcp
+  //   withACLGrantWrite withACLGrantWriteAcp set object acl.
+  //
+  //   withCopySourceIfMatch withCopySourceIfNoneMatch withCopySourceIfModifiedSince
+  //   withCopySourceIfUnmodifiedSince set copy conditions.
+  //
+  //   withStorageClass set storage class, 'STANDARD|IA'
+  //
+  //   withServerSideEncryptionCustomer: Copy SSE-C加密对象，源对象的加密算法、加密密钥、密钥MD5
+  //
+  //   if copyObject called with withMetadataDirective(TosHeaders.METADATA_DIRECTIVE_REPLACE),
+  //   these properties can be used:
+  //     withContentType set Content-Type.
+  //     withContentDisposition set Content-Disposition.
+  //     withContentLanguage set Content-Language.
+  //     withContentEncoding set Content-Encoding.
+  //     withCacheControl set Cache-Control.
+  //     withExpires set Expires.
+  //     withMeta set meta header(s),
   Outcome<TosError, CopyObjectOutput> copyObject(const std::string& bucket, const std::string& srcObjectKey, const std::string& dstObjectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, CopyObjectOutput> copyObjectTo(const std::string& bucket, const std::string& dstBucket, const std::string& dstObjectKey, const std::string& srcObjectKey);
+  // optional. setting withXXX properties.
+  //   withVersionID the version id of source object.
+  //   withMetadataDirective copy source object metadata or replace with new object metadata.
+  //
+  //   withACL withACLGrantFullControl withACLGrantRead withACLGrantReadAcp
+  //   withACLGrantWrite withACLGrantWriteAcp set object acl.
+  //
+  //   withCopySourceIfMatch withCopySourceIfNoneMatch withCopySourceIfModifiedSince
+  //   withCopySourceIfUnmodifiedSince set copy conditions.
+  //
+  //   withStorageClass set storage class, 'STANDARD|IA'
+  //
+  //   withServerSideEncryptionCustomer: Copy SSE-C加密对象，源对象的加密算法、加密密钥、密钥MD5
+  //
+  //   if copyObjectTo called with withMetadataDirective(TosHeaders.METADATA_DIRECTIVE_REPLACE),
+  //   these properties can be used:
+  //     withContentType set Content-Type.
+  //     withContentDisposition set Content-Disposition.
+  //     withContentLanguage set Content-Language.
+  //     withContentEncoding set Content-Encoding.
+  //     withCacheControl set Cache-Control.
+  //     withExpires set Expires.
+  //     withMeta set meta header(s),
   Outcome<TosError, CopyObjectOutput> copyObjectTo(const std::string& bucket, const std::string& dstBucket, const std::string& dstObjectKey, const std::string& srcObjectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, CopyObjectOutput> copyObjectFrom(const std::string& bucket, const std::string& srcBucket, const std::string& srcObjectKey, const std::string& dstObjectKey);
+
+  // optional. setting withXXX properties.
+  //   withVersionID the version id of source object.
+  //   withMetadataDirective copy source object metadata or replace with new object metadata.
+  //
+  //   withACL withACLGrantFullControl withACLGrantRead withACLGrantReadAcp
+  //   withACLGrantWrite withACLGrantWriteAcp set object acl.
+  //
+  //   withCopySourceIfMatch withCopySourceIfNoneMatch withCopySourceIfModifiedSince
+  //   withCopySourceIfUnmodifiedSince set copy conditions.
+  //
+  //   withStorageClass set storage class, 'STANDARD|IA'
+  //
+  //   withServerSideEncryptionCustomer: Copy SSE-C加密对象，源对象的加密算法、加密密钥、密钥MD5
+  //
+  //   if copyObjectFrom called with withMetadataDirective(TosHeaders.METADATA_DIRECTIVE_REPLACE),
+  //   these properties can be used:
+  //     withContentType set Content-Type.
+  //     withContentDisposition set Content-Disposition.
+  //     withContentLanguage set Content-Language.
+  //     withContentEncoding set Content-Encoding.
+  //     withCacheControl set Cache-Control.
+  //     withExpires set Expires.
+  //     withMeta set meta header(s),
   Outcome<TosError, CopyObjectOutput> copyObjectFrom(const std::string& bucket, const std::string& srcBucket, const std::string& srcObjectKey, const std::string& dstObjectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, UploadPartCopyOutput> uploadPartCopy(const std::string& bucket, const UploadPartCopyInput& input);
+  // optional. setting withXXX properties.
+  //   withCopySourceIfMatch, withCopySourceIfNoneMatch, withCopySourceIfModifiedSince and
+  //   withCopySourceIfUnmodifiedSince set copy conditions
+  //   withServerSideEncryption: set server side encryption algorithm, 'AES256'.
+  //   withServerSideEncryptionCustomer: Copy SSE-C加密对象，源对象的加密算法、加密密钥、密钥MD5
   Outcome<TosError, UploadPartCopyOutput> uploadPartCopy(const std::string& bucket, const UploadPartCopyInput& input, const RequestOptionBuilder& builder);
 
   Outcome<TosError, PutObjectAclOutput> putObjectAcl(const std::string& bucket, const PutObjectAclInput& input);
   Outcome<TosError, GetObjectAclOutput> getObjectAcl(const std::string& bucket, const std::string& objectKey);
+  // withVersionID the version of the object
   Outcome<TosError, GetObjectAclOutput> getObjectAcl(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);
 
   Outcome<TosError, CreateMultipartUploadOutput> createMultipartUpload(const std::string& bucket, const std::string& objectKey);
+  // optional. setting withXXX properties.
+  //   withContentType set Content-Type.
+  //   withContentDisposition set Content-Disposition.
+  //   withContentLanguage set Content-Language.
+  //   withContentEncoding set Content-Encoding.
+  //   withCacheControl set Cache-Control.
+  //   withExpires set Expires.
+  //   withMeta set meta header(s).
+  //   withContentSHA256 set Content-Sha256.
+  //   withContentMD5 set Content-MD5.
+  //   withExpires set Expires.
+  //   withServerSideEncryptionCustomer set server side encryption options.
+  //   withACL, WithACLGrantFullControl, withACLGrantRead, withACLGrantReadAcp,
+  //   withACLGrantWrite, withACLGrantWriteAcp set object acl.
+  //   withStorageClass set storage class, 'STANDARD|IA'.
+  //   withServerSideEncryption: set server side encryption algorithm, 'AES256'.
   Outcome<TosError, CreateMultipartUploadOutput> createMultipartUpload(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);
   Outcome<TosError, UploadPartOutput> uploadPart(const std::string& bucket, const UploadPartInput& input);
   Outcome<TosError, UploadPartOutput> uploadPart(const std::string& bucket, const UploadPartInput& input, const RequestOptionBuilder& builder);

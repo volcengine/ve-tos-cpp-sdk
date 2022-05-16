@@ -80,6 +80,9 @@ public:
   }
   const std::string &getCsType() const { return csType_; }
   void setCsType(const std::string &csType) { csType_ = csType; }
+  void setContentLength1(long contentLength) { contentLength_ = contentLength; }
+  const std::string &getCrc64() const { return crc64_; }
+  void setCrc64(const std::string &crc64) { crc64_ = crc64; }
 
 private:
   long contentLength_;
@@ -103,5 +106,6 @@ private:
   std::string sseCustomerAlgorithm_;
   std::string sseCustomerKeyMD5_;
   std::string csType_;
+  std::string crc64_;
 };
 } // namespace VolcengineTos
