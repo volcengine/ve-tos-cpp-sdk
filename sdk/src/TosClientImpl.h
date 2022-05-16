@@ -54,6 +54,9 @@ public:
   Outcome<TosError, HeadBucketOutput> headBucket(const std::string& bucket);
   Outcome<TosError, DeleteBucketOutput> deleteBucket(const std::string& bucket);
   Outcome<TosError, ListBucketsOutput> listBuckets(const ListBucketsInput& input);
+  Outcome<TosError, PutBucketPolicyOutput> putBucketPolicy(const std::string& bucket, const std::string& policy);
+  Outcome<TosError, GetBucketPolicyOutput> getBucketPolicy(const std::string& bucket);
+  Outcome<TosError, DeleteBucketPolicyOutput> deleteBucketPolicy(const std::string& bucket);
 
   Outcome<TosError, GetObjectOutput> getObject(const std::string& bucket, const std::string& objectKey);
   Outcome<TosError, GetObjectOutput> getObject(const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder);

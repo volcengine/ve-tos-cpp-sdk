@@ -31,6 +31,7 @@ void VolcengineTos::ObjectMeta::fromResponse(TosResponse& res) {
   sseCustomerAlgorithm_ = res.findHeader(HEADER_SSE_CUSTOMER_ALGORITHM);
   sseCustomerKeyMD5_ = res.findHeader(HEADER_SSE_CUSTOMER_KEY_MD5);
   csType_ = res.findHeader(HEADER_CS_TYPE);
+  crc64_ = res.findHeader(HEADER_CRC64);
 }
 bool VolcengineTos::ObjectMeta::operator==(
     const VolcengineTos::ObjectMeta &rhs) const {

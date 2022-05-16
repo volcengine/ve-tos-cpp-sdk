@@ -92,12 +92,13 @@ void setContentType(RequestBuilder &rb, const std::string &objectKey) {
   }
 }
 static void createBucketSetOptionHeader(RequestBuilder & rb, const CreateBucketInput &input){
-  if (!input.getAcl().empty()) rb.withHeader(HEADER_ACL, input.getAcl());
-  if (!input.getGrantFullControl().empty()) rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
-  if (!input.getGrantRead().empty()) rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
-  if (!input.getGrantReadAcp().empty()) rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
-  if (!input.getGrantWrite().empty()) rb.withHeader(HEADER_GRANT_WRITE, input.getGrantWrite());
-  if (!input.getGrantWriteAcp().empty()) rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+  rb.withHeader(HEADER_ACL, input.getAcl());
+  rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+  rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+  rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+  rb.withHeader(HEADER_GRANT_WRITE, input.getGrantWrite());
+  rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+  rb.withHeader(HEADER_STORAGE_CLASS, input.getStorageClass());
 }
 Outcome<TosError, CreateBucketOutput>
 TosClientImpl::createBucket(const CreateBucketInput &input) {
@@ -148,6 +149,7 @@ TosClientImpl::headBucket(const std::string &bucket) {
   HeadBucketOutput output;
   output.setRequestInfo(tosRes.result()->GetRequestInfo());
   output.setRegion(tosRes.result()->findHeader(HEADER_BUCKET_REGION));
+  output.setStorageClass(tosRes.result()->findHeader(HEADER_STORAGE_CLASS));
   res.setSuccess(true);
   res.setR(output);
   return res;
@@ -192,6 +194,95 @@ TosClientImpl::listBuckets(const ListBucketsInput &input) {
   std::stringstream ss;
   ss << tosRes.result()->getContent()->rdbuf();
   output.fromJsonString(ss.str());
+  res.setSuccess(true);
+  res.setR(output);
+  return res;
+}
+
+Outcome<TosError, PutBucketPolicyOutput>
+TosClientImpl::putBucketPolicy(const std::string &bucket,
+                               const std::string &policy) {
+  Outcome<TosError, PutBucketPolicyOutput> res;
+  std::string check = isValidBucketName(bucket);
+  if (!check.empty()) {
+    TosError error;
+    error.setMessage(check);
+    res.setE(error);
+    res.setSuccess(false);
+    return res;
+  }
+
+  auto rb = newBuilder(bucket, "");
+  rb.withQuery("policy", "");
+  auto ss = std::make_shared<std::stringstream>(policy);
+  auto req = rb.Build(http::MethodPut, ss);
+  auto tosRes = roundTrip(req, 204);
+  if (!tosRes.isSuccess()){
+    res.setE(tosRes.error());
+    res.setSuccess(false);
+    return res;
+  }
+  PutBucketPolicyOutput output;
+  output.setRequestInfo(tosRes.result()->GetRequestInfo());
+  res.setSuccess(true);
+  res.setR(output);
+  return res;
+}
+
+Outcome<TosError, GetBucketPolicyOutput>
+TosClientImpl::getBucketPolicy(const std::string &bucket) {
+  Outcome<TosError, GetBucketPolicyOutput> res;
+  std::string check = isValidBucketName(bucket);
+  if (!check.empty()) {
+    TosError error;
+    error.setMessage(check);
+    res.setE(error);
+    res.setSuccess(false);
+    return res;
+  }
+
+  auto rb = newBuilder(bucket, "");
+  rb.withQuery("policy", "");
+  auto req = rb.Build(http::MethodGet, nullptr);
+  auto tosRes = roundTrip(req, 200);
+  if (!tosRes.isSuccess()){
+    res.setE(tosRes.error());
+    res.setSuccess(false);
+    return res;
+  }
+  GetBucketPolicyOutput output;
+  output.setRequestInfo(tosRes.result()->GetRequestInfo());
+  std::stringstream ss;
+  ss << tosRes.result()->getContent()->rdbuf();
+  output.setPolicy(ss.str());
+  res.setSuccess(true);
+  res.setR(output);
+  return res;
+}
+
+Outcome<TosError, DeleteBucketPolicyOutput>
+TosClientImpl::deleteBucketPolicy(const std::string &bucket) {
+  Outcome<TosError, DeleteBucketPolicyOutput> res;
+  std::string check = isValidBucketName(bucket);
+  if (!check.empty()) {
+    TosError error;
+    error.setMessage(check);
+    res.setE(error);
+    res.setSuccess(false);
+    return res;
+  }
+
+  auto rb = newBuilder(bucket, "");
+  rb.withQuery("policy", "");
+  auto req = rb.Build(http::MethodDelete, nullptr);
+  auto tosRes = roundTrip(req, 204);
+  if (!tosRes.isSuccess()){
+    res.setE(tosRes.error());
+    res.setSuccess(false);
+    return res;
+  }
+  DeleteBucketPolicyOutput output;
+  output.setRequestInfo(tosRes.result()->GetRequestInfo());
   res.setSuccess(true);
   res.setR(output);
   return res;
@@ -772,6 +863,7 @@ TosClientImpl::completeMultipartUpload(const std::string &bucket, CompleteMultip
   CompleteMultipartUploadOutput output;
   output.setRequestInfo(tosRes.result()->GetRequestInfo());
   output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
+  output.setCrc64(tosRes.result()->findHeader(HEADER_CRC64));
   res.setSuccess(true);
   res.setR(output);
   return res;
@@ -1069,8 +1161,10 @@ void TosClientImpl::putObject(const std::shared_ptr<TosRequest> &req, Outcome<To
   output.setRequestInfo(tosRes.result()->GetRequestInfo());
   output.setEtag(tosRes.result()->findHeader(http::HEADER_ETAG));
   output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
+  output.setCrc64(tosRes.result()->findHeader(HEADER_CRC64));
   output.setSseCustomerAlgorithm(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_ALGORITHM));
   output.setSseCustomerKeyMd5(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY_MD5));
+  output.setSseCustomerKey(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY));
   res.setSuccess(true);
   res.setR(output);
 }
@@ -1086,6 +1180,7 @@ void TosClientImpl::appendObject(const std::shared_ptr<TosRequest>& req, Outcome
   output.setRequestInfo(tosRes.result()->GetRequestInfo());
   output.setEtag(tosRes.result()->findHeader(http::HEADER_ETAG));
   output.setNextAppendOffset(stoi(nextOffset));
+  output.setCrc64(tosRes.result()->findHeader(HEADER_CRC64));
   res.setSuccess(true);
   res.setR(output);
 }
@@ -1129,6 +1224,7 @@ void TosClientImpl::copyObject(std::shared_ptr<TosRequest> &req, Outcome<TosErro
   ss << tosRes.result()->getContent()->rdbuf();
   output.fromJsonString(ss.str());
   output.setRequestInfo(tosRes.result()->GetRequestInfo());
+  output.setCrc64(tosRes.result()->findHeader(HEADER_CRC64));
   res.setSuccess(true);
   res.setR(output);
 }
@@ -1158,6 +1254,7 @@ void TosClientImpl::uploadPartCopy(RequestBuilder& rb, const UploadPartCopyInput
   output.setPartNumber(input.getPartNumber());
   output.setEtag(out.getEtag());
   output.setLastModified(out.getLastModified());
+  output.setCrc64(tosRes.result()->findHeader(HEADER_CRC64));
   res.setSuccess(true);
   res.setR(output);
 }
@@ -1198,6 +1295,7 @@ void TosClientImpl::createMultipartUpload(RequestBuilder &rb, Outcome<TosError, 
   output.setUploadId(upload.getUploadId());
   output.setSseCustomerAlgorithm(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_ALGORITHM));
   output.setSseCustomerMd5(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY_MD5));
+  output.setSseCustomerKey(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY));
   res.setSuccess(true);
   res.setR(output);
 }
@@ -1260,3 +1358,4 @@ void TosClientImpl::preSignedURL(RequestBuilder &rb, const std::string& method,
   res.setR(url);
   res.setSuccess(true);
 }
+

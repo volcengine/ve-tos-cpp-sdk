@@ -51,7 +51,11 @@ public:
   void setQuery(const std::map<std::string, std::string> &query) { query_ = query; }
   bool isAutoRecognizeContentType() const { return autoRecognizeContentType_; }
   void setAutoRecognizeContentType(bool autoRecognizeContentType) { autoRecognizeContentType_ = autoRecognizeContentType; }
-  void withHeader(const std::string & key, const std::string & value) { headers_[key] = value; }
+  void withHeader(const std::string & key, const std::string & value) {
+    if (!value.empty()) {
+      headers_[key] = value;
+    }
+  }
   void withQuery(const std::string & key, const std::string & value) { query_[key] = value; }
 
   std::shared_ptr<TosRequest> Build(const std::string & method);

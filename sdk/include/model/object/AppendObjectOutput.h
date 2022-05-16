@@ -14,10 +14,13 @@ public:
   void setNextAppendOffset(int64_t nextAppendOffset) {
     AppendObjectOutput::nextAppendOffset_ = nextAppendOffset;
   }
+  const std::string &getCrc64() const { return crc64_; }
+  void setCrc64(const std::string &crc64) { crc64_ = crc64; }
 
 private:
   RequestInfo requestInfo_;
   std::string etag_;
   int64_t nextAppendOffset_;
+  std::string crc64_;
 };
 } // namespace VolcengineTos
