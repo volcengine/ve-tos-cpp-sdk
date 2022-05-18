@@ -4,6 +4,8 @@
 namespace VolcengineTos {
 class UploadPartOutput {
 public:
+  std::string dump();
+  void load(const std::string& output);
   const RequestInfo &getRequestInfo() const { return requestInfo_; }
   void setRequestInfo(const RequestInfo &requestInfo) { requestInfo_ = requestInfo; }
   int getPartNumber() const { return partNumber_; }
@@ -17,7 +19,7 @@ public:
 
 private:
   RequestInfo requestInfo_;
-  int partNumber_;
+  int partNumber_=0;
   std::string etag_;
   std::string sseCustomerAlgorithm_;
   std::string sseCustomerMD5_;

@@ -59,6 +59,16 @@ Outcome<TosError, PutObjectOutput> TosClient::putObject(const std::string &bucke
                                                         const std::shared_ptr<std::iostream> &content, const RequestOptionBuilder &builder) {
   return tosClientImpl_->putObject(bucket, objectKey, content, builder);
 }
+
+Outcome<TosError, UploadFileOutput>
+TosClient::uploadFile(const std::string &bucket, const UploadFileInput &input) {
+  return tosClientImpl_->uploadFile(bucket, input, {});
+}
+Outcome<TosError, UploadFileOutput>
+TosClient::uploadFile(const std::string &bucket, const UploadFileInput &input,
+                      const RequestOptionBuilder &builder) {
+  return tosClientImpl_->uploadFile(bucket, input, builder);
+}
 Outcome<TosError, GetObjectOutput> TosClient::getObject(const std::string &bucket, const std::string &objectKey) {
   return tosClientImpl_->getObject(bucket, objectKey);
 }

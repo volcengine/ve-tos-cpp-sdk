@@ -75,6 +75,11 @@ set(SDK_HEADER
         include/model/object/UploadPartCopyOutput.h
         include/model/object/UploadPartInput.h
         include/model/object/UploadPartOutput.h
+        include/model/object/UploadFileOutput.h
+        include/model/object/UploadFileInput.h
+        include/model/object/UploadFileInfo.h
+        include/model/object/UploadFileCheckpoint.h
+        include/model/object/UploadFilePartInfo.h
         include/model/RequestInfo.h
         include/utils/BaseUtils.h
         include/TosResponse.h
@@ -84,7 +89,7 @@ set(SDK_HEADER
         include/TosClient.h
         include/Config.h
         include/RequestBuilder.h
-        include/RequestOptionBuilder.h)
+        include/RequestOptionBuilder.h )
 set(SDK_LIB
         src/transport/http/HttpClient.cc
         src/transport/http/HttpRequest.cc
@@ -115,6 +120,10 @@ set(SDK_LIB
         src/model/object/ListMultipartUploadsOutput.cc
         src/model/object/DeleteMultiObjectsInput.cc
         src/model/object/DeleteMultiObjectsOutput.cc
+        src/model/object/UploadFileCheckpoint.cc
+        src/model/object/UploadPartOutput.cc
+        src/model/object/UploadFilePartInfo.cc
+        src/model/object/UploadFileInfo.cc
         src/TosRequest.cc
         src/RequestBuilder.cc
         src/TosClient.cc
@@ -122,7 +131,7 @@ set(SDK_LIB
         src/TosResponse.cc
         src/TosClientImpl.h
         src/TosClientImpl.cc
-        src/utils/MimeType.h )
+        src/utils/MimeType.h)
 
 if (BUILD_SHARED_LIB)
     set(STATIC_LIB_SUFFIX "-static")

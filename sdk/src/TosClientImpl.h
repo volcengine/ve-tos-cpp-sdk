@@ -43,6 +43,7 @@
 #include "model/object/ListUploadedPartsInput.h"
 #include "model/object/DeleteMultiObjectsInput.h"
 #include "TosClient.h"
+#include "model/object/UploadFileCheckpoint.h"
 
 namespace VolcengineTos {
 class TosClientImpl {
@@ -68,6 +69,8 @@ public:
   Outcome<TosError, DeleteMultiObjectsOutput> deleteMultiObjects(const std::string& bucket, DeleteMultiObjectsInput& input, const RequestOptionBuilder& builder);
   Outcome<TosError, PutObjectOutput> putObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content);
   Outcome<TosError, PutObjectOutput> putObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, const RequestOptionBuilder& builder);
+
+  Outcome<TosError, UploadFileOutput> uploadFile(const std::string& bucket, const UploadFileInput& input, const RequestOptionBuilder& builder);
 
   Outcome<TosError, AppendObjectOutput> appendObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, int64_t offset);
   Outcome<TosError, AppendObjectOutput> appendObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, int64_t offset, const RequestOptionBuilder& builder);
@@ -141,6 +144,11 @@ private:
   void uploadPartCopy(RequestBuilder &rb, const UploadPartCopyInput &input, Outcome<TosError, UploadPartCopyOutput> &res);
   void getObjectAcl(RequestBuilder &rb, Outcome<TosError, GetObjectAclOutput> &res);
   void createMultipartUpload(RequestBuilder &rb, Outcome<TosError, CreateMultipartUploadOutput> &res);
+  Outcome<TosError, UploadFileCheckpoint> initCheckpoint(const std::string & bucket, const UploadFileInput & input,
+                                                         const UploadFileInfo & info, const std::string & checkpointFilePath, const RequestOptionBuilder &builder);
+  Outcome<TosError, UploadFileCheckpoint> getCheckpoint(const std::string & bucket, const UploadFileInput & input,
+                                                        const UploadFileInfo & fileInfo, const std::string & checkpointFilePath, const RequestOptionBuilder &builder);
+  Outcome<TosError, UploadFileOutput> uploadPartConcurrent(const UploadFileInput& input, UploadFileCheckpoint checkpoint, const RequestOptionBuilder &builder);
   void uploadPart(RequestBuilder &rb, const UploadPartInput &input, Outcome<TosError, UploadPartOutput> &res);
   void listUploadedParts(RequestBuilder &rb, const std::string &uploadId, Outcome<TosError, ListUploadedPartsOutput> &res);
   void preSignedURL(RequestBuilder &rb, const std::string &method, const std::chrono::duration<int> &ttl, Outcome<TosError, std::string> &res);
