@@ -34,6 +34,14 @@ std::string StringUtils::stringToHex(const unsigned char * input, int length) {
   }
   return output;
 }
+std::string StringUtils::stringReplace(const std::string &input, const std::string &substr, const std::string &newstr) {
+  std::string ret(input);
+  std::string::size_type pos = 0;
+  while((pos = ret.find(substr)) != std::string::npos) {
+    ret.replace(pos, substr.length(), newstr);
+  }
+  return ret;
+}
 
 std::string MapUtils::findValueByKeyIgnoreCase(
     const std::map<std::string, std::string> &map, const std::string &key) {

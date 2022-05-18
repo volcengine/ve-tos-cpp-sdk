@@ -46,6 +46,8 @@
 #include "model/bucket/PutBucketPolicyOutput.h"
 #include "model/bucket/GetBucketPolicyOutput.h"
 #include "model/bucket/DeleteBucketPolicyOutput.h"
+#include "model/object/UploadFileOutput.h"
+#include "model/object/UploadFileInput.h"
 
 namespace VolcengineTos {
 static const char* TOS_SDK_VERSION = "0.1.0";
@@ -127,6 +129,9 @@ public:
   //   withACLGrantWrite, withACLGrantWriteAcp set object acl.
   //   withStorageClass set storage class, 'STANDARD|IA'
   Outcome<TosError, PutObjectOutput> putObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, const RequestOptionBuilder& builder);
+
+  Outcome<TosError, UploadFileOutput> uploadFile(const std::string& bucket, const UploadFileInput& input);
+  Outcome<TosError, UploadFileOutput> uploadFile(const std::string& bucket, const UploadFileInput& input, const RequestOptionBuilder& builder);
 
   Outcome<TosError, AppendObjectOutput> appendObject(const std::string& bucket, const std::string& objectKey, const std::shared_ptr<std::iostream> &content, int64_t offset);
   // optional. setting withXXX properties.

@@ -388,6 +388,24 @@ void uploadPartAbort(const std::shared_ptr<TosClient> &client, const std::string
   std::cout << abort.result().getRequestInfo().getRequestId() << std::endl;
 }
 
+void uploadFile(const std::shared_ptr<TosClient> &client, const std::string & bucket, const std::string & key, const std::string & path){
+  UploadFileInput input;
+  input.setObjectKey(key);
+  input.setPartSize(5 * 1024 * 1024);
+  input.setTaskNum(100);
+  input.setEnableCheckpoint(true);
+  input.setUploadFilePath(path);
+  auto output = client->uploadFile(bucket, input);
+  if (!output.isSuccess()) {
+    std::cout << output.error().String() << std::endl;
+    return;
+  }
+  std::cout << "the object etag is: "
+            << output.result().getOutput().getRequestInfo().getRequestId()
+            << std::endl;
+}
+
+
 void listMultipart(const std::shared_ptr<TosClient> &client, const std::string & bucket){
   ListMultipartUploadsInput input;
   input.setMaxUploads(100);
