@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
-project(ve-tos-cpp-sdk-example CXX)
+project(ve-tos-cpp-sdk-example
+        VERSION 0.2.0
+        LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 
 add_executable(${PROJECT_NAME} example.cc)

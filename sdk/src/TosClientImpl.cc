@@ -7,7 +7,15 @@
 #include "transport/DefaultTransport.h"
 #include "transport/TransportConfig.h"
 #include "utils/MimeType.h"
+#include "model/object/UploadFileInfo.h"
+#include "model/object/UploadFileCheckpoint.h"
 #include <cstring>
+#include <fstream>
+#include <sys/stat.h>
+#include <cstdio>
+#include <thread>
+#include <mutex>
+#include <queue>
 
 using namespace VolcengineTos;
 
@@ -56,6 +64,12 @@ std::string isValidBucketName(const std::string& name) {
 std::string isValidKey(const std::string& key) {
   if (key.empty()){
     return "tos: object name is empty";
+  }
+  if (!StringUtils::isValidUTF8(key)) {
+    return "tos: object name is not viewable utf-8 encode";
+  }
+  if (key[0] == '/' || key[0] == '\\' || key.find("//") != key.npos) {
+    return "tos: object name cannot start with '/' or '\' contains '//'";
   }
   return "";
 }
@@ -438,6 +452,324 @@ TosClientImpl::putObject(const std::string &bucket, const std::string &objectKey
   return res;
 }
 
+Outcome<TosError, int> validateInput(const std::string& bucket, const UploadFileInput & input) {
+  Outcome<TosError, int> ret;
+  TosError error;
+  std::string check = isValidBucketName(bucket);
+  if (!check.empty()) {
+    error.setMessage(check);
+    ret.setE(error);
+    ret.setSuccess(false);
+    return ret;
+  }
+  check = isValidKey(input.getObjectKey());
+  if (!check.empty()) {
+    error.setMessage(check);
+    ret.setE(error);
+    ret.setSuccess(false);
+    return ret;
+  }
+  if (input.getPartSize() < 5 * 1024 * 1024 || input.getPartSize() > 5 * 1024 * 1024 * 1024L) {
+    error.setMessage("The input part size is invalid, please set it range from 5MB to 5GB");
+    ret.setE(error);
+    ret.setSuccess(false);
+    return ret;
+  }
+  int taskNum = input.getTaskNum();
+  if (taskNum > 1000) taskNum = 1000;
+  if (taskNum < 1) taskNum = 1;
+  ret.setR(taskNum);
+  ret.setSuccess(true);
+  return ret;
+}
+std::string getCheckpointPath(const std::string & bucket, const UploadFileInput & input) {
+  std::stringstream ret;
+  std::string objKey(StringUtils::stringReplace(input.getObjectKey(), "/", "_"));
+  if (input.getCheckpointFile().empty()) {
+    ret << input.getUploadFilePath() << "." << bucket << "." << objKey << ".upload";
+    return ret.str();
+  } else {
+    struct stat cfs{};
+    if (stat(input.getCheckpointFile().c_str(), &cfs) == 0) {
+      if (cfs.st_mode & S_IFDIR) {
+        ret << input.getCheckpointFile() << "/" << bucket << "." << objKey << ".upload";
+        return ret.str();
+      } else {
+        ret << input.getCheckpointFile();
+        return ret.str();
+      }
+    }
+  }
+  return "";
+}
+Outcome<TosError, UploadFileInfo> getUploadFileInfo(const std::string & uploadFilePath){
+  Outcome<TosError, UploadFileInfo> ret;
+  UploadFileInfo ufi;
+  TosError e;
+  struct stat ufs{};
+  if (stat(uploadFilePath.c_str(), &ufs) == 0) {
+    if (ufs.st_mode & S_IFDIR) {
+      e.setMessage("Does not support directory, please specific your file path");
+      ret.setE(e);
+      ret.setSuccess(false);
+      return ret;
+    } else {
+      ufi.setFilePath(uploadFilePath);
+#ifdef __APPLE__
+      ufi.setLastModified(ufs.st_mtimespec.tv_sec);
+#else
+      ufi.setLastModified(ufs.st_mtim.tv_sec);
+#endif
+      ufi.setFileSize(ufs.st_size);
+      ret.setR(ufi);
+      ret.setSuccess(true);
+    }
+  } else {
+    e.setMessage("File not found in the specific path");
+    ret.setE(e);
+    ret.setSuccess(false);
+    return ret;
+  }
+  return ret;
+}
+UploadFileCheckpoint loadCheckpointFromFile(const std::string &checkpointFilePath) {
+  UploadFileCheckpoint ufc;
+  ufc.load();
+  ufc.setCheckpointFilePath(checkpointFilePath);
+  return ufc;
+}
+bool deleteCheckpointFile(const std::string &checkpointFilePath) {
+  return remove(checkpointFilePath.c_str());
+}
+Outcome<TosError, std::vector<UploadFilePartInfo>> getPartInfoFromFile(int64_t uploadFileSize, int64_t partSize) {
+  Outcome<TosError, std::vector<UploadFilePartInfo>> ret;
+  auto partNum = uploadFileSize / partSize;
+  auto lastPartSize = uploadFileSize % partSize;
+  TosError error;
+  if (lastPartSize != 0) partNum++;
+  if (partNum > 10000) {
+    error.setMessage("The split file parts number is larger than 10000, please increase your part size");
+    ret.setSuccess(false);
+    ret.setE(error);
+    return ret;
+  }
+  std::vector<UploadFilePartInfo> partInfoList;
+  for (int i = 0; i < partNum; ++i) {
+    UploadFilePartInfo info;
+    info.setPartNum(i+1);
+    info.setOffset(i * partSize);
+    if (i < partNum-1) {
+      info.setPartSize(partSize);
+    } else {
+      info.setPartSize(lastPartSize);
+    }
+    partInfoList.emplace_back(info);
+  }
+  ret.setR(partInfoList);
+  ret.setSuccess(true);
+  return ret;
+}
+Outcome<TosError, UploadFileCheckpoint> TosClientImpl::initCheckpoint(const std::string & bucket, const UploadFileInput & input,
+                                                                      const UploadFileInfo & info, const std::string & checkpointFilePath,
+                                                                      const RequestOptionBuilder & builder) {
+  Outcome<TosError, UploadFileCheckpoint> ret;
+  TosError error;
+  auto partInfo = getPartInfoFromFile(info.getFileSize(), input.getPartSize());
+  if (!partInfo.isSuccess()) {
+    error.setMessage(partInfo.error().getMessage());
+    ret.setSuccess(false);
+    ret.setE(error);
+    return ret;
+  }
+  UploadFileCheckpoint checkpoint;
+  checkpoint.setBucket(bucket);
+  checkpoint.setKey(input.getObjectKey());
+  checkpoint.setFileInfo(info);
+  checkpoint.setUploadFilePartInfoList(partInfo.result());
+  checkpoint.setCheckpointFilePath(checkpointFilePath);
+  auto output = this->createMultipartUpload(bucket, input.getObjectKey());
+  if (!output.isSuccess()) {
+    error.setMessage(output.error().getMessage());
+    ret.setSuccess(false);
+    ret.setE(error);
+    return ret;
+  }
+  checkpoint.setUploadId(output.result().getUploadId());
+  ret.setSuccess(true);
+  ret.setR(checkpoint);
+  return ret;
+}
+
+Outcome<TosError, UploadFileCheckpoint> TosClientImpl::getCheckpoint
+    (const std::string & bucket, const UploadFileInput & input, const UploadFileInfo & fileInfo,
+     const std::string & checkpointFilePath, const RequestOptionBuilder & builder){
+  Outcome<TosError, UploadFileCheckpoint> ret;
+  UploadFileCheckpoint checkpoint;
+  if (input.isEnableCheckpoint()) {
+    checkpoint = loadCheckpointFromFile(checkpointFilePath);
+  } else {
+    deleteCheckpointFile(checkpointFilePath);
+  }
+  bool valid = checkpoint.isValid(fileInfo.getFileSize(), fileInfo.getLastModified(),
+                                  bucket, input.getObjectKey(), input.getUploadFilePath());
+  if (!valid) {
+    deleteCheckpointFile(checkpointFilePath);
+    return this->initCheckpoint(bucket, input, fileInfo, checkpointFilePath, builder);
+  }
+  ret.setR(checkpoint);
+  ret.setSuccess(true);
+  return ret;
+}
+std::shared_ptr<std::fstream> getContentFromFile(const std::string & filePath) {
+  return std::make_shared<std::fstream>(filePath, std::ios::in | std::ios::binary);
+}
+
+Outcome<TosError, UploadFileOutput> TosClientImpl::uploadPartConcurrent(const UploadFileInput& input,
+                                                                        UploadFileCheckpoint checkpoint,
+                                                                        const RequestOptionBuilder & builder){
+  Outcome<TosError, UploadFileOutput> ret;
+  TosError error;
+  std::vector<Outcome<TosError, UploadPartOutput>> uploadedOutputs;
+  uploadedOutputs.reserve(checkpoint.getUploadFilePartInfoList().size());
+  std::vector<UploadFilePartInfo> toUpload = checkpoint.getUploadFilePartInfoList();
+  std::vector<std::thread> threadPool;
+  std::mutex lock_;
+
+  for (int i = 0; i < input.getTaskNum(); i++) {
+    auto res = std::thread([&]() {
+      while (true) {
+        UploadFilePartInfo part;
+        {
+          std::lock_guard<std::mutex> lck(lock_);
+          if (toUpload.empty())
+            break;
+          part = toUpload.front();
+          toUpload.erase(toUpload.begin());
+        }
+
+        if (part.isCompleted()) {
+          Outcome<TosError, UploadPartOutput> uploadedPart;
+          uploadedPart.setSuccess(true);
+          uploadedPart.setR(part.getPart());
+          {
+            std::lock_guard<std::mutex> lck(lock_);
+            uploadedOutputs.emplace_back(uploadedPart);
+          }
+          continue;
+        }
+
+        std::shared_ptr<std::iostream> content = getContentFromFile(checkpoint.getFileInfo().getFilePath());
+        content->seekg(part.getOffset(), content->beg);
+
+        UploadPartInput upi;
+        upi.setKey(checkpoint.getKey());
+        upi.setUploadId(checkpoint.getUploadId());
+        upi.setPartNumber(part.getPartNum());
+        upi.setPartSize(part.getPartSize());
+        upi.setContent(content);
+        auto res = this->uploadPart(checkpoint.getBucket(), upi, builder);
+        // todo 校验数据 etag/crc64
+        if (res.isSuccess()) {
+          part.setIsCompleted(true);
+          part.setPart(res.result());
+          checkpoint.setUploadFilePartInfoByIdx(part, part.getPartNum()-1);
+          if (input.isEnableCheckpoint()) {
+            {
+              std::lock_guard<std::mutex> lck(lock_);
+              checkpoint.dump();
+            }
+          }
+        }
+        {
+          std::lock_guard<std::mutex> lck(lock_);
+          uploadedOutputs.emplace_back(res);
+        }
+      }
+    });
+    threadPool.emplace_back(std::move(res));
+  }
+  for (auto& worker:threadPool) {
+    if(worker.joinable()){
+      worker.join();
+    }
+  }
+  std::vector<UploadPartOutput> uploadedList;
+  for (auto & i : uploadedOutputs) {
+    if (!i.isSuccess()) {
+      // todo 判断什么情况的失败可以跳过（用户重新调用），什么情况可以abort
+      //
+      AbortMultipartUploadInput abort;
+      abort.setKey(checkpoint.getKey());
+      abort.setUploadId(checkpoint.getUploadId());
+      this->abortMultipartUpload(checkpoint.getBucket(), abort);
+      // 静默abort，用户不感知
+      ret.setSuccess(false);
+      error.setMessage("upload part failed");
+      ret.setE(error);
+      return ret;
+    }
+    uploadedList.emplace_back(i.result());
+  }
+  CompleteMultipartUploadInput complete(checkpoint.getKey(), checkpoint.getUploadId(), uploadedList);
+  auto output = this->completeMultipartUpload(checkpoint.getBucket(), complete);
+  if (!output.isSuccess()) {
+    ret.setSuccess(false);
+    error.setMessage("complete multi part failed");
+    ret.setE(error);
+    return ret;
+  }
+  // 合并失败，根据情况选择是否删除
+  if (input.isEnableCheckpoint()) {
+    deleteCheckpointFile(checkpoint.getCheckpointFilePath());
+  }
+  UploadFileOutput ufo;
+  ufo.setUploadId(checkpoint.getUploadId());
+  ufo.setBucket(checkpoint.getBucket());
+  ufo.setObjectKey(checkpoint.getKey());
+  ufo.setOutput(output.result());
+  ret.setSuccess(true);
+  ret.setR(ufo);
+  return ret;
+}
+Outcome<TosError, UploadFileOutput>
+TosClientImpl::uploadFile(const std::string &bucket,
+                          const UploadFileInput &input, const RequestOptionBuilder & builder) {
+  Outcome<TosError, UploadFileOutput> res;
+  TosError error;
+  auto check = validateInput(bucket, input);
+  if (!check.isSuccess()){
+    error.setMessage(check.error().getMessage());
+    res.setE(error);
+    res.setSuccess(false);
+    return res;
+  }
+  std::string checkpointFilePath;
+  if (input.isEnableCheckpoint()) {
+    checkpointFilePath = getCheckpointPath(bucket, input);
+    if (checkpointFilePath.empty()) {
+      error.setMessage("The file is not found in the specific path " + input.getCheckpointFile());
+      res.setE(error);
+      res.setSuccess(false);
+      return res;
+    }
+  }
+  auto ufi = getUploadFileInfo(input.getUploadFilePath());
+  if (!ufi.isSuccess()) {
+    error.setMessage(ufi.error().getMessage());
+    res.setE(error);
+    res.setSuccess(false);
+    return res;
+  }
+
+  auto cp = getCheckpoint(bucket, input, ufi.result(), checkpointFilePath, builder);
+  if (!cp.isSuccess()) {
+    error.setMessage(cp.error().getMessage());
+    res.setE(error);
+    res.setSuccess(false);
+    return res;
+  }
+  return uploadPartConcurrent(input, cp.result(), builder);
+}
 Outcome<TosError, AppendObjectOutput>
 TosClientImpl::appendObject(const std::string &bucket, const std::string &objectKey,
                             const std::shared_ptr<std::iostream> &content, int64_t offset) {
@@ -1310,6 +1642,7 @@ void TosClientImpl::uploadPart(RequestBuilder &rb, const UploadPartInput &input,
     res.setSuccess(false);
     return;
   }
+  rb.setContentLength(input.getPartSize());
   rb.withQuery("uploadId", input.getUploadId());
   rb.withQuery("partNumber", std::to_string(input.getPartNumber()));
   auto req = rb.Build(http::MethodPut, input.getContent());
