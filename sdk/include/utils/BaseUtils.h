@@ -17,6 +17,10 @@ public:
   static std::string toLower(const std::string &input);
 
   static std::string stringToHex(const unsigned char * input, int length);
+
+  static std::string stringReplace(const std::string &input, const std::string &substr, const std::string &newstr);
+
+  static bool isValidUTF8(const std::string &input);
 };
 class MapUtils {
 public:
