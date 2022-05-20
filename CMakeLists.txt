@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 0.1.3
+        VERSION 0.2.0
         LANGUAGES CXX)
 
 # project settings
@@ -46,6 +46,8 @@ message(STATUS "CURL include: ${CURL_INCLUDE_DIRS}")
 message(STATUS "CURL lib: ${CURL_LIBRARIES}")
 set(CLIENT_CURL_LIBS ${CURL_LIBRARIES})
 set(CLIENT_CURL_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 add_subdirectory(sdk)
 
