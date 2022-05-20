@@ -34,6 +34,40 @@ std::string StringUtils::stringToHex(const unsigned char * input, int length) {
   }
   return output;
 }
+std::string StringUtils::stringReplace(const std::string &input, const std::string &substr, const std::string &newstr) {
+  std::string ret(input);
+  std::string::size_type pos = 0;
+  while((pos = ret.find(substr)) != std::string::npos) {
+    ret.replace(pos, substr.length(), newstr);
+  }
+  return ret;
+}
+bool StringUtils::isValidUTF8(const std::string &input) {
+  int byteLength = 0;
+  unsigned char uc;
+  for (char i : input) {
+    uc = i;
+    // 判断不可见 ascii 字符
+    if (uc < 32 || uc == 127) return false;
+    if (byteLength == 0) {
+      if (uc >= 0x80) {
+        if (uc >= 0xFC && uc <= 0xFD) byteLength = 6;
+        else if (uc >= 0xF8) byteLength = 5;
+        else if (uc >= 0xF0) byteLength = 4;
+        else if (uc >= 0xE0) byteLength = 3;
+        else if (uc >= 0xC0) byteLength = 2;
+        else return false;
+        byteLength--;
+      }
+    } else{
+      if ((uc & 0xC0) != 0x80) return false;
+      if ((uc < 32)) return false;
+      byteLength--;
+    }
+  }
+  if (byteLength > 0 ) return false;
+  return true;
+}
 
 std::string MapUtils::findValueByKeyIgnoreCase(
     const std::map<std::string, std::string> &map, const std::string &key) {

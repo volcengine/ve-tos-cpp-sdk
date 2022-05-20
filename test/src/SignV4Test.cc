@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "auth/SignV4.h"
+#include "../../sdk/src/auth/SignV4.h"
 
 using namespace VolcengineTos;
 
