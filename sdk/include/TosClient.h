@@ -48,9 +48,10 @@
 #include "model/bucket/DeleteBucketPolicyOutput.h"
 #include "model/object/UploadFileOutput.h"
 #include "model/object/UploadFileInput.h"
+#include "auth/FederationCredentials.h"
 
 namespace VolcengineTos {
-static const char* TOS_SDK_VERSION = "0.2.0";
+static const char* TOS_SDK_VERSION = "0.2.1";
 #ifdef WIN32
 static const char* PLATFORM_NAME = "Windows";
 #elif __linux__
@@ -91,6 +92,7 @@ public:
             const std::string &accessKeyId, const std::string &secretKeyId, const std::string &securityToken);
 
   TosClient(const std::string& endpoint, const std::string& region, const StaticCredentials &cred);
+  TosClient(const std::string& endpoint, const std::string& region, const FederationCredentials &cred);
   virtual ~TosClient();
 
   Outcome<TosError, CreateBucketOutput> createBucket(const CreateBucketInput& input);

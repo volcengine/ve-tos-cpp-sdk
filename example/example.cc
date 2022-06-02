@@ -4,6 +4,10 @@
 #include "model/acl/Acl.h"
 #include <string>
 #include <fstream>
+#include "auth/FederationTokenProvider.h"
+#include "auth/FederationCredentials.h"
+#include <functional>
+#include <utility>
 
 using namespace VolcengineTos;
 
@@ -509,6 +513,48 @@ void preSignedUrl(const std::shared_ptr<TosClient> &client, const std::string & 
   std::cout << "the preSigned url is: " << res.result() << std::endl;
 }
 
+typedef std::function<FederationToken()> Provider;
+class MockFederationTokenProvider : public FederationTokenProvider {
+public:
+  FederationToken federationToken() override;
+  void registerProvider(Provider provider) { provider_ = std::move(provider); }
+private:
+  Provider provider_;
+};
+FederationToken MockFederationTokenProvider::federationToken() {
+  return provider_();
+}
+
+void federationToken(const std::string &endpoint, const std::string &region, const std::string & ak, const std::string &sk,
+                     const std::string &bucket, const std::string &key) {
+  MockFederationTokenProvider tokenProvider;
+  tokenProvider.registerProvider(
+      [&]() -> FederationToken {
+        FederationToken ft;
+        Credential credential;
+        credential.setAccessKeyId(ak);
+        credential.setAccessKeySecret(sk);
+        ft.setCredential(credential);
+        // 600秒过期
+        ft.setExpiration(std::time(nullptr) + 10);
+        return ft;
+      }
+  );
+  FederationCredentials tokenCredential(tokenProvider);
+  TosClient client(endpoint, region, tokenCredential);
+  std::string data = "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'";
+  auto ss = std::make_shared<std::stringstream>(data);
+  RequestOptionBuilder rob;
+  rob.withContentLength(data.length());
+  rob.withContentType("application/json");
+  rob.withMeta("self-test", "yes");
+  auto output = client.putObject(bucket, key, ss, rob);
+  if (!output.isSuccess()) {
+    std::cout << output.error().String() << std::endl;
+  }
+  std::cout << output.result().getRequestInfo().getRequestId() << std::endl;
+
+}
 int main(){
   std::string endpoint("your endpoint");
   std::string region("your region");
