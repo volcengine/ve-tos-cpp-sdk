@@ -12,10 +12,22 @@
 #include "FederationTokenProvider.h"
 namespace VolcengineTos {
 typedef std::chrono::duration<int> secType;
-class FederationCredentials : public Credentials{
+class FederationCredentials : public Credentials {
 public:
-  explicit FederationCredentials(FederationTokenProvider tokenProvider);
-  ~FederationCredentials() override;
+  FederationCredentials() = delete;
+  ~FederationCredentials() override = default;
+  FederationCredentials(const FederationCredentials &fc)
+      : tokenProvider_(fc.tokenProvider_) {
+    cachedToken_ = fc.cachedToken_;
+    preFetch_ = fc.preFetch_;
+  }
+  FederationCredentials& operator=(const FederationCredentials& fc) {
+    cachedToken_ = fc.cachedToken_;
+    preFetch_ = fc.preFetch_;
+    tokenProvider_ = fc.tokenProvider_;
+    return *this;
+  }
+  explicit FederationCredentials(VolcengineTos::FederationTokenProvider &tokenProvider);
   FederationToken token();
   Credential credential() override;
 
@@ -25,7 +37,7 @@ private:
   FederationToken cachedToken_;
   std::atomic_flag refreshing_ = ATOMIC_FLAG_INIT;
   secType preFetch_{};
-  FederationTokenProvider tokenProvider_;
+  FederationTokenProvider &tokenProvider_;
   std::mutex update_;
 };
 }// namespace VolcengineTos

@@ -44,11 +44,13 @@
 #include "model/object/DeleteMultiObjectsInput.h"
 #include "TosClient.h"
 #include "model/object/UploadFileCheckpoint.h"
+#include "auth/FederationCredentials.h"
 
 namespace VolcengineTos {
 class TosClientImpl {
 public:
   TosClientImpl(const std::string &endpoint, const std::string &region, const StaticCredentials &cred);
+  TosClientImpl(const std::string &endpoint, const std::string &region, const FederationCredentials &cred);
   ~TosClientImpl() = default;
 
   Outcome<TosError, CreateBucketOutput> createBucket(const CreateBucketInput& input);
@@ -152,5 +154,6 @@ private:
   void uploadPart(RequestBuilder &rb, const UploadPartInput &input, Outcome<TosError, UploadPartOutput> &res);
   void listUploadedParts(RequestBuilder &rb, const std::string &uploadId, Outcome<TosError, ListUploadedPartsOutput> &res);
   void preSignedURL(RequestBuilder &rb, const std::string &method, const std::chrono::duration<int> &ttl, Outcome<TosError, std::string> &res);
+  void init(const std::string &endpoint, const std::string &region);
 };
 }// namespace VolcengineTos
