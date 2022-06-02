@@ -35,6 +35,11 @@ TosClient::TosClient(const std::string &endpoint, const std::string &region, con
 {
 }
 
+TosClient::TosClient(const std::string &endpoint, const std::string &region, const FederationCredentials &cred) :
+  tosClientImpl_(std::make_shared<TosClientImpl>(endpoint, region, cred))
+{
+}
+
 TosClient::~TosClient() = default;
 
 Outcome<TosError, CreateBucketOutput> TosClient::createBucket(const CreateBucketInput &input) {

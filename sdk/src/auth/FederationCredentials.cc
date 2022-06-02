@@ -3,12 +3,11 @@
 #include "auth/FederationCredentials.h"
 
 VolcengineTos::FederationCredentials::FederationCredentials(
-    VolcengineTos::FederationTokenProvider tokenProvider) {
+    VolcengineTos::FederationTokenProvider &tokenProvider)
+    : tokenProvider_(tokenProvider) {
   cachedToken_ = tokenProvider.federationToken();
-  tokenProvider_ = std::move(tokenProvider);
   preFetch_ = secType(300);
 }
-VolcengineTos::FederationCredentials::~FederationCredentials() = default;
 
 VolcengineTos::FederationToken VolcengineTos::FederationCredentials::token() {
   return cachedToken_;

@@ -19,8 +19,22 @@
 
 using namespace VolcengineTos;
 
-TosClientImpl::TosClientImpl(const std::string &endpoint, const std::string &region, const StaticCredentials &cred)
-{
+TosClientImpl::TosClientImpl(const std::string &endpoint,
+                             const std::string &region,
+                             const StaticCredentials &cred) {
+  init(endpoint, region);
+  credentials_ = std::make_shared<StaticCredentials>(cred);
+  signer_ = std::make_shared<SignV4>(credentials_, region);
+}
+TosClientImpl::TosClientImpl(const std::string &endpoint,
+                             const std::string &region,
+                             const FederationCredentials &cred) {
+  init(endpoint, region);
+  credentials_ = std::make_shared<FederationCredentials>(cred);
+  signer_ = std::make_shared<SignV4>(credentials_, region);
+}
+void TosClientImpl::init(const std::string &endpoint,
+                        const std::string &region) {
   TransportConfig conf;
   transport_ = std::make_shared<DefaultTransport>(conf);
 
@@ -39,8 +53,6 @@ TosClientImpl::TosClientImpl(const std::string &endpoint, const std::string &reg
     scheme_ = http::SchemeHTTP;
     host_ = endpoint;
   }
-  credentials_ = std::make_shared<StaticCredentials>(cred);
-  signer_ = std::make_shared<SignV4>(credentials_, region);
 
   if (userAgent_.empty()) userAgent_ = DefaultUserAgent();
   urlMode_ = URL_MODE_DEFAULT;
