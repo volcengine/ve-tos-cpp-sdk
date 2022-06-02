@@ -4,7 +4,7 @@
 
 #include <utility>
 namespace VolcengineTos {
-class StaticCredentials : public Credentials{
+class StaticCredentials : public Credentials {
 public:
   StaticCredentials() = default;
   ~StaticCredentials() override = default;
