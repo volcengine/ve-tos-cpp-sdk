@@ -41,4 +41,3 @@ private:
   std::mutex update_;
 };
 }// namespace VolcengineTos
-

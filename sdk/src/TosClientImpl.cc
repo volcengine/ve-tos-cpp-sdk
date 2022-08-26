@@ -34,7 +34,7 @@ TosClientImpl::TosClientImpl(const std::string &endpoint,
   signer_ = std::make_shared<SignV4>(credentials_, region);
 }
 void TosClientImpl::init(const std::string &endpoint,
-                        const std::string &region) {
+                         const std::string &region) {
   TransportConfig conf;
   transport_ = std::make_shared<DefaultTransport>(conf);
 
@@ -1070,7 +1070,7 @@ TosClientImpl::putObjectAcl(const std::string &bucket, const PutObjectAclInput &
   std::string jsonRules(rules.toJsonString());
   if (jsonRules != "null") {
     ss = std::make_shared<std::stringstream>(jsonRules);
-    std::cout << ss->str() << std::endl;
+    //std::cout << ss->str() << std::endl;
   }
   auto rb = newBuilder(bucket, input.getKey());
   rb.withQuery("acl", "");
@@ -1478,8 +1478,8 @@ void TosClientImpl::deleteObject(RequestBuilder &rb,Outcome<TosError, DeleteObje
 void TosClientImpl::deleteMultiObjects(RequestBuilder &rb, const std::string &data, const std::string & dataMd5, Outcome<TosError, DeleteMultiObjectsOutput> &res) {
   rb.withHeader(http::HEADER_CONTENT_MD5, dataMd5);
   rb.withQuery("delete", "");
-  std::cout << data << std::endl;
-  std::cout << dataMd5 << std::endl;
+  //std::cout << data << std::endl;
+  //std::cout << dataMd5 << std::endl;
   auto req = rb.Build(http::MethodPost, std::make_shared<std::stringstream>(data));
   auto tosRes = roundTrip(req, 200);
   if (!tosRes.isSuccess()){
@@ -1703,4 +1703,3 @@ void TosClientImpl::preSignedURL(RequestBuilder &rb, const std::string& method,
   res.setR(url);
   res.setSuccess(true);
 }
-
