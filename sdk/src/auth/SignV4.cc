@@ -315,7 +315,7 @@ std::string SignV4::doSign(const std::string& method, const std::string& path, c
   std::string buf;
 
   std::string req = this->canonicalRequest(method, path, contentSha256, header, query);
-  std::cout << "canonicalRequest: " << req << std::endl;
+  //std::cout << "canonicalRequest: " << req << std::endl;
 
   buf.append(signPrefix).append(split);
 
@@ -329,7 +329,7 @@ std::string SignV4::doSign(const std::string& method, const std::string& path, c
   std::string hexSum(StringUtils::stringToHex(sum, 32));
   buf.append(hexSum);
 
-  std::cout << "string to sign: " + buf << std::endl;
+  //std::cout << "string to sign: " + buf << std::endl;
 
   unsigned int mdLen = 32;
   unsigned char unsignedDate[32];
