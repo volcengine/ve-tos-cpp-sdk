@@ -7,7 +7,6 @@ More details can be found in [document](https://www.volcengine.com/docs/6349/107
 ### Requirements
 - C++ 11 or later
 - CMake (version 3.1 or later)
-- Visual Studio 2013 or later
 - GCC 4.8 or later
 - Clang 3.3 or later
 
@@ -27,15 +26,6 @@ cd build
 
 The SDK depends on curl and openssl libraries. Before building the sdk library, 
 please make sure that you have installed curl and openssl in your platform.
-
-#### Windows
-Please install libcurl and openssl libraries in the official website.
-Run the following commands to build and install.
-```bash
-cmake ../ -DCMAKE_INSTALL_PREFIX="your path to install sdk"
-msbuild ALL_BUILD.vcxproj
-msbuild INSTALL.vcxproj
-```
 
 #### Linux
 Install libcurl and openssl libraries through the following command.
