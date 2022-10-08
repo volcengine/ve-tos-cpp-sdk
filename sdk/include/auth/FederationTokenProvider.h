@@ -4,8 +4,8 @@
 namespace VolcengineTos {
 class FederationTokenProvider {
 public:
-  virtual FederationToken federationToken() {
-    return {};
-  }
+    virtual FederationToken federationToken() {
+        return {};
+    }
 };
-}// namespace VolcengineTos
+}  // namespace VolcengineTos

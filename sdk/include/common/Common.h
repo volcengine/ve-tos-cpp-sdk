@@ -20,7 +20,7 @@ static const int Refused = -1;
 static const int otherErr = -2;
 
 /**
-     * HTTP header
+ * HTTP header
  */
 static const char* HEADER_USER_AGENT = "User-Agent";
 static const char* HEADER_CONTENT_LENGTH = "Content-Length";
@@ -41,10 +41,10 @@ static const char* HEADER_RANGE = "Range";
 static const char* HEADER_CONTENT_RANGE = "Content-Range";
 static const char* HEADER_LOCATION = "Location";
 
-} // namespace http
+}  // namespace http
 
 /**
-     * TOS Header
+ * TOS Header
  */
 static const char* HEADER_CONTENT_SHA256 = "X-Tos-Content-Sha256";
 static const char* HEADER_VERSIONID = "X-Tos-Version-Id";
@@ -58,6 +58,7 @@ static const char* HEADER_SSE_CUSTOMER_KEY = "X-Tos-Server-Side-Encryption-Custo
 static const char* HEADER_SSE = "x-tos-server-side-encryption";
 static const char* HEADER_CRC64 = "x-tos-hash-crc64ecma";
 static const char* HEADER_REQUEST_ID = "X-Tos-Request-Id";
+static const char* HEADER_ID_2 = "X-Tos-Id-2";
 static const char* HEADER_BUCKET_REGION = "X-Tos-Bucket-Region";
 static const char* HEADER_ACL = "X-Tos-Acl";
 static const char* HEADER_GRANT_FULL_CONTROL = "X-Tos-Grant-Full-Control";
@@ -65,6 +66,7 @@ static const char* HEADER_GRANT_READ = "X-Tos-Grant-Read";
 static const char* HEADER_GRANT_READ_ACP = "X-Tos-Grant-Read-Acp";
 static const char* HEADER_GRANT_WRITE = "X-Tos-Grant-Write";
 static const char* HEADER_GRANT_WRITE_ACP = "X-Tos-Grant-Write-Acp";
+static const char* HEADER_AZ_REDUNDANCY = "";
 static const char* HEADER_NEXT_APPEND_OFFSET = "X-Tos-Next-Append-Offset";
 static const char* HEADER_OBJECT_TYPE = "X-Tos-Object-Type";
 static const char* HEADER_METADATA_DIRECTIVE = "X-Tos-Metadata-Directive";
@@ -73,6 +75,13 @@ static const char* HEADER_COPY_SOURCE_IF_MATCH = "X-Tos-Copy-Source-If-Match";
 static const char* HEADER_COPY_SOURCE_IF_NONE_MATCH = "X-Tos-Copy-Source-If-None-Match";
 static const char* HEADER_COPY_SOURCE_IF_MODIFIED_SINCE = "X-Tos-Copy-Source-If-Modified-Since";
 static const char* HEADER_COPY_SOURCE_IF_UNMODIFIED_SINCE = "X-Tos-Copy-Source-If-Unmodified-Since";
+
+static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_ALGORITHM =
+        "X-Tos-Copy-Source-Server-Side-Encryption-Customer-Algorithm";
+static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_KEY = "X-Tos-Copy-Source-Server-Side-Encryption-Customer-key";
+static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_KEY_MD5 =
+        "X-Tos-Copy-Source-Server-Side-Encryption-Customer-key-MD5";
+
 static const char* HEADER_COPY_SOURCE_RANGE = "X-Tos-Copy-Source-Range";
 static const char* HEADER_COPY_SOURCE_VERSION_ID = "X-Tos-Copy-Source-Version-Id";
 static const char* HEADER_WEBSITE_REDIRECT_LOCATION = "X-Tos-Website-Redirect-Location";
@@ -80,13 +89,13 @@ static const char* HEADER_CS_TYPE = "X-Tos-Cs-Type";
 static const char* HEADER_META_PREFIX = "X-Tos-Meta-";
 
 /**
-     * replace source object metadata when calling copyObject
+ * replace source object metadata when calling copyObject
  */
 static const char* METADATA_DIRECTIVE_REPLACE = "REPLACE";
 
 /**
-     * copy source object metadata when calling copyObject
+ * copy source object metadata when calling copyObject
  */
 static const char* METADATA_DIRECTIVE_COPY = "COPY";
 
-} // namespace VolcengineTos
+}  // namespace VolcengineTos

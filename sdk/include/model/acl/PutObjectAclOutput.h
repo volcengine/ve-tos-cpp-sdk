@@ -5,12 +5,14 @@
 namespace VolcengineTos {
 class PutObjectAclOutput {
 public:
-  const RequestInfo &getRequestInfo() const { return requestInfo_; }
-  void setRequestInfo(const RequestInfo &requestInfo) {
-    requestInfo_ = requestInfo;
-  }
+    const RequestInfo& getRequestInfo() const {
+        return requestInfo_;
+    }
+    void setRequestInfo(const RequestInfo& requestInfo) {
+        requestInfo_ = requestInfo;
+    }
 
 private:
-  RequestInfo requestInfo_;
+    RequestInfo requestInfo_;
 };
-} // namespace VolcengineTos
+}  // namespace VolcengineTos
