@@ -16,4 +16,4 @@ static const char* PERMISSION_TYPE_READ_ACP = "READ_ACP";
 static const char* PERMISSION_TYPE_WRITE_ACP = "WRITE_ACP";
 static const char* PERMISSION_FULL_CONTROL = "FULL_CONTROL";
 
-} // namespace VolcengineTos
+}  // namespace VolcengineTos

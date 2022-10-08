@@ -4,12 +4,14 @@
 using namespace VolcengineTos;
 
 RequestInfo TosResponse::GetRequestInfo() {
-  RequestInfo info;
-  info.setRequestId(getRequestID());
-  info.setHeaders(headers_);
-  return info;
+    RequestInfo info;
+    info.setRequestId(getRequestID());
+    info.setHeaders(headers_);
+    info.setId2(headers_["x-tos-id-2"]);
+    info.setStatusCode(statusCode_);
+    return info;
 }
 
 std::string TosResponse::getRequestID() {
-  return MapUtils::findValueByKeyIgnoreCase(headers_, HEADER_REQUEST_ID);
+    return MapUtils::findValueByKeyIgnoreCase(headers_, HEADER_REQUEST_ID);
 }

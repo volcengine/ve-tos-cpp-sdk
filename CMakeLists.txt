@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 0.2.1
+        VERSION 2.2.0
         LANGUAGES CXX)
 
 # project settings
@@ -11,7 +11,8 @@ set(CMAKE_CXX_STANDARD 11)
 option(BUILD_UNITTEST "Build unittest" OFF)
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_SHARED_LIB "Build shared library" OFF)
-
+# close warning
+add_definitions(-w)
 # check OS platform
 if (UNIX)
     set(OS_PLATFORM "LINUX")
@@ -29,9 +30,9 @@ message(STATUS "OS platform: ${OS_PLATFORM}")
 
 message(STATUS "Looking for OpenSSL")
 find_package(OpenSSL REQUIRED)
-if(NOT OPENSSL_FOUND)
+if (NOT OPENSSL_FOUND)
     message(FATAL_ERROR "Could not find openSSL")
-endif()
+endif ()
 message(STATUS "OpenSSL include: ${OPENSSL_INCLUDE_DIR}")
 message(STATUS "OpenSSL lib: ${OPENSSL_LIBRARIES}")
 set(CLIENT_SSL_LIBS ${OPENSSL_LIBRARIES})
@@ -39,9 +40,9 @@ set(CLIENT_SSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
 
 message(STATUS "Looking for CURL")
 find_package(CURL)
-if(NOT CURL_FOUND)
+if (NOT CURL_FOUND)
     message(FATAL_ERROR "Could not find curl")
-endif()
+endif ()
 message(STATUS "CURL include: ${CURL_INCLUDE_DIRS}")
 message(STATUS "CURL lib: ${CURL_LIBRARIES}")
 set(CLIENT_CURL_LIBS ${CURL_LIBRARIES})
@@ -53,7 +54,7 @@ add_subdirectory(sdk)
 
 if (BUILD_DEMO)
     add_subdirectory(example)
-endif()
+endif ()
 
 if (BUILD_UNITTEST)
     add_subdirectory(test)

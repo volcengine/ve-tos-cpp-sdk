@@ -4,10 +4,14 @@
 namespace VolcengineTos {
 class UploadCommonPrefix {
 public:
-  const std::string &getPrefix() const { return prefix_; }
-  void setPrefix(const std::string &prefix) { prefix_ = prefix; }
+    const std::string& getPrefix() const {
+        return prefix_;
+    }
+    void setPrefix(const std::string& prefix) {
+        prefix_ = prefix;
+    }
 
 private:
-  std::string prefix_;
+    std::string prefix_;
 };
-} // namespace VolcengineTos
+}  // namespace VolcengineTos
