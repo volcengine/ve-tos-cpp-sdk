@@ -3050,7 +3050,7 @@ Outcome<TosError, UploadPartCopyOutput> TosClientImpl::uploadPartCopy(const std:
                                                                       const UploadPartCopyInput& input) {
     Outcome<TosError, UploadPartCopyOutput> res;
     std::vector<std::string> keys = {input.getSourceKey(), input.getDestinationKey()};
-    std::vector<std::string> bkts = {input.getDestinationKey(), bucket};
+    std::vector<std::string> bkts = {input.getSourceBucket(), bucket};
     std::string check = isValidNames(bkts, keys);
     if (!check.empty()) {
         TosError error;
@@ -3085,7 +3085,7 @@ Outcome<TosError, UploadPartCopyOutput> TosClientImpl::uploadPartCopy(const std:
                                                                       const RequestOptionBuilder& builder) {
     Outcome<TosError, UploadPartCopyOutput> res;
     std::vector<std::string> keys = {input.getSourceKey(), input.getDestinationKey()};
-    std::vector<std::string> bkts = {input.getDestinationKey(), bucket};
+    std::vector<std::string> bkts = {input.getSourceBucket(), bucket};
     std::string check = isValidNames(bkts, keys);
     if (!check.empty()) {
         TosError error;
