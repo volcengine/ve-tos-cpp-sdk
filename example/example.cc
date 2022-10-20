@@ -728,7 +728,7 @@ int main() {
     InitializeClient();
     TosClientV2 client(region, ak, sk, conf);
     auto cli = std::make_shared<TosClientV2>(client);
-    CleanBucket(cli, bucket);
+    // CleanBucket(cli, bucket);
     creatBucket(cli, bucket);
 
     preSignedUrl(cli, bucket);
@@ -764,7 +764,7 @@ int main() {
     listObjectVersion(cli, bucket);
     creatBucket(cli, "tobucket-" + bucket);
     copyObject(cli, "tobucket-" + bucket, "toObject-" + key, bucket, key);
-    CleanBucket(cli, "tobucket-" + bucket);
+    // CleanBucket(cli, "tobucket-" + bucket);
     uploadPartCopy(cli, bucket);
 
     deleteObject(cli, bucket, key);
