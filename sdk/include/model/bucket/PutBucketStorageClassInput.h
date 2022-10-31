@@ -3,11 +3,17 @@
 #include <string>
 #include <Type.h>
 #include <vector>
-#include "MirrorBackRule.h"
 
 namespace VolcengineTos {
 class PutBucketStorageClassInput {
 public:
+    explicit PutBucketStorageClassInput(std::string bucket) : bucket_(std::move(bucket)) {
+    }
+    PutBucketStorageClassInput(std::string bucket, StorageClassType storageClass)
+            : bucket_(std::move(bucket)), storageClass_(storageClass) {
+    }
+    PutBucketStorageClassInput() = default;
+    virtual ~PutBucketStorageClassInput() = default;
     const std::string& getBucket() const {
         return bucket_;
     }

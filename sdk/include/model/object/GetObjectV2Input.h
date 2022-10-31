@@ -130,12 +130,6 @@ public:
         rateLimiter_ = ratelimiter;
     }
 
-    int getPartNumber() const {
-        return partNumber_;
-    }
-    void setPartNumber(int partNumber) {
-        partNumber_ = partNumber;
-    }
     const std::string& getRange() const {
         return range_;
     }
@@ -147,8 +141,6 @@ private:
     std::string bucket_;
     std::string key_;
     std::string versionID_;
-
-    int partNumber_ = 0;
 
     std::string ifMatch_;
     std::time_t ifModifiedSince_ = 0;

@@ -51,9 +51,9 @@ public:
 
 private:
     RequestInfo requestInfo_;
-    int partNumber_;
+    int partNumber_ = 0;
     std::string eTag_;
-    std::time_t lastModified_;
+    std::time_t lastModified_ = 0;
     std::string copySourceVersionID_;
 };
 }  // namespace VolcengineTos

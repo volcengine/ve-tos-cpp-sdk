@@ -16,7 +16,12 @@ public:
     void setTempFilePath(const std::string& tempfilepath) {
         tempFilePath_ = tempfilepath;
     }
-
+    bool isKeyEndWithDelimiter() const {
+        return keyEndWithDelimiter;
+    }
+    void setKeyEndWithDelimiter(bool keyEndWithDelimiter) {
+        DownloadFileFileInfo::keyEndWithDelimiter = keyEndWithDelimiter;
+    }
     std::string dump() {
         nlohmann::json j;
         j["FilePath"] = filePath_;
@@ -34,5 +39,6 @@ public:
 private:
     std::string filePath_;
     std::string tempFilePath_;
+    bool keyEndWithDelimiter = false;
 };
 }  // namespace VolcengineTos

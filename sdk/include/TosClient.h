@@ -52,7 +52,7 @@
 #include "ClientConfig.h"
 
 namespace VolcengineTos {
-static const char* TOS_SDK_VERSION = "v2.2.0";
+static const char* TOS_SDK_VERSION = "v2.4.0";
 #ifdef WIN32
 static const char* PLATFORM_NAME = "windows";
 #elif __linux__
@@ -364,11 +364,15 @@ public:
     [[gnu::deprecated]] Outcome<TosError, ListMultipartUploadsOutput> listMultipartUploads(
             const std::string& bucket, const ListMultipartUploadsInput& input);
 
-    Outcome<TosError, std::string> preSignedURL(const std::string& httpMethod, const std::string& bucket,
-                                                const std::string& objectKey, std::chrono::duration<int> ttl);
-    Outcome<TosError, std::string> preSignedURL(const std::string& httpMethod, const std::string& bucket,
-                                                const std::string& objectKey, std::chrono::duration<int> ttl,
-                                                const RequestOptionBuilder& builder);
+    [[gnu::deprecated]] Outcome<TosError, std::string> preSignedURL(const std::string& httpMethod,
+                                                                    const std::string& bucket,
+                                                                    const std::string& objectKey,
+                                                                    std::chrono::duration<int> ttl);
+    [[gnu::deprecated]] Outcome<TosError, std::string> preSignedURL(const std::string& httpMethod,
+                                                                    const std::string& bucket,
+                                                                    const std::string& objectKey,
+                                                                    std::chrono::duration<int> ttl,
+                                                                    const RequestOptionBuilder& builder);
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;
