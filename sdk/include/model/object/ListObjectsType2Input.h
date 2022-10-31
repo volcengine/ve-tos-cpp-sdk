@@ -1,9 +1,23 @@
 #pragma once
 
 #include <string>
+#include <utility>
 namespace VolcengineTos {
 class ListObjectsType2Input {
 public:
+    explicit ListObjectsType2Input(std::string bucket) : bucket_(std::move(bucket)) {
+    }
+    ListObjectsType2Input(std::string bucket, std::string prefix, int maxKeys)
+            : bucket_(std::move(bucket)), prefix_(std::move(prefix)), maxKeys_(maxKeys) {
+    }
+    ListObjectsType2Input(std::string bucket, std::string prefix, std::string startAfter, int maxKeys)
+            : bucket_(std::move(bucket)),
+              prefix_(std::move(prefix)),
+              startAfter_(std::move(startAfter)),
+              maxKeys_(maxKeys) {
+    }
+    ListObjectsType2Input() = default;
+    virtual ~ListObjectsType2Input() = default;
     const std::string& getBucket() const {
         return bucket_;
     }
@@ -34,12 +48,6 @@ public:
     void setContinuationToken(const std::string& continuationToken) {
         continuationToken_ = continuationToken;
     }
-    bool isReverse() const {
-        return reverse_;
-    }
-    void setReverse(bool reverse) {
-        reverse_ = reverse;
-    }
     int getMaxKeys() const {
         return maxKeys_;
     }
@@ -59,8 +67,8 @@ private:
     std::string delimiter_;
     std::string startAfter_;
     std::string continuationToken_;
-    bool reverse_ = false;
     int maxKeys_ = 0;
     std::string encodingType_;
+    //    bool listOnlyOnce_ = false;
 };
 }  // namespace VolcengineTos

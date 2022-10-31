@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.2.0
+        VERSION 2.4.0
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 
 add_executable(${PROJECT_NAME} example.cc)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include)
 # 依赖的日志库，需要引入该搜索目录
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src/external)
+#target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src/external)
 
 # 链接静态编译的 libve-tos-cpp-sdk-lib.a 静态库
 target_link_libraries(${PROJECT_NAME} ve-tos-cpp-sdk-lib)

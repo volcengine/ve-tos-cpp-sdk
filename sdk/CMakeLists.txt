@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.2.0
+        VERSION 2.4.0
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -156,6 +156,47 @@ set(SDK_HEADER
         include/model/object/UploadFileInfoV2.h
         include/model/object/PreSignedURLInput.h
         include/model/object/PreSignedURLOutput.h
+        include/model/bucket/PutBucketCORSInput.h
+        include/model/bucket/PutBucketCORSOutput.h
+        include/model/bucket/GetBucketCORSInput.h
+        include/model/bucket/GetBucketCORSOutput.h
+        include/model/bucket/DeleteBucketCORSInput.h
+        include/model/bucket/DeleteBucketCORSOutput.h
+        include/model/bucket/CORSRule.h
+        include/model/object/ListObjectsType2Input.h
+        include/model/object/ListObjectsType2Output.h
+        include/model/bucket/PutBucketStorageClassOutput.h
+        include/model/bucket/PutBucketStorageClassInput.h
+        include/model/bucket/GetBucketLocationOutput.h
+        include/model/bucket/GetBucketLocationInput.h
+        include/model/bucket/PutBucketLifecycleInput.h
+        include/model/bucket/PutBucketLifecycleOutput.h
+        include/model/bucket/GetBucketLifecycleInput.h
+        include/model/bucket/GetBucketLifecycleOutput.h
+        include/model/bucket/DeleteBucketLifecycleInput.h
+        include/model/bucket/DeleteBucketLifecycleOutput.h
+        include/model/bucket/PutBucketMirrorBackInput.h
+        include/model/bucket/PutBucketMirrorBackOutput.h
+        include/model/bucket/GetBucketMirrorBackInput.h
+        include/model/bucket/GetBucketMirrorBackOutput.h
+        include/model/bucket/DeleteBucketMirrorBackInput.h
+        include/model/bucket/DeleteBucketMirrorBackOutput.h
+        include/model/object/PutObjectTaggingInput.h
+        include/model/object/PutObjectTaggingOutput.h
+        include/model/object/GetObjectTaggingInput.h
+        include/model/object/GetObjectTaggingOutput.h
+        include/model/object/DeleteObjectTaggingInput.h
+        include/model/object/DeleteObjectTaggingOutput.h
+        include/model/acl/PutBucketAclInput.h
+        include/model/acl/PutBucketAclOutput.h
+        include/model/acl/GetBucketAclInput.h
+        include/model/acl/GetBucketAclOutput.h
+        include/model/object/FetchObjectInput.h
+        include/model/object/FetchObjectOutput.h
+        include/model/object/PutFetchTaskInput.h
+        include/model/object/PutFetchTaskOutput.h
+        include/model/acl/PreSignedPostSignatureInput.h
+        include/model/acl/PreSignedPostSignatureOutput.h
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc

@@ -1,16 +1,28 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include "Type.h"
 #include "MirrorHeader.h"
 #include "PublicSource.h"
 namespace VolcengineTos {
 class Redirect {
 public:
-    const std::string& getRedirectType() const {
+    Redirect() = default;
+    virtual ~Redirect() = default;
+    Redirect(RedirectType redirectType, bool fetchSourceOnRedirect, bool passQuery, bool followRedirect,
+             const MirrorHeader& mirrorHeader, const PublicSource& publicSource)
+            : redirectType_(redirectType),
+              fetchSourceOnRedirect_(fetchSourceOnRedirect),
+              passQuery_(passQuery),
+              followRedirect_(followRedirect),
+              mirrorHeader_(mirrorHeader),
+              publicSource_(publicSource) {
+    }
+    RedirectType getRedirectType() const {
         return redirectType_;
     }
-    void setRedirectType(const std::string& redirectType) {
+    void setRedirectType(RedirectType redirectType) {
         redirectType_ = redirectType;
     }
     bool isFetchSourceOnRedirect() const {
@@ -45,10 +57,10 @@ public:
     }
 
 private:
-    std::string redirectType_;
-    bool fetchSourceOnRedirect_;
-    bool passQuery_;
-    bool followRedirect_;
+    RedirectType redirectType_ = RedirectType::NotSet;
+    bool fetchSourceOnRedirect_ = false;
+    bool passQuery_ = false;
+    bool followRedirect_ = false;
     MirrorHeader mirrorHeader_;
     PublicSource publicSource_;
 };

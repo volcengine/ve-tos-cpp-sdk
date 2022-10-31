@@ -24,6 +24,7 @@ std::string TimeUtils::transTimeToFormat(const std::time_t& t, const char* forma
     std::string ret(timebuf);
     return ret;
 }
+
 std::string TimeUtils::transTimeToGmtTime(const std::time_t& t) {
     if (t == 0) {
         return "";
@@ -210,7 +211,14 @@ std::string CryptoUtils::md5Sum(const std::string& input) {
     MD5_Final(md5Res, &ctx);
     return base64Encode(md5Res, MD5_DIGEST_LENGTH);
 }
-
+std::string CryptoUtils::md5SumURLEncoding(const std::string& input) {
+    MD5_CTX ctx;
+    MD5_Init(&ctx);
+    MD5_Update(&ctx, input.c_str(), input.size());
+    unsigned char md5Res[MD5_DIGEST_LENGTH];
+    MD5_Final(md5Res, &ctx);
+    return base64EncodeURL(md5Res, MD5_DIGEST_LENGTH);
+}
 unsigned char CryptoUtils::ToHex(unsigned char x) {
     return x > 9 ? x + 55 : x + 48;
 }
@@ -343,4 +351,81 @@ std::string CryptoUtils::base64Encode(const unsigned char* input, size_t inputLe
         pos += 3;
     }
     return ret;
+}
+
+std::string CryptoUtils::base64EncodeURL(const unsigned char* input, size_t inputLen) {
+    std::string ret;
+    size_t len_encoded = (inputLen + 2) / 3 * 4;
+    ret.reserve(len_encoded);
+
+    unsigned int pos = 0;
+    while (pos < inputLen) {
+        ret.push_back(base64_url[(input[pos + 0] & 0xfc) >> 2]);
+        if (pos + 1 < inputLen) {
+            ret.push_back(base64_url[((input[pos + 0] & 0x03) << 4) + ((input[pos + 1] & 0xf0) >> 4)]);
+            if (pos + 2 < inputLen) {
+                ret.push_back(base64_url[((input[pos + 1] & 0x0f) << 2) + ((input[pos + 2] & 0xc0) >> 6)]);
+                ret.push_back(base64_url[input[pos + 2] & 0x3f]);
+            } else {
+                ret.push_back(base64_url[(input[pos + 1] & 0x0f) << 2]);
+                ret.push_back('=');
+            }
+        } else {
+            ret.push_back(base64_url[(input[pos + 0] & 0x03) << 4]);
+            ret.push_back('=');
+            ret.push_back('=');
+        }
+        pos += 3;
+    }
+    return ret;
+}
+
+bool FileUtils::CreateDirectory(const std::string& folder, bool endWithFileName) {
+    std::string folder_builder;
+    std::string sub;
+    sub.reserve(folder.size());
+    for (auto it = folder.begin(); it != folder.end(); ++it) {
+        const char c = *it;
+        sub.push_back(c);
+        // 当遇到分隔符或者到达文件最后位置时
+        if (c == PATH_DELIMITER || (it == folder.end() - 1 && !endWithFileName)) {
+            folder_builder.append(sub);
+            // 文件不存在返回-1，文件存在返回0， //的场景会认为是同一个文件
+            if (access(folder_builder.c_str(), 0) != 0) {
+                // 该文件所有者、用户组拥有读，写，搜索操作权限；其他用户拥有可读和搜索权限
+                // 和各个后端 SDK 权限对齐
+                if (mkdir(folder_builder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0) {
+                    return false;
+                }
+            }
+            sub.clear();
+        }
+    }
+    return true;
+}
+
+bool NetUtils::checkV4(std::string& s) {
+    int k = 0;         // 记录每个segment起始位置
+    int pCnt = 0;      // 记录'.'的个数
+    s.push_back('.');  // 方便atoi使用
+    for (int i = 0; i < s.size(); ++i) {
+        if (s[i] == '.') {
+            // 对两个 . . 范围内数据进行判断要在 0～255 之间，同时以 0 开头的情况仅可以有一个 0
+            s[i] = '\0';                                       // 方便atoi使用
+            if (s[k] == '\0'                                   // 连续..或第一个为.的情况
+                || (s[k] == '0' && strlen(&s[k]) > 1)          // 以0开头的情况
+                || !(atoi(&s[k]) <= 255 && atoi(&s[k]) >= 0))  // 不符合区间范围
+            {
+                return false;
+            }
+            k = i + 1;
+            ++pCnt;
+        } else if (!(s[i] >= '0' && s[i] <= '9')) {  // 包含非 0-9或'.' 的情况
+            // 在这里会把正常 endpoint 筛选出来
+            return false;
+        }
+    }
+    if (pCnt != 3 + 1)
+        return false;  //'.'不是3段,最后一个1是自己加的
+    return true;
 }

@@ -139,3 +139,80 @@ Outcome<TosError, UploadFileV2Output> TosClientV2::uploadFile(const UploadFileV2
 Outcome<TosError, DownloadFileOutput> TosClientV2::downloadFile(const DownloadFileInput& input) {
     return tosClientImpl_->downloadFile(input);
 }
+Outcome<TosError, PreSignedURLOutput> TosClientV2::preSignedURL(const PreSignedURLInput& input) {
+    return tosClientImpl_->preSignedURL(input);
+}
+
+Outcome<TosError, PutBucketCORSOutput> TosClientV2::putBucketCORS(const PutBucketCORSInput& input) {
+    return tosClientImpl_->putBucketCORS(input);
+}
+Outcome<TosError, GetBucketCORSOutput> TosClientV2::getBucketCORS(const GetBucketCORSInput& input) {
+    return tosClientImpl_->getBucketCORS(input);
+}
+Outcome<TosError, DeleteBucketCORSOutput> TosClientV2::deleteBucketCORS(const DeleteBucketCORSInput& input) {
+    return tosClientImpl_->deleteBucketCORS(input);
+}
+Outcome<TosError, ListObjectsType2Output> TosClientV2::listObjectsType2(const ListObjectsType2Input& input) {
+    return tosClientImpl_->listObjectsType2(input);
+}
+Outcome<TosError, PutBucketStorageClassOutput> TosClientV2::putBucketStorageClass(
+        const PutBucketStorageClassInput& input) {
+    return tosClientImpl_->putBucketStorageClass(input);
+}
+Outcome<TosError, GetBucketLocationOutput> TosClientV2::getBucketLocation(const GetBucketLocationInput& input) {
+    return tosClientImpl_->getBucketLocation(input);
+}
+Outcome<TosError, PutBucketLifecycleOutput> TosClientV2::putBucketLifecycle(const PutBucketLifecycleInput& input) {
+    return tosClientImpl_->putBucketLifecycle(input);
+}
+Outcome<TosError, GetBucketLifecycleOutput> TosClientV2::getBucketLifecycle(const GetBucketLifecycleInput& input) {
+    return tosClientImpl_->getBucketLifecycle(input);
+}
+Outcome<TosError, DeleteBucketLifecycleOutput> TosClientV2::deleteBucketLifecycle(
+        const DeleteBucketLifecycleInput& input) {
+    return tosClientImpl_->deleteBucketLifecycle(input);
+}
+Outcome<TosError, PutBucketPolicyOutput> TosClientV2::putBucketPolicy(const PutBucketPolicyInput& input) {
+    return tosClientImpl_->putBucketPolicy(input);
+}
+Outcome<TosError, GetBucketPolicyOutput> TosClientV2::getBucketPolicy(const GetBucketPolicyInput& input) {
+    return tosClientImpl_->getBucketPolicy(input);
+}
+Outcome<TosError, DeleteBucketPolicyOutput> TosClientV2::deleteBucketPolicy(const DeleteBucketPolicyInput& input) {
+    return tosClientImpl_->deleteBucketPolicy(input);
+}
+Outcome<TosError, PutBucketMirrorBackOutput> TosClientV2::putBucketMirrorBack(const PutBucketMirrorBackInput& input) {
+    return tosClientImpl_->putBucketMirrorBack(input);
+}
+Outcome<TosError, GetBucketMirrorBackOutput> TosClientV2::getBucketMirrorBack(const GetBucketMirrorBackInput& input) {
+    return tosClientImpl_->getBucketMirrorBack(input);
+}
+Outcome<TosError, DeleteBucketMirrorBackOutput> TosClientV2::deleteBucketMirrorBack(
+        const DeleteBucketMirrorBackInput& input) {
+    return tosClientImpl_->deleteBucketMirrorBack(input);
+}
+Outcome<TosError, PutObjectTaggingOutput> TosClientV2::putObjectTagging(const PutObjectTaggingInput& input) {
+    return tosClientImpl_->putObjectTagging(input);
+}
+Outcome<TosError, GetObjectTaggingOutput> TosClientV2::getObjectTagging(const GetObjectTaggingInput& input) {
+    return tosClientImpl_->getObjectTagging(input);
+}
+Outcome<TosError, DeleteObjectTaggingOutput> TosClientV2::deleteObjectTagging(const DeleteObjectTaggingInput& input) {
+    return tosClientImpl_->deleteObjectTagging(input);
+}
+Outcome<TosError, PutBucketAclOutput> TosClientV2::putBucketAcl(const PutBucketAclInput& input) {
+    return tosClientImpl_->putBucketAcl(input);
+}
+Outcome<TosError, GetBucketAclOutput> TosClientV2::getBucketAcl(const GetBucketAclInput& input) {
+    return tosClientImpl_->getBucketAcl(input);
+}
+Outcome<TosError, FetchObjectOutput> TosClientV2::fetchObject(const FetchObjectInput& input) {
+    return tosClientImpl_->fetchObject(input);
+}
+Outcome<TosError, PutFetchTaskOutput> TosClientV2::putFetchTask(const PutFetchTaskInput& input) {
+    return tosClientImpl_->putFetchTask(input);
+}
+Outcome<TosError, PreSignedPostSignatureOutput> TosClientV2::preSignedPostSignature(
+        const PreSignedPostSignatureInput& input) {
+    return tosClientImpl_->preSignedPostSignature(input);
+}

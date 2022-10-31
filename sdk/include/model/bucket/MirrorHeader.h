@@ -1,10 +1,16 @@
 #pragma once
 
+#include <utility>
 #include <vector>
 #include <string>
 namespace VolcengineTos {
 class MirrorHeader {
 public:
+    MirrorHeader() = default;
+    virtual ~MirrorHeader() = default;
+    MirrorHeader(bool passAll, std::vector<std::string> pass, std::vector<std::string> remove)
+            : passAll_(passAll), pass_(std::move(pass)), remove_(std::move(remove)) {
+    }
     bool isPassAll() const {
         return passAll_;
     }
@@ -25,7 +31,7 @@ public:
     }
 
 private:
-    bool passAll_;
+    bool passAll_ = false;
     std::vector<std::string> pass_;
     std::vector<std::string> remove_;
 };

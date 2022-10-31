@@ -1,11 +1,17 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include "Condition.h"
 #include "Redirect.h"
 namespace VolcengineTos {
 class MirrorBackRule {
 public:
+    MirrorBackRule(std::string id, const Condition& condition, const Redirect& redirect)
+            : id_(std::move(id)), condition_(condition), redirect_(redirect) {
+    }
+    MirrorBackRule() = default;
+    virtual ~MirrorBackRule() = default;
     const std::string& getId() const {
         return id_;
     }
