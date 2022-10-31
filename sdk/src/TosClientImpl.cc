@@ -13,6 +13,10 @@
 #include "model/object/UploadFileCheckpointV2.h"
 #include "utils/LogUtils.h"
 #include "model/object/DownloadFileCheckpoint.h"
+#include "model/object/PostSignatureConditionInner.h"
+#include "model/object/PostPolicyInner.h"
+#include "model/object/CopyObjectInner.h"
+#include "model/object/UploadPartCopyInner.h"
 #include <cstring>
 #include <fstream>
 #include <sys/stat.h>
@@ -53,7 +57,13 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region)
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
     config_.setRegion(region);
-    initSchemeAndHost(endpoint, region);
+    auto schemeHostParameter = initSchemeAndHost(endpoint);
+    scheme_ = schemeHostParameter.scheme_;
+    host_ = schemeHostParameter.host_;
+    urlMode_ = schemeHostParameter.urlMode_;
+    if (!NetUtils::isNotIP(host_)) {
+        connectWithIP_ = true;
+    }
 }
 TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const StaticCredentials& cred,
                              const ClientConfig& config) {
@@ -103,27 +113,35 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     config_.setEnableCrc(config.enableCRC);
     config_.setAutoRecognizeContentType(config.autoRecognizeContentType);
     config_.setMaxRetryCount(config.maxRetryCount);
-    initSchemeAndHost(endpoint, region);
+    auto schemeHostParameter = initSchemeAndHost(endpoint);
+    scheme_ = schemeHostParameter.scheme_;
+    host_ = schemeHostParameter.host_;
+    urlMode_ = schemeHostParameter.urlMode_;
+    if (!NetUtils::isNotIP(host_)) {
+        connectWithIP_ = true;
+    }
 }
 
-void TosClientImpl::initSchemeAndHost(const std::string& endpoint, const std::string& region) {
+SchemeHostParameter TosClientImpl::initSchemeAndHost(const std::string& endpoint) {
     // set scheme and host
+    SchemeHostParameter schemeHostParameter;
     if (StringUtils::startsWithIgnoreCase(endpoint, http::SchemeHTTPS)) {
-        scheme_ = http::SchemeHTTPS;
-        host_ = endpoint.substr(std::strlen(http::SchemeHTTPS) + 3,
-                                endpoint.length() - std::strlen(http::SchemeHTTPS) - 3);
+        schemeHostParameter.scheme_ = http::SchemeHTTPS;
+        schemeHostParameter.host_ = endpoint.substr(std::strlen(http::SchemeHTTPS) + 3,
+                                                    endpoint.length() - std::strlen(http::SchemeHTTPS) - 3);
     } else if (StringUtils::startsWithIgnoreCase(endpoint, http::SchemeHTTP)) {
-        scheme_ = http::SchemeHTTP;
-        host_ = endpoint.substr(std::strlen(http::SchemeHTTP) + 3,
-                                endpoint.length() - std::strlen(http::SchemeHTTP) - 3);
+        schemeHostParameter.scheme_ = http::SchemeHTTP;
+        schemeHostParameter.host_ = endpoint.substr(std::strlen(http::SchemeHTTP) + 3,
+                                                    endpoint.length() - std::strlen(http::SchemeHTTP) - 3);
     } else {
-        scheme_ = http::SchemeHTTP;
-        host_ = endpoint;
+        schemeHostParameter.scheme_ = http::SchemeHTTPS;
+        schemeHostParameter.host_ = endpoint;
     }
 
     if (userAgent_.empty())
         userAgent_ = DefaultUserAgent();
-    urlMode_ = URL_MODE_DEFAULT;
+    schemeHostParameter.urlMode_ = URL_MODE_DEFAULT;
+    return schemeHostParameter;
 }
 
 // 桶名/对象名校验相关函数
@@ -149,8 +167,8 @@ std::string isValidKey(const std::string& key) {
     if (!StringUtils::isValidUTF8(key)) {
         return "invalid object name, the character set is illegal";
     }
-    if (key[0] == '/' || key[0] == '\\' || key.find("//") != key.npos) {
-        return "invalid object name, the object name can not start with '/' or '\\'";
+    if (key[0] == '\\' || key.find("//") != key.npos) {
+        return "invalid object name, the object name can not start with '\\'";
     }
     if (key[0] == '.' && key.length() == 1) {
         return "invalid object name, the object name can not use '.'";
@@ -213,8 +231,7 @@ int expectedCode(const RequestBuilder& rb) {
 }
 int expectedCodeV2(const RequestBuilder& rb) {
     const auto& header_ = rb.getHeaders();
-    bool exit_range_header =
-            header_.count("Range") || header_.count("X-Tos-Copy-Source-Range") || rb.getQuery().count("partNumber");
+    bool exit_range_header = header_.count("Range") || header_.count("X-Tos-Copy-Source-Range");
     return exit_range_header ? 206 : 200;
 }
 
@@ -633,9 +650,6 @@ static void getObjectSetOptionHeader(RequestBuilder& rb, const GetObjectV2Input&
     rb.withQueryCheckEmpty("response-content-type", input.getResponseContentType());
     rb.withQueryCheckEmpty("response-expires", TimeUtils::transTimeToGmtTime(input.getResponseExpires()));
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
-    if (input.getPartNumber() != 0) {
-        rb.withQueryCheckEmpty("partNumber", std::to_string(input.getPartNumber()));
-    }
 }
 Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2Input& input,
                                                               std::shared_ptr<uint64_t> hashCrc64ecma) {
@@ -698,7 +712,7 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
         *hashCrc64ecma = tosRes.result()->getHashCrc64Result();
     }
     // crc64校验
-    if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0 && rb.getQuery().count("partNumber") == 0) {
+    if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0) {
         auto hashcrc64 = std::stoull(tosRes.result()->findHeader(HEADER_CRC64));
         if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
             TosError error;
@@ -735,8 +749,26 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
     GetObjectToFileOutput output;
     output.setGetObjectBasicOutput(res_.result().getGetObjectBasicOutput());
     // write to file
+    bool ret = FileUtils::CreateDirectory(input.getFilePath(), true);
+    if (!ret) {
+        // 错误处理，创建文件夹失败的场景
+        TosError error;
+        error.setMessage("invalid file path, mkdir failed");
+        error.setIsClientError(true);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
     auto content = std::make_shared<std::fstream>(
             input.getFilePath(), std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+    if (!content->good()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("open file failed");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
     auto resContent = res_.result().getContent();
     *content << resContent->rdbuf();
     content->close();
@@ -1199,14 +1231,27 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
                               const std::string uploadFilePath) {
     std::stringstream ret;
     std::string objKey(StringUtils::stringReplace(key, "/", "_"));
+    std::string originPath;
+
+    originPath = bucket + "." + objKey;
+
+    std::string base64md5Path = CryptoUtils::md5SumURLEncoding(originPath);
     if (checkPointFile.empty()) {
-        ret << uploadFilePath << "." << bucket << "." << objKey << ".upload";
+        // 创建文件夹
+        ret << uploadFilePath << "." << base64md5Path << ".upload";
         return ret.str();
     } else {
         struct stat cfs {};
+        if (stat(checkPointFile.c_str(), &cfs) != 0) {
+            bool res = FileUtils::CreateDirectory(checkPointFile, true);
+            if (!res) {
+                // 错误处理，创建文件夹失败的场景
+                return "";
+            }
+        }
         if (stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << "/" << bucket << "." << objKey << ".upload";
+                ret << checkPointFile << "/" << base64md5Path << ".upload";
                 return ret.str();
             } else {
                 ret << checkPointFile;
@@ -1718,8 +1763,17 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
         std::mutex processLock;
         pProcessStat->dataTransferListener_.dataTransferStatusChange_ = process.dataTransferStatusChange_;
         pProcessStat->dataTransferListener_.userData_ = process.userData_;
-        pProcessStat->userData = (void*)pProcessStat;
+
         pProcessStat->totalBytes_ = checkpoint.getFileInfo().getFileSize();
+        // 回归进度条
+        if (input.isEnableCheckpoint()) {
+            for (auto& part : toUpload) {
+                if (part.isCompleted()) {
+                    pProcessStat->consumedBytes_ += part.getPartSize();
+                }
+            }
+        }
+        pProcessStat->userData = (void*)pProcessStat;
     }
     for (int i = 0; i < input.getTaskNum(); i++) {
         auto res = std::thread([&]() {
@@ -1939,6 +1993,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum());
     if (!check.isSuccess()) {
         error.setMessage(check.error().getMessage());
+        error.setIsClientError(true);
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -1947,7 +2002,8 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     if (input.isEnableCheckpoint()) {
         checkpointFilePath = getCheckpointPath(bucket, key, input.getCheckpointFile(), input.getFilePath());
         if (checkpointFilePath.empty()) {
-            error.setMessage("The file is not found in the specific path " + input.getCheckpointFile());
+            error.setMessage("The folder is created fail in the specific path " + input.getCheckpointFile());
+            error.setIsClientError(true);
             res.setE(error);
             res.setSuccess(false);
             return res;
@@ -1956,6 +2012,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     auto ufi = getUploadFileInfoV2(input.getFilePath());
     if (!ufi.isSuccess()) {
         error.setMessage(ufi.error().getMessage());
+        error.setIsClientError(true);
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -1965,6 +2022,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     auto cp = getCheckpoint(input, ufi.result(), checkpointFilePath, event);
     if (!cp.isSuccess()) {
         error.setMessage(cp.error().getMessage());
+        error.setIsClientError(true);
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2120,18 +2178,31 @@ Outcome<TosError, DownloadFileCheckpoint> TosClientImpl::initCheckpoint(const Do
     return ret;
 }
 
-std::string getDownloadCheckpointPath(const std::string& bucket, const std::string& key,
+std::string getDownloadCheckpointPath(const std::string& bucket, const std::string& key, const std::string& versionId,
                                       const std::string& checkPointFile, const std::string filePath) {
     std::stringstream ret;
-    std::string objKey(StringUtils::stringReplace(key, "/", "_"));
+    std::string originPath;
+    if (versionId.empty()) {
+        originPath = bucket + "." + key + "." + versionId;
+    } else {
+        originPath = bucket + "." + key;
+    }
+    std::string base64md5Path = CryptoUtils::md5SumURLEncoding(originPath);
     if (checkPointFile.empty()) {
-        ret << filePath << "." << bucket << "." << objKey << ".download";
+        ret << filePath << "." << base64md5Path << ".download";
         return ret.str();
     } else {
         struct stat cfs {};
+        if (stat(checkPointFile.c_str(), &cfs) != 0) {
+            bool res = FileUtils::CreateDirectory(checkPointFile, true);
+            if (!res) {
+                // 错误处理，创建文件夹失败的场景
+                return "";
+            }
+        }
         if (stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << "/" << bucket << "." << objKey << ".download";
+                ret << checkPointFile << "/" << base64md5Path << ".download";
                 return ret.str();
             } else {
                 ret << checkPointFile;
@@ -2193,15 +2264,69 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
     struct stat dfs {};
     std::string filePath = input.getFilePath();
     // 设置文件路径
+    // 路径不存在，需要先创建路径
+    if (stat(filePath.c_str(), &dfs) != 0) {
+        // 判断是路径是文件夹语义还是文件语义，结尾为分隔符
+        if (filePath.back() == PATH_DELIMITER) {
+            // 文件夹语义则循环创建文件夹
+            bool res = FileUtils::CreateDirectory(filePath, false);
+            if (!res) {
+                // 错误处理，创建文件夹失败的场景
+                error.setMessage("invalid file path, mkdir failed");
+                error.setIsClientError(true);
+                ret.setE(error);
+                ret.setSuccess(false);
+                return ret;
+            }
+            // 然后需要判断拼接的 key 是文件语义还是文件夹语义
+        } else {
+            // 如果是文件就创建父目录，然后直接返回就可以
+            bool res = FileUtils::CreateDirectory(filePath, true);
+            if (!res) {
+                // 错误处理，创建文件夹失败的场景
+                error.setMessage("invalid file path, mkdir failed");
+                error.setIsClientError(true);
+                ret.setE(error);
+                ret.setSuccess(false);
+                return ret;
+            }
+            ret_filePath << filePath;
+            ret_tempFilePath << ret_filePath.str() << ".temp";
+            fileinfo.setFilePath(ret_filePath.str());
+            fileinfo.setTempFilePath(ret_tempFilePath.str());
+            ret.setR(fileinfo);
+            ret.setSuccess(true);
+            return ret;
+        }
+    }
+    // 重新 stat 一下，但理论上一定存在对应路径了
     if (stat(filePath.c_str(), &dfs) == 0) {
         if (dfs.st_mode & S_IFDIR) {
             ret_filePath << filePath << "/" << key;
+            bool res = FileUtils::CreateDirectory(ret_filePath.str(), true);
+            if (!res) {
+                // 错误处理，创建文件夹失败
+                error.setMessage("invalid file path, mkdir failed");
+                error.setIsClientError(true);
+                ret.setE(error);
+                ret.setSuccess(false);
+                return ret;
+            }
+            // key 最后是分隔符，认为是文件夹语义
+            if (key.back() == PATH_DELIMITER) {
+                fileinfo.setKeyEndWithDelimiter(true);
+                ret.setR(fileinfo);
+                ret.setSuccess(true);
+                return ret;
+            }
+            // 否则是正常的语义
             ret_tempFilePath << ret_filePath.str() << ".temp";
             fileinfo.setFilePath(ret_filePath.str());
             fileinfo.setTempFilePath(ret_tempFilePath.str());
             ret.setR(fileinfo);
             ret.setSuccess(true);
         } else {
+            // 如果是文件，直接返回就可以
             ret_filePath << filePath;
             ret_tempFilePath << ret_filePath.str() << ".temp";
             fileinfo.setFilePath(ret_filePath.str());
@@ -2243,8 +2368,16 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
         std::mutex processLock;
         pProcessStat->dataTransferListener_.dataTransferStatusChange_ = process.dataTransferStatusChange_;
         pProcessStat->dataTransferListener_.userData_ = process.userData_;
-        pProcessStat->userData = (void*)pProcessStat;
         pProcessStat->totalBytes_ = headOutput.getContentLength();
+        // 回归进度条
+        if (input.isEnableCheckpoint()) {
+            for (auto& part : toDownload) {
+                if (part.isCompleted()) {
+                    pProcessStat->consumedBytes_ += part.getRangeEnd() - part.getRangeStart() + 1;
+                }
+            }
+        }
+        pProcessStat->userData = (void*)pProcessStat;
     }
     for (int i = 0; i < input.getTaskNum(); i++) {
         auto res = std::thread([&]() {
@@ -2450,6 +2583,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     const auto& headInput = input.getHeadObjectV2Input();
     auto check = validateInput(headInput.getBucket(), headInput.getKey(), input.getPartSize(), input.getTaskNum());
     if (!check.isSuccess()) {
+        error.setIsClientError(true);
         error.setMessage(check.error().getMessage());
         res.setE(error);
         res.setSuccess(false);
@@ -2457,6 +2591,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     }
     auto checkObjectExists = this->headObject(headInput);
     if (!checkObjectExists.isSuccess()) {
+        error.setIsClientError(true);
         error.setMessage(checkObjectExists.error().getMessage());
         res.setE(error);
         res.setSuccess(false);
@@ -2464,20 +2599,28 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     }
     auto dfi = getDownloadFileFileInfo(input);
     if (!dfi.isSuccess()) {
+        error.setIsClientError(true);
         error.setMessage(dfi.error().getMessage());
         res.setE(error);
         res.setSuccess(false);
         return res;
     }
-
+    // 当 key 末尾为分隔符，直接返回的场景
+    if (dfi.result().isKeyEndWithDelimiter()) {
+        DownloadFileOutput downloadFileOutput;
+        downloadFileOutput.setHeadObjectV2Output(checkObjectExists.result());
+        res.setR(downloadFileOutput);
+        res.setSuccess(true);
+        return res;
+    }
     std::string checkpointFilePath;
     if (input.isEnableCheckpoint()) {
-        checkpointFilePath = getDownloadCheckpointPath(input.getHeadObjectV2Input().getBucket(),
-                                                       input.getHeadObjectV2Input().getKey(), input.getCheckpointFile(),
-                                                       dfi.result().getFilePath());
+        checkpointFilePath = getDownloadCheckpointPath(
+                input.getHeadObjectV2Input().getBucket(), input.getHeadObjectV2Input().getKey(),
+                input.getHeadObjectV2Input().getVersionId(), input.getCheckpointFile(), dfi.result().getFilePath());
         if (checkpointFilePath.empty()) {
             error.setIsClientError(true);
-            error.setMessage("The file is not found in the specific path " + input.getCheckpointFile());
+            error.setMessage("The folder created fail in the specific path " + input.getCheckpointFile());
             res.setE(error);
             res.setSuccess(false);
             return res;
@@ -2489,6 +2632,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     auto cp = getCheckpoint(input, checkpointFilePath, dfi.result(), checkObjectExists.result(), event);
     if (!cp.isSuccess()) {
         error.setMessage(cp.error().getMessage());
+        error.setIsClientError(true);
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2943,10 +3087,23 @@ Outcome<TosError, CopyObjectV2Output> TosClientImpl::copyObject(const CopyObject
         res.setSuccess(false);
         return res;
     }
-    CopyObjectV2Output output;
+    CopyObjectInner tempOutput;
     std::stringstream ss;
     ss << tosRes.result()->getContent()->rdbuf();
-    output.fromJsonString(ss.str());
+    tempOutput.fromJsonString(ss.str());
+    if (tempOutput.getOutput().getETag().empty()) {
+        TosError se = tempOutput.getTosError();
+        if (se.getRequestId().empty() && se.getMessage().empty() && se.getCode().empty() && se.getHostId().empty()) {
+            // 尝试解错误信息，解失败了也认为是服务端错误
+            se.setMessage("there is no etag tag in the body, copying failed");
+            se.setIsClientError(false);
+        }
+        res.setE(se);
+        return res;
+    }
+    CopyObjectV2Output output;
+    output.setLastModified(tempOutput.getOutput().getLastModified());
+    output.setETag(tempOutput.getOutput().getETag());
     output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
     output.setCopySourceVersionId(tosRes.result()->findHeader(HEADER_COPY_SOURCE_VERSION_ID));
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
@@ -3192,15 +3349,28 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
         res.setSuccess(false);
         return res;
     }
-    UploadPartCopyV2Output output;
+    UploadPartCopyInner tempOutput;
     std::stringstream ss;
     ss << tosRes.result()->getContent()->rdbuf();
-    output.fromJsonString(ss.str());
+    tempOutput.fromJsonString(ss.str());
+    if (tempOutput.getOutput().getETag().empty()) {
+        TosError se = tempOutput.getTosError();
+        if (se.getRequestId().empty() && se.getMessage().empty() && se.getCode().empty() && se.getHostId().empty()) {
+            // 尝试解错误信息，解失败了也认为是服务端错误
+            se.setMessage("there is no etag tag in the body, copying failed");
+            se.setIsClientError(false);
+        }
+        res.setE(se);
+        return res;
+    }
+
+    UploadPartCopyV2Output output;
+    output.setLastModified(tempOutput.getOutput().getLastModified());
+    output.setETag(tempOutput.getOutput().getETag());
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     output.setCopySourceVersionId(tosRes.result()->findHeader(HEADER_COPY_SOURCE_VERSION_ID));
     // PartNumber从input传入
     output.setPartNumber(input.getPartNumber());
-
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -4067,7 +4237,7 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
         res.setSuccess(false);
         return res;
     }
-    if (input.getExpires() <= 0 || input.getExpires() > 604800) {
+    if (input.getExpires() < 0 || input.getExpires() > maxPreSignExpires) {
         TosError error;
         error.setIsClientError(true);
         error.setMessage("invalid expires, the expires must be [1, 604800]");
@@ -4075,11 +4245,15 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
         res.setSuccess(false);
         return res;
     }
+    auto expires_ = input.getExpires();
+    if (expires_ == 0) {
+        expires_ = defaultSignExpires;
+    }
     auto headers = input.getHeader();
     auto querys = input.getQuery();
     auto rb = newBuilder(input.getBucket(), input.getKey(), input.getAlternativeEndpoint(), headers, querys);
     auto req = rb.build(HttpMethodTypetoString[input.getHttpMethod()]);
-    std::chrono::duration<int> ttl(input.getExpires());
+    std::chrono::duration<int> ttl(expires_);
     auto query = signer_->signQuery(req, ttl);
     for (auto& iter : query) {
         req->setSingleQuery(iter.first, iter.second);
@@ -4090,6 +4264,955 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
     output.setSignHeader(input.getHeader());
     res.setR(output);
     res.setSuccess(true);
+    return res;
+}
+
+Outcome<TosError, PutBucketCORSOutput> TosClientImpl::putBucketCORS(const PutBucketCORSInput& input) {
+    Outcome<TosError, PutBucketCORSOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getRules().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid rules, the rules must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("cors", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketCORSOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketCORSOutput> TosClientImpl::getBucketCORS(const GetBucketCORSInput& input) {
+    Outcome<TosError, GetBucketCORSOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("cors", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketCORSOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketCORSOutput> TosClientImpl::deleteBucketCORS(const DeleteBucketCORSInput& input) {
+    Outcome<TosError, DeleteBucketCORSOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("cors", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketCORSOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const ListObjectsType2Input& input) {
+    Outcome<TosError, ListObjectsType2Output> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("list-type", "2");
+    rb.withQueryCheckEmpty("prefix", input.getPrefix());
+    rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
+    rb.withQueryCheckEmpty("start-after", input.getStartAfter());
+    rb.withQueryCheckEmpty("continuation-token", input.getContinuationToken());
+    if (input.getMaxKeys() != 0) {
+        rb.withQueryCheckEmpty("max-keys", std::to_string(input.getMaxKeys()));
+    }
+    rb.withQueryCheckEmpty("encoding-type", input.getEncodingType());
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    ListObjectsType2Output output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+    // 如果是一次列举，就直接返回
+    // 或者一次就列举完成了，到不了 maxkey 的情况
+    // 或者携带 delimiter 列举 CommonPrefix 的情况
+    // 检查默认值
+    //    if (input.isListOnlyOnce() || !output.isTruncated()) {
+    //        res.setSuccess(true);
+    //        res.setR(output);
+    //        return res;
+    //    } else {
+    //        // 第一次请求获取的结果
+    //        bool isTruncated = output.isTruncated();
+    //        int number =
+    //                static_cast<int>(output.getContents().size()) +
+    //                static_cast<int>(output.getCommonPrefixes().size());
+    //        int newMaxKey = input.getMaxKeys() - number;
+    //        auto content = output.getContents();
+    //        auto commonPrefixes = output.getCommonPrefixes();
+    //        rb.withQueryCheckEmpty("max-keys", std::to_string(newMaxKey));
+    //        rb.withQueryCheckEmpty("continuation-token", output.getNextContinuationToken());
+    //        while (isTruncated && newMaxKey > 0) {
+    //            auto req = rb.Build(http::MethodGet, nullptr);
+    //            auto tosRes = roundTrip(req, 200);
+    //            if (!tosRes.isSuccess()) {
+    //                res.setE(tosRes.error());
+    //                res.setSuccess(false);
+    //                return res;
+    //            }
+    //            ListObjectsType2Output outputTemp;
+    //            std::stringstream ss;
+    //            ss << tosRes.result()->getContent()->rdbuf();
+    //            outputTemp.fromJsonString(ss.str());
+    //            number = static_cast<int>(outputTemp.getContents().size()) +
+    //                     static_cast<int>(outputTemp.getCommonPrefixes().size());
+    //            newMaxKey -= number;
+    //            isTruncated = outputTemp.isTruncated();
+    //            rb.withQueryCheckEmpty("max-keys", std::to_string(newMaxKey));
+    //            rb.withQueryCheckEmpty("continuation-token", outputTemp.getNextContinuationToken());
+    //            // 重新计算结果
+    //            output.setKeyCount(outputTemp.getKeyCount());
+    //            output.setIsTruncated(outputTemp.isTruncated());
+    //            output.setNextContinuationToken(outputTemp.getNextContinuationToken());
+    //            // append 到当前两个 vector 的后面
+    //            auto tempContent = outputTemp.getContents();
+    //            content.insert(content.end(), tempContent.begin(), tempContent.end());
+    //            auto tempCommonPrefixes = outputTemp.getCommonPrefixes();
+    //            commonPrefixes.insert(commonPrefixes.end(), tempCommonPrefixes.begin(), tempCommonPrefixes.end());
+    //        }
+    //        output.setContents(content);
+    //        // 排序并筛选
+    //        sort(commonPrefixes.begin(), commonPrefixes.end());
+    //        commonPrefixes.erase(unique(commonPrefixes.begin(), commonPrefixes.end()), commonPrefixes.end());
+    //        output.setCommonPrefixes(commonPrefixes);
+    //        res.setSuccess(true);
+    //        res.setR(output);
+    //        return res;
+    //    }
+}
+
+Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageClass(
+        const PutBucketStorageClassInput& input) {
+    Outcome<TosError, PutBucketStorageClassOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("storageClass", "");
+    rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
+    auto req = rb.Build(http::MethodPut, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketStorageClassOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+// todo: boe4 该接口有问题
+Outcome<TosError, GetBucketLocationOutput> TosClientImpl::getBucketLocation(const GetBucketLocationInput& input) {
+    Outcome<TosError, GetBucketLocationOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("location", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketLocationOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketLifecycleOutput> TosClientImpl::putBucketLifecycle(const PutBucketLifecycleInput& input) {
+    Outcome<TosError, PutBucketLifecycleOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getRules().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid rules, the rules must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("lifecycle", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketLifecycleOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketLifecycleOutput> TosClientImpl::getBucketLifecycle(const GetBucketLifecycleInput& input) {
+    Outcome<TosError, GetBucketLifecycleOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("lifecycle", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketLifecycleOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketLifecycleOutput> TosClientImpl::deleteBucketLifecycle(
+        const DeleteBucketLifecycleInput& input) {
+    Outcome<TosError, DeleteBucketLifecycleOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("lifecycle", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketLifecycleOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const PutBucketPolicyInput& input) {
+    Outcome<TosError, PutBucketPolicyOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getPolicy().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid policy, the policy must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("policy", "");
+    auto ss = std::make_shared<std::stringstream>(input.getPolicy());
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const GetBucketPolicyInput& input) {
+    Outcome<TosError, GetBucketPolicyOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("policy", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.setPolicy(ss.str());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(const DeleteBucketPolicyInput& input) {
+    Outcome<TosError, DeleteBucketPolicyOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("policy", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketMirrorBackOutput> TosClientImpl::putBucketMirrorBack(const PutBucketMirrorBackInput& input) {
+    Outcome<TosError, PutBucketMirrorBackOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getRules().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid rules, the rules must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("mirror", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketMirrorBackOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketMirrorBackOutput> TosClientImpl::getBucketMirrorBack(const GetBucketMirrorBackInput& input) {
+    Outcome<TosError, GetBucketMirrorBackOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("mirror", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketMirrorBackOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketMirrorBackOutput> TosClientImpl::deleteBucketMirrorBack(
+        const DeleteBucketMirrorBackInput& input) {
+    Outcome<TosError, DeleteBucketMirrorBackOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("mirror", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketMirrorBackOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutObjectTaggingOutput> TosClientImpl::putObjectTagging(const PutObjectTaggingInput& input) {
+    Outcome<TosError, PutObjectTaggingOutput> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getTagSet().getTags().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid tagSet, the tagSet must be not empty.");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("tagging", "");
+    rb.withQueryCheckEmpty("versionId", input.getVersionId());
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutObjectTaggingOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetObjectTaggingOutput> TosClientImpl::getObjectTagging(const GetObjectTaggingInput& input) {
+    Outcome<TosError, GetObjectTaggingOutput> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    rb.withQuery("tagging", "");
+    rb.withQueryCheckEmpty("versionId", input.getVersionId());
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetObjectTaggingOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteObjectTaggingOutput> TosClientImpl::deleteObjectTagging(const DeleteObjectTaggingInput& input) {
+    Outcome<TosError, DeleteObjectTaggingOutput> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    rb.withQuery("tagging", "");
+    rb.withQueryCheckEmpty("versionId", input.getVersionId());
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteObjectTaggingOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucketAclInput& input) {
+    Outcome<TosError, PutBucketAclOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    rb.withQuery("acl", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketAclOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketAclOutput> TosClientImpl::getBucketAcl(const GetBucketAclInput& input) {
+    Outcome<TosError, GetBucketAclOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("acl", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketAclOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+static void fetchObjectSetOptionHeader(RequestBuilder& rb, const FetchObjectInput& input) {
+    rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+    rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+    rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+    rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+    setMetaHeader(input.getMeta(), rb);
+    setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
+    rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
+}
+
+Outcome<TosError, FetchObjectOutput> TosClientImpl::fetchObject(const FetchObjectInput& input) {
+    Outcome<TosError, FetchObjectOutput> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getUrl().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid url, the url must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    check = isValidSSEC(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+
+    rb.withQuery("fetch", "");
+    fetchObjectSetOptionHeader(rb, input);
+
+    auto req = rb.Build(http::MethodPost, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    FetchObjectOutput output;
+    std::stringstream ssRes;
+    ssRes << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ssRes.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+static void putFetchTaskSetOptionHeader(RequestBuilder& rb, const PutFetchTaskInput& input) {
+    rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+    rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+    rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+    rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+    setMetaHeader(input.getMeta(), rb);
+    setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
+    rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
+}
+Outcome<TosError, PutFetchTaskOutput> TosClientImpl::putFetchTask(const PutFetchTaskInput& input) {
+    Outcome<TosError, PutFetchTaskOutput> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getUrl().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid url, the url must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    check = isValidSSEC(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("fetchTask", "");
+
+    putFetchTaskSetOptionHeader(rb, input);
+    auto req = rb.Build(http::MethodPost, ss);
+    auto tosRes = roundTrip(req, 200);
+
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutFetchTaskOutput output;
+    std::stringstream ssRes;
+    ssRes << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ssRes.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSignature(
+        const PreSignedPostSignatureInput& input) {
+    Outcome<TosError, PreSignedPostSignatureOutput> res;
+    if (input.getExpires() < 0 || input.getExpires() > maxPreSignExpires) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid expires, the expires must be [1, 604800]");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto expires_ = input.getExpires();
+    if (expires_ == 0) {
+        expires_ = defaultSignExpires;
+    }
+    std::vector<PostSignatureConditionInner> conditions_;
+    // algorithm
+    conditions_.emplace_back("x-tos-algorithm", "TOS4-HMAC-SHA256");
+    // data
+    std::time_t now = time(nullptr);
+    std::string date = TimeUtils::transTimeToFormat(now, iso8601Layout);
+    conditions_.emplace_back("x-tos-date", date);
+    // credential
+    auto cred_ = credentials_->credential();
+    std::string credential;
+    std::string region_ = config_.getRegion();
+    credential = credential.append(cred_.getAccessKeyId())
+                         .append("/")
+                         .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
+                         .append("/")
+                         .append(region_)
+                         .append("/tos/request");
+    conditions_.emplace_back("x-tos-credential", credential);
+    // SecurityToken
+    if (!cred_.getSecurityToken().empty()) {
+        conditions_.emplace_back("x-tos-security-token", cred_.getSecurityToken());
+    }
+    // bucket
+    if (!input.getBucket().empty()) {
+        conditions_.emplace_back("bucket", input.getBucket());
+    }
+    // key
+    if (!input.getKey().empty()) {
+        conditions_.emplace_back("key", input.getKey());
+    }
+    // 传入的conditions
+    for (auto& condition : input.getConditions()) {
+        if (condition.getOperator() != nullptr) {
+            conditions_.emplace_back(condition.getOperator(), "$" + condition.getKey(), condition.getValue());
+        } else {
+            conditions_.emplace_back(condition.getKey(), condition.getValue());
+        }
+    }
+    if (input.getContentLengthRange() != nullptr) {
+        // 在拼接 json 时再转回数字
+        conditions_.emplace_back(std::make_shared<std::string>("content-length-range"),
+                                 std::to_string(input.getContentLengthRange()->getRangeStart()),
+                                 std::to_string(input.getContentLengthRange()->getRangeEnd()));
+    }
+
+    // post policy 的 expiration 字段
+    std::string expiration_ = TimeUtils::transTimeToFormat(now + expires_, serverTimeFormat);
+    PostPolicyInner postPolicy_(conditions_, expiration_);
+    std::string jsonCondition(postPolicy_.toJsonString());
+    if (jsonCondition == "null") {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("unable to do serialization/deserialization");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    // base64 encode policy
+    std::string jsonCondition_ = CryptoUtils::base64Encode(
+            reinterpret_cast<const unsigned char*>(jsonCondition.c_str()), jsonCondition.length());
+    std::string date_ = TimeUtils::transTimeToFormat(now, yyyyMMdd);
+    std::string signture = SignV4::signingKey(SignKeyInfo(date_, region_, cred_), jsonCondition_);
+    PreSignedPostSignatureOutput output(jsonCondition, jsonCondition_, "TOS4-HMAC-SHA256", credential, date, signture);
+
+    res.setR(output);
+    res.setSuccess(true);
+    return res;
 }
 
 std::set<std::string> CanRetryMethods = {"createBucket",
@@ -4144,10 +5267,17 @@ bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
 Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const std::shared_ptr<TosRequest>& request,
                                                                          int expectedCode) {
     Outcome<TosError, std::shared_ptr<TosResponse>> ret;
+    if (connectWithIP_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use ip:port to access");
+        ret.setE(se);
+        return ret;
+    }
     auto logger = LogUtils::GetLogger();
     auto rateLimiter = request->getRataLimiter();
     auto maxRetry = config_.getMaxRetryCount() < 1 ? 1 : config_.getMaxRetryCount();
-    for (int retry = 0; retry < maxRetry; retry++) {
+    for (int retry = 0;; retry++) {
         if (retry != 0) {
             TimeUtils::sleepMilliSecondTimes(config_.getRetrySleepScale() * (1 << retry));
         }
@@ -4241,8 +5371,9 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
                                          const std::string& alternativeEndpoint,
                                          const std::map<std::string, std::string>& headers,
                                          std::map<std::string, std::string>& queries) {
-    // todo: alternativeEndpoint 不带桶名，当成 client的endpoint，可能要处理一下 schema
-    std::string host = alternativeEndpoint.empty() ? host_ : alternativeEndpoint;
+    auto schemeHostParameter = initSchemeAndHost(alternativeEndpoint);
+    std::string alternativeEndpoint_ = schemeHostParameter.host_;
+    std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
     auto rb = RequestBuilder(signer_, scheme_, host, bucket, object, urlMode_, headers, queries);
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     return rb;

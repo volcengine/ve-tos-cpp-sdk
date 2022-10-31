@@ -176,25 +176,25 @@ std::vector<std::pair<std::string, std::string>> SignV4::signedQuery(const std::
     return signedRes;
 }
 
-// std::string SignV4::signingKey(const SignKeyInfo &info){
-//   const std::string& sk(info.getCredential().getAccessKeySecret());
-//   const std::string& date(info.getDate());
-//   const std::string& region(info.getRegion());
-//   unsigned int mdLen = 32;
-//   unsigned char unsignedDate[32];
-//   unsigned char unsignedRegion[32];
-//   unsigned char unsignedService[32];
-//   unsigned char unsignedOut[32];
-//   HMAC(EVP_sha256(), sk.c_str(), sk.size(),
-//        reinterpret_cast<const unsigned char *>(date.c_str()), date.size(), unsignedDate, &mdLen);
-//   HMAC(EVP_sha256(), unsignedDate, 32,
-//        reinterpret_cast<const unsigned char *>(region.c_str()), region.size(), unsignedRegion, &mdLen);
-//   HMAC(EVP_sha256(), unsignedRegion, 32,
-//         reinterpret_cast<const unsigned char *>("tos"), 3, unsignedService, &mdLen);
-//   HMAC(EVP_sha256(), unsignedService, 32,
-//        reinterpret_cast<const unsigned char *>("request"), 7, unsignedOut, &mdLen);
-//   std::string res(std::to_string(unsignedOut);
-// }
+std::string SignV4::signingKey(const SignKeyInfo& info, const std::string& buf) {
+    const std::string& sk(info.getCredential().getAccessKeySecret());
+    const std::string& date(info.getDate());
+    const std::string& region(info.getRegion());
+    unsigned int mdLen = 32;
+    unsigned char unsignedDate[32];
+    unsigned char unsignedRegion[32];
+    unsigned char unsignedService[32];
+    unsigned char signK[32];
+    HMAC(EVP_sha256(), sk.c_str(), sk.size(), reinterpret_cast<const unsigned char*>(date.c_str()), date.size(),
+         unsignedDate, &mdLen);
+    HMAC(EVP_sha256(), unsignedDate, 32, reinterpret_cast<const unsigned char*>(region.c_str()), region.size(),
+         unsignedRegion, &mdLen);
+    HMAC(EVP_sha256(), unsignedRegion, 32, reinterpret_cast<const unsigned char*>("tos"), 3, unsignedService, &mdLen);
+    HMAC(EVP_sha256(), unsignedService, 32, reinterpret_cast<const unsigned char*>("request"), 7, signK, &mdLen);
+    unsigned char sig[32];
+    HMAC(EVP_sha256(), signK, 32, reinterpret_cast<const unsigned char*>(buf.c_str()), buf.size(), sig, &mdLen);
+    return StringUtils::stringToHex(sig, 32);
+}
 
 std::string SignV4::uriEncode(const std::string& in, bool encodeSlash) {
     int hexCount = 0;

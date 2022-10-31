@@ -4,7 +4,7 @@
 
 #include "HttpRequest.h"
 #include "HttpResponse.h"
-
+#include "curl/curl.h"
 namespace VolcengineTos {
 static bool hasInitHttpClient = false;
 struct HttpConfig {
@@ -39,7 +39,9 @@ public:
     std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request);
 
 private:
-    void set_share_handle(void* curl_handle, int cacheTime);
+    void setShareHandle(void* curl_handle, int cacheTime);
+    void removeDNS(void* curl_handle, const std::shared_ptr<HttpRequest>& request);
+    CURLSH* share_handle = nullptr;
 
 private:
     int requestTimeout_ = 120000;
@@ -52,5 +54,6 @@ private:
     std::string proxyUsername_;
     std::string proxyPassword_;
     int dnsCacheTime_ = 0;
+    std::mutex mu_;
 };
 }  // namespace VolcengineTos

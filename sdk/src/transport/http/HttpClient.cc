@@ -218,16 +218,30 @@ HttpClient::HttpClient(const HttpConfig& config) {
     proxyPassword_ = config.proxyPassword;
     dnsCacheTime_ = config.dnsCacheTime;
 }
-
-void HttpClient::set_share_handle(CURL* curl_handle, int cacheTime) {
-    static CURLSH* share_handle = nullptr;
+void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
+    std::lock_guard<std::mutex> lock(mu_);
     if (!share_handle) {
         share_handle = curl_share_init();
+        // 共享 DNS 信息，带锁
         curl_share_setopt(share_handle, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
     }
+    // 当前 curl handler 使用共享 handle 的数据
     curl_easy_setopt(curl_handle, CURLOPT_SHARE, share_handle);
+    // 在内存中保存DNS信息的时间
     curl_easy_setopt(curl_handle, CURLOPT_DNS_CACHE_TIMEOUT, cacheTime * 60);
 }
+
+void HttpClient::removeDNS(void* curl, const std::shared_ptr<HttpRequest>& request) {
+    // 无法感知 IP，超时时将会直接踢出该 host 对应的 DNS 映射信息
+    curl_slist* dns_list = nullptr;
+    auto servicehost = request->url().host();
+    std::string port = request->url().scheme() == "http" ? "80" : "443";
+    auto rmHost = "-" + servicehost + ":" + port;
+    dns_list = curl_slist_append(dns_list, rmHost.c_str());
+    std::lock_guard<std::mutex> lock(mu_);
+    curl_easy_setopt(curl, CURLOPT_RESOLVE, dns_list);
+}
+
 std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRequest>& request) {
     // init curl for this request
     CURL* curl = curl_easy_init();
@@ -245,7 +259,6 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_);
 
-    // todo: 测试代理机制
     if (proxyPort_ != -1 && !proxyHost_.empty()) {
         std::string proxy = proxyHost_ + ":" + std::to_string(proxyPort_);
         std::string proxyUserPwd = proxyUsername_ + ":" + proxyPassword_;
@@ -324,29 +337,31 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     curl_easy_setopt(curl, CURLOPT_READDATA, &resourceMan);
     curl_easy_setopt(curl, CURLOPT_READFUNCTION, sendBody);
 
-    //  todo：测试，先直接请求多个 curl，看日志后续 dns
-    //  没有请求时间了，然后直接请求完删除，看看删除有没有效，有效的话删除前直接加超时判断逻辑。注意删除 dns
-    //  时要根据请求值/返回值找到该次域名和ip
-    // host_list = curl_slist_append(host_list, "-servicehost:443");
-    // curl_easy_setopt(curl, CURLOPT_RESOLVE, host_list);
-
     // 使用缓存 dns
     if (dnsCacheTime_ > 0) {
-        set_share_handle(curl, dnsCacheTime_);
+        setShareHandle(curl, dnsCacheTime_);
     }
-
     CURLcode res = curl_easy_perform(curl);
     if (res == CURLE_COULDNT_CONNECT) {
         response->setStatus(http::Refused);
         response->setStatusMsg("connection refused");
+        if (dnsCacheTime_ > 0) {
+            removeDNS(curl, request);
+        }
+
     } else if (res == CURLE_OPERATION_TIMEDOUT) {
         response->setStatus(http::otherErr);
         response->setStatusMsg("operation timeout");
+        if (dnsCacheTime_ > 0) {
+            removeDNS(curl, request);
+        }
     } else if (res != CURLE_OK) {
         response->setStatus(http::otherErr);
         response->setStatusMsg("curl error code is " + std::to_string(res));
     } else {
         response->setStatus(http::Success);
+
+#ifdef CURL_VERSION_7610
         long nameLookUp = 0;
         long connectTime = 0;
         long tlsConnect = 0;
@@ -360,13 +375,31 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         auto logger = LogUtils::GetLogger();
         if (logger != nullptr) {
             logger->debug(
-                    "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} "
-                    "ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
-                    "time:{} ms",
+                    "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
                     request->method(), request->url().host(), request->url().path(), nameLookUp / 1000,
                     connectTime / 1000, tlsConnect / 1000, startTrans / 1000, (totalTime - startTrans) / 1000,
                     totalTime / 1000);
         }
+#else
+        double nameLookUp = 0;
+        double connectTime = 0;
+        double tlsConnect = 0;
+        double startTrans = 0;
+        double totalTime = 0;
+        curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
+        curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
+        curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
+        curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
+        curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
+        auto logger = LogUtils::GetLogger();
+        if (logger != nullptr) {
+            logger->debug(
+                    "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
+                    request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
+                    (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
+                    (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
+        }
+#endif
     }
     int response_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
