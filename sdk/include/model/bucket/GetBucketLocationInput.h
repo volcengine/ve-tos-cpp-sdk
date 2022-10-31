@@ -6,6 +6,10 @@
 namespace VolcengineTos {
 class GetBucketLocationInput {
 public:
+    explicit GetBucketLocationInput(std::string bucket) : bucket_(std::move(bucket)) {
+    }
+    GetBucketLocationInput() = default;
+    virtual ~GetBucketLocationInput() = default;
     const std::string& getBucket() const {
         return bucket_;
     }

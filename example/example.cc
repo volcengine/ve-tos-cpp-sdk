@@ -1,4 +1,5 @@
 #include "TosClientV2.h"
+//#include "../src/utils/LogUtils.h"
 
 using namespace VolcengineTos;
 
@@ -91,7 +92,7 @@ void putObjectWithProcess(const std::shared_ptr<TosClientV2>& client, const std:
     auto ss = std::make_shared<std::stringstream>(data);
     PutObjectV2Input input(bucketName, objectkey, ss);
     auto basicInput = input.getPutObjectBasicInput();
-    DataTransferListener datatransferlistener = {ProgressCallback};
+    DataTransferListener datatransferlistener = {ProgressCallback, nullptr};
     basicInput.setDataTransferListener(datatransferlistener);
     input.setPutObjectBasicInput(basicInput);
     auto output = client->putObject(input);
@@ -353,7 +354,7 @@ void copyObject(const std::shared_ptr<TosClientV2>& client, const std::string& b
 
 void uploadPartCopy(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName) {
     std::string objectKey("object-upload-part-copy-" + std::to_string(std::time(nullptr)));
-    std::string dstKey("objectUploadPartCopy.data");
+    std::string copyObjectKey("objectUploadPartCopy.data");
     auto ss = std::make_shared<std::stringstream>();
     for (int i = 0; i < (11 << 20); ++i) {
         *ss << 1;
@@ -361,9 +362,12 @@ void uploadPartCopy(const std::shared_ptr<TosClientV2>& client, const std::strin
     PutObjectV2Input putInput(bucketName, objectKey, ss);
     auto srcPut = client->putObject(putInput);
 
-    CreateMultipartUploadInput input_part_create(bucketName, dstKey);
+    CreateMultipartUploadInput input_part_create(bucketName, copyObjectKey);
     auto upload = client->createMultipartUpload(input_part_create);
-
+    if (!upload.isSuccess()) {
+        std::cout << "createMultipartUpload error: " << upload.error().String() << std::endl;
+        return;
+    }
     // 获取要copy的对象大小
     HeadObjectV2Input headInput(bucketName, objectKey);
     auto headOutput = client->headObject(headInput);
@@ -373,8 +377,8 @@ void uploadPartCopy(const std::shared_ptr<TosClientV2>& client, const std::strin
     }
 
     int64_t size = headOutput.result().getContentLength();
-
-    int partSize = 5 * 1024 * 1024;  // 10MB
+    // 分片大小 5MB 为例
+    int partSize = 5 * 1024 * 1024;
     int partCount = (int)(size / partSize);
     std::vector<UploadedPartV2> copyParts(partCount);
     int64_t copySourceRangeEnd_ = 0;
@@ -386,21 +390,27 @@ void uploadPartCopy(const std::shared_ptr<TosClientV2>& client, const std::strin
         int64_t copySourceRangeStart_ = copySourceRangeEnd_;
         copySourceRangeEnd_ = copySourceRangeStart_ + partLen;
 
-        UploadPartCopyV2Input input(bucketName, dstKey, bucketName, objectKey, i + 1, upload.result().getUploadId());
+        UploadPartCopyV2Input input(bucketName, copyObjectKey, bucketName, objectKey, i + 1,
+                                    upload.result().getUploadId());
         input.setCopySourceRangeStart(copySourceRangeStart_);
         input.setCopySourceRangeEnd(copySourceRangeEnd_);
         auto res = client->uploadPartCopy(input);
+        if (!res.isSuccess()) {
+            std::cout << "upload part " << i << "failed, error is: " << res.error().String() << std::endl;
+            return;
+        }
         UploadedPartV2 temp(res.result().getPartNumber(), res.result().getETag());
         copyParts[i] = temp;
         copySourceRangeEnd_ = copySourceRangeEnd_ + 1;
     }
 
-    CompleteMultipartUploadV2Input input(bucketName, dstKey, upload.result().getUploadId(), copyParts);
+    CompleteMultipartUploadV2Input input(bucketName, copyObjectKey, upload.result().getUploadId(), copyParts);
     auto complete = client->completeMultipartUpload(input);
     if (!complete.isSuccess()) {
         std::cout << "uploadPartCopy error: " << complete.error().String() << std::endl;
         return;
     }
+    std::cout << "uploadPartCopy success" << std::endl;
 }
 
 void uploadPart(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName,
@@ -632,20 +642,23 @@ void preSignedUrl(const std::shared_ptr<TosClientV2>& client, const std::string&
     std::string data =
             "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'";
     auto ss = std::make_shared<std::stringstream>(data);
-    std::string key("object-put-1");
+    std::string key("object-put-444");
     PutObjectV2Input input(bucket, key, ss);
     auto output = client->putObject(input);
     if (!output.isSuccess()) {
         std::cout << output.error().String() << std::endl;
         return;
     }
-    std::chrono::duration<int, std::ratio<100>> hs(3);
-    auto res = client->preSignedURL("GET", bucket, key, hs);
+    PreSignedURLInput inputPreSign(HttpMethodType::Get, bucket, key, 300);
+    std::map<std::string, std::string> query{{"response-content-disposition", "ttt"}};
+    inputPreSign.setQuery(query);
+    inputPreSign.setAlternativeEndpoint("http://boe-official-test.volces.com");
+    auto res = client->preSignedURL(inputPreSign);
     if (!res.isSuccess()) {
         std::cout << "preSignedUrl error: " << output.error().String() << std::endl;
         return;
     }
-    std::cout << "the preSigned url is: " << res.result() << std::endl;
+    std::cout << "the preSigned url is: " << res.result().getSignUrl() << std::endl;
 }
 
 void downloadFile(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName,
@@ -710,7 +723,7 @@ void CleanBucket(const std::shared_ptr<TosClientV2>& client, const std::string& 
 
 int main() {
     // 设置初始化参数，对象名和桶名
-    std::string endpoint("Your endpoint");
+    std::string endpoint("your Endpoint");
     std::string region("your region");
     std::string ak("Your Access Key");
     std::string sk("Your Secret Key");
@@ -728,9 +741,10 @@ int main() {
     InitializeClient();
     TosClientV2 client(region, ak, sk, conf);
     auto cli = std::make_shared<TosClientV2>(client);
-    // CleanBucket(cli, bucket);
-    creatBucket(cli, bucket);
 
+    creatBucket(cli, bucket);
+    // 使用时，请一定要确保是测试桶，再使用 CleanBucket 这个语句，否则可能会删除掉正常数据
+    //    CleanBucket(cli, bucket);
     preSignedUrl(cli, bucket);
     // 桶接口
     listBucket(cli);
@@ -764,7 +778,8 @@ int main() {
     listObjectVersion(cli, bucket);
     creatBucket(cli, "tobucket-" + bucket);
     copyObject(cli, "tobucket-" + bucket, "toObject-" + key, bucket, key);
-    // CleanBucket(cli, "tobucket-" + bucket);
+    // 一定要确保是测试桶，再使用 CleanBucket 这个语句
+    //    CleanBucket(cli, "tobucket-" + bucket);
     uploadPartCopy(cli, bucket);
 
     deleteObject(cli, bucket, key);

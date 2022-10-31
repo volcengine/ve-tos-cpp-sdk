@@ -39,7 +39,6 @@ void TestUtils::PutObject(const std::shared_ptr<TosClientV2>& client, const std:
         return;
     }
 }
-
 void TestUtils::PutObjectWithMeta(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
                                   const std::string& obj_name, const std::string& data,
                                   const std::map<std::string, std::string>& meta) {
@@ -81,10 +80,14 @@ std::string TestUtils::GetObjectContentByStream(const std::shared_ptr<TosClientV
     input_obj_get.setBucket(bkt_name);
     input_obj_get.setKey(obj_name);
     auto output_obj_get = client->getObject(input_obj_get);
-    std::ostringstream ss;
-    ss << output_obj_get.result().getContent()->rdbuf();
-    std::string tmp_string = ss.str();
-    return tmp_string;
+    if (output_obj_get.isSuccess()) {
+        std::ostringstream ss;
+        ss << output_obj_get.result().getContent()->rdbuf();
+        std::string tmp_string = ss.str();
+        return tmp_string;
+    } else {
+        return "";
+    }
 }
 std::map<std::string, std::string> TestUtils::GetObjectMeta(const std::shared_ptr<TosClientV2>& client,
                                                             const std::string& bkt_name, const std::string& obj_name) {
@@ -139,7 +142,7 @@ void TestUtils::CleanAllBucket(const std::shared_ptr<TosClientV2>& client) {
     auto buckets = output_list_all.result().getBuckets();
     for (const auto& bkt_ : buckets) {
         std::string bkt_name = bkt_.getName();
-        auto idx = bkt_name.find("sdktest-");
+        auto idx = bkt_name.find("sdktest");
         if (idx != std::string::npos) {
             std::cout << "Delete bucket name:" << bkt_name << std::endl;
             TestUtils::CleanBucket(client, bkt_name);

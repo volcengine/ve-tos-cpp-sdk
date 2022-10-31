@@ -1,10 +1,14 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include "Type.h"
 namespace VolcengineTos {
 class PreSignedURLInput {
 public:
+    PreSignedURLInput(HttpMethodType httpMethod, std::string bucket, std::string key, int64_t expires)
+            : httpMethod_(httpMethod), bucket_(std::move(bucket)), key_(std::move(key)), expires_(expires) {
+    }
     HttpMethodType getHttpMethod() const {
         return httpMethod_;
     }

@@ -3,6 +3,8 @@
 #include <string>
 #include "model/acl/Owner.h"
 #include "Type.h"
+#include "../src/external/json/json.hpp"
+#include "utils/BaseUtils.h"
 namespace VolcengineTos {
 class ListedObjectV2 {
 public:
@@ -47,6 +49,37 @@ public:
     }
     void setHashCrc64Ecma(uint64_t hashcrc64ecma) {
         hashCrc64ecma_ = hashcrc64ecma;
+    }
+
+    static ListedObjectV2 parseListedObjectV2(const nlohmann::json& object) {
+        VolcengineTos::ListedObjectV2 lo;
+        if (object.contains("Key")) {
+            lo.setKey(object.at("Key").get<std::string>());
+        }
+        if (object.contains("LastModified")) {
+            lo.setLastModified(VolcengineTos::TimeUtils::transLastModifiedStringToTime(
+                    object.at("LastModified").get<std::string>()));
+        }
+
+        if (object.contains("ETag"))
+            lo.setETag(object.at("ETag").get<std::string>());
+        if (object.contains("Size"))
+            lo.setSize(object.at("Size").get<int64_t>());
+        if (object.contains("Owner")) {
+            VolcengineTos::Owner owner;
+            if (object.at("Owner").contains("ID")) {
+                owner.setId(object.at("Owner").at("ID").get<std::string>());
+            }
+            if (object.at("Owner").contains("DisplayName")) {
+                owner.setDisplayName(object.at("Owner").at("DisplayName").get<std::string>());
+            }
+            lo.setOwner(owner);
+        }
+        if (object.contains("StorageClass"))
+            lo.setStorageClass(VolcengineTos::StringtoStorageClassType[object.at("StorageClass").get<std::string>()]);
+        if (object.contains("HashCrc64ecma"))
+            lo.setHashCrc64Ecma(stoull(object.at("HashCrc64ecma").get<std::string>()));
+        return lo;
     }
 
 private:

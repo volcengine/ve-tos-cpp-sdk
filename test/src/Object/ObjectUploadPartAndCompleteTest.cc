@@ -18,6 +18,7 @@ protected:
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
         workPath = FileUtils::getWorkPath();
+        std::cout << workPath << std::endl;
         TestUtils::CreateBucket(cliV2, bkt_name);
     }
 

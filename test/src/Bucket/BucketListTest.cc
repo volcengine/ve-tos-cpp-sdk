@@ -16,9 +16,10 @@ protected:
         ClientConfig conf;
         conf.endPoint = TestConfig::Endpoint;
         conf.enableVerifySSL = TestConfig::enableVerifySSL;
-        
+
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
+        //        TestUtils::CleanAllBucket(cliV2);
     }
 
     // Tears down the stuff shared by all tests in this test case.
@@ -44,7 +45,7 @@ TEST_F(BucketListTest, ListBucketTest) {
     auto buckets_part1 = output_list_all_part1.result().getBuckets();
     for (auto bkt_ : buckets_part1) {
         std::string bkt_name = bkt_.getName();
-        if (bkt_name.rfind(testPrefix, 0) == 0) {
+        if (bkt_name.rfind(testPrefix, 0) == 0 && bkt_.getLocation() == TestConfig::Region) {
             std::cout << "Delete bucket name:" << bkt_name << std::endl;
             TestUtils::CleanBucket(cliV2, bkt_name);
         }
@@ -63,7 +64,7 @@ TEST_F(BucketListTest, ListBucketTest) {
     std::vector<ListedBucket> testBucket;
     for (auto bkt_ : buckets_part2) {
         std::string bkt_name = bkt_.getName();
-        if (bkt_name.rfind(testPrefix, 0) == 0) {
+        if (bkt_name.rfind(testPrefix, 0) == 0 && bkt_.getLocation() == TestConfig::Region) {
             testBucket.emplace_back(bkt_);
         }
     }
@@ -108,7 +109,7 @@ TEST_F(BucketListTest, ListBucketClientV1Test) {
     std::vector<ListedBucket> testBucket;
     for (auto bkt_ : buckets_part2) {
         std::string bkt_name = bkt_.getName();
-        if (bkt_name.rfind(testPrefix, 0) == 0) {
+        if (bkt_name.rfind(testPrefix, 0) == 0 && bkt_.getLocation() == TestConfig::Region) {
             testBucket.emplace_back(bkt_);
         }
     }

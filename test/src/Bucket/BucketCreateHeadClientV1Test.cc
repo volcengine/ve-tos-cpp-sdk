@@ -23,10 +23,16 @@ protected:
 
     Outcome<TosError, CreateBucketOutput> CreateBucketV1(CreateBucketInput& input) {
         auto output_v1 = cliV1->createBucket(input);
+        if (!output_v1.isSuccess()) {
+            std::cout << output_v1.error().getMessage() << std::endl;
+        }
         return output_v1;
     }
     Outcome<TosError, DeleteBucketOutput> DeleteBucketV1(const std::string& bkt_name) {
         auto output_v1_delete = cliV1->deleteBucket(bkt_name);
+        if (!output_v1_delete.isSuccess()) {
+            std::cout << output_v1_delete.error().getMessage() << std::endl;
+        }
         return output_v1_delete;
     }
 
@@ -89,7 +95,7 @@ TEST_F(BucketCreateHeadClientV1Test, HeadNonExistentBucketClientV1Test) {
 }
 
 TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithOrthogonalCaseClientV1Test) {
-    std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefix);
+    std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefix) + "v1";
     CreateBucketInput input_v1;
 
     input_v1.setBucket(bkt);
@@ -99,25 +105,34 @@ TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithOrthogonalCaseClientV1Test)
     EXPECT_EQ(CreateBucketV1(input_v1).isSuccess(), true);
     EXPECT_EQ(DeleteBucketV1(bkt).isSuccess(), true);
 
+    std::string bkt2 = TestUtils::GetBucketName(TestConfig::TestPrefix) + "v1";
+    input_v1.setBucket(bkt2);
     input_v1.setAcl("public-read-write");
     input_v1.setStorageClass("IA");
-    EXPECT_EQ(CreateBucketV1(input_v1).isSuccess(), true);
-    EXPECT_EQ(DeleteBucketV1(bkt).isSuccess(), true);
 
+    EXPECT_EQ(CreateBucketV1(input_v1).isSuccess(), true);
+    EXPECT_EQ(DeleteBucketV1(bkt2).isSuccess(), true);
+
+    std::string bkt3 = TestUtils::GetBucketName(TestConfig::TestPrefix) + "v1";
+    input_v1.setBucket(bkt3);
     input_v1.setAcl("authenticated-read");
     input_v1.setStorageClass("IA");
     EXPECT_EQ(CreateBucketV1(input_v1).isSuccess(), true);
-    EXPECT_EQ(DeleteBucketV1(bkt).isSuccess(), true);
+    EXPECT_EQ(DeleteBucketV1(bkt3).isSuccess(), true);
 
+    std::string bkt4 = TestUtils::GetBucketName(TestConfig::TestPrefix) + "v1";
+    input_v1.setBucket(bkt4);
     input_v1.setAcl("bucket-owner-read");
     input_v1.setStorageClass("IA");
     EXPECT_EQ(CreateBucketV1(input_v1).isSuccess(), true);
-    EXPECT_EQ(DeleteBucketV1(bkt).isSuccess(), true);
+    EXPECT_EQ(DeleteBucketV1(bkt4).isSuccess(), true);
 
+    std::string bkt5 = TestUtils::GetBucketName(TestConfig::TestPrefix) + "v1";
+    input_v1.setBucket(bkt5);
     input_v1.setAcl("bucket-owner-full-control");
     input_v1.setStorageClass("IA");
     EXPECT_EQ(CreateBucketV1(input_v1).isSuccess(), true);
-    EXPECT_EQ(DeleteBucketV1(bkt).isSuccess(), true);
+    EXPECT_EQ(DeleteBucketV1(bkt5).isSuccess(), true);
 }
 TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithErrorBucketNameLengthClientV1Test) {
     std::string error_message = "invalid bucket name, the length must be [3, 63]";
@@ -139,7 +154,7 @@ TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithErrorBucketNameLengthClient
     EXPECT_EQ(output_v1_3.isSuccess(), false);
     EXPECT_EQ(output_v1_3.error().getMessage() == error_message, true);
 
-    std::string bkt_4 = "aaa";
+    std::string bkt_4 = "ttttt";
     input_v1.setBucket(bkt_4);
     auto output_v1_4 = cliV1->createBucket(input_v1);
     EXPECT_EQ(output_v1_4.isSuccess(), true);

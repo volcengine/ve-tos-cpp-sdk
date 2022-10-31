@@ -96,7 +96,52 @@
 #include "Type.h"
 #include "model/object/DownloadFileInput.h"
 #include "model/object/DownloadFileOutput.h"
-
+#include "model/object/PreSignedURLOutput.h"
+#include "model/object/PreSignedURLInput.h"
+#include "model/bucket/PutBucketCORSInput.h"
+#include "model/bucket/PutBucketCORSOutput.h"
+#include "model/bucket/GetBucketCORSInput.h"
+#include "model/bucket/GetBucketCORSOutput.h"
+#include "model/bucket/DeleteBucketCORSOutput.h"
+#include "model/bucket/DeleteBucketCORSInput.h"
+#include "model/object/ListObjectsType2Input.h"
+#include "model/object/ListObjectsType2Output.h"
+#include "model/bucket/PutBucketStorageClassOutput.h"
+#include "model/bucket/PutBucketStorageClassInput.h"
+#include "model/bucket/GetBucketLocationOutput.h"
+#include "model/bucket/GetBucketLocationInput.h"
+#include "model/bucket/PutBucketLifecycleInput.h"
+#include "model/bucket/PutBucketLifecycleOutput.h"
+#include "model/bucket/GetBucketLifecycleOutput.h"
+#include "model/bucket/DeleteBucketLifecycleOutput.h"
+#include "model/bucket/GetBucketLifecycleInput.h"
+#include "model/bucket/DeleteBucketLifecycleInput.h"
+#include "model/bucket/PutBucketPolicyInput.h"
+#include "model/bucket/GetBucketPolicyInput.h"
+#include "model/bucket/DeleteBucketPolicyInput.h"
+#include "model/bucket/PutBucketMirrorBackInput.h"
+#include "model/bucket/PutBucketMirrorBackOutput.h"
+#include "model/bucket/GetBucketMirrorBackInput.h"
+#include "model/bucket/GetBucketMirrorBackOutput.h"
+#include "model/bucket/DeleteBucketMirrorBackInput.h"
+#include "model/bucket/DeleteBucketMirrorBackOutput.h"
+#include "model/object/PutObjectTaggingInput.h"
+#include "model/object/PutObjectTaggingOutput.h"
+#include "model/object/GetObjectTaggingInput.h"
+#include "model/object/GetObjectTaggingOutput.h"
+#include "model/object/DeleteObjectTaggingInput.h"
+#include "model/object/DeleteObjectTaggingOutput.h"
+#include "model/acl/PutBucketAclInput.h"
+#include "model/acl/PutBucketAclOutput.h"
+#include "model/acl/GetBucketAclInput.h"
+#include "model/acl/GetBucketAclOutput.h"
+#include "model/object/FetchObjectInput.h"
+#include "model/object/FetchObjectOutput.h"
+#include "model/object/PutFetchTaskInput.h"
+#include "model/object/PutFetchTaskOutput.h"
+#include "model/acl/PreSignedPostSignatureInput.h"
+#include "model/acl/PreSignedPostSignatureOutput.h"
+#include "SchemeHostParameter.h"
 namespace VolcengineTos {
 
 void InitializeClient();
@@ -166,6 +211,33 @@ public:
 
     Outcome<TosError, UploadFileV2Output> uploadFile(const UploadFileV2Input& input);
     Outcome<TosError, DownloadFileOutput> downloadFile(const DownloadFileInput& input);
+
+    Outcome<TosError, PreSignedURLOutput> preSignedURL(const PreSignedURLInput& input);
+
+    // 2.4.0
+    Outcome<TosError, PutBucketCORSOutput> putBucketCORS(const PutBucketCORSInput& input);
+    Outcome<TosError, GetBucketCORSOutput> getBucketCORS(const GetBucketCORSInput& input);
+    Outcome<TosError, DeleteBucketCORSOutput> deleteBucketCORS(const DeleteBucketCORSInput& input);
+    Outcome<TosError, ListObjectsType2Output> listObjectsType2(const ListObjectsType2Input& input);
+    Outcome<TosError, PutBucketStorageClassOutput> putBucketStorageClass(const PutBucketStorageClassInput& input);
+    Outcome<TosError, GetBucketLocationOutput> getBucketLocation(const GetBucketLocationInput& input);
+    Outcome<TosError, PutBucketLifecycleOutput> putBucketLifecycle(const PutBucketLifecycleInput& input);
+    Outcome<TosError, GetBucketLifecycleOutput> getBucketLifecycle(const GetBucketLifecycleInput& input);
+    Outcome<TosError, DeleteBucketLifecycleOutput> deleteBucketLifecycle(const DeleteBucketLifecycleInput& input);
+    Outcome<TosError, PutBucketPolicyOutput> putBucketPolicy(const PutBucketPolicyInput& input);
+    Outcome<TosError, GetBucketPolicyOutput> getBucketPolicy(const GetBucketPolicyInput& input);
+    Outcome<TosError, DeleteBucketPolicyOutput> deleteBucketPolicy(const DeleteBucketPolicyInput& input);
+    Outcome<TosError, PutBucketMirrorBackOutput> putBucketMirrorBack(const PutBucketMirrorBackInput& input);
+    Outcome<TosError, GetBucketMirrorBackOutput> getBucketMirrorBack(const GetBucketMirrorBackInput& input);
+    Outcome<TosError, DeleteBucketMirrorBackOutput> deleteBucketMirrorBack(const DeleteBucketMirrorBackInput& input);
+    Outcome<TosError, PutObjectTaggingOutput> putObjectTagging(const PutObjectTaggingInput& input);
+    Outcome<TosError, GetObjectTaggingOutput> getObjectTagging(const GetObjectTaggingInput& input);
+    Outcome<TosError, DeleteObjectTaggingOutput> deleteObjectTagging(const DeleteObjectTaggingInput& input);
+    Outcome<TosError, PutBucketAclOutput> putBucketAcl(const PutBucketAclInput& input);
+    Outcome<TosError, GetBucketAclOutput> getBucketAcl(const GetBucketAclInput& input);
+    Outcome<TosError, FetchObjectOutput> fetchObject(const FetchObjectInput& input);
+    Outcome<TosError, PutFetchTaskOutput> putFetchTask(const PutFetchTaskInput& input);
+    Outcome<TosError, PreSignedPostSignatureOutput> preSignedPostSignature(const PreSignedPostSignatureInput& input);
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;

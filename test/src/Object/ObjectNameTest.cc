@@ -143,7 +143,7 @@ TEST_F(ObjectNameTest, NameASCII4792Test) {
     input_obj_put_basic.setBucket(bkt_name);
 
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
-    std::vector<int> t_vector{47, 92};
+    std::vector<int> t_vector{92};
     for (auto t : t_vector) {
         auto i = char(t);
         obj_key = i;
@@ -151,8 +151,7 @@ TEST_F(ObjectNameTest, NameASCII4792Test) {
         input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
         auto output_obj_put = cliV2->putObject(input_obj_put);
         EXPECT_EQ(output_obj_put.isSuccess(), false);
-        EXPECT_EQ(output_obj_put.error().getMessage() ==
-                          "invalid object name, the object name can not start with '/' or '\\'",
+        EXPECT_EQ(output_obj_put.error().getMessage() == "invalid object name, the object name can not start with '\\'",
                   true);
     }
 }
