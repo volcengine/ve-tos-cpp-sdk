@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2022.11.10 Version 2.4.1
+
+-fix: GCC 4.8.5 compatibility
+
 ### 2022.10.31 Version 2.4.0
 
 - add: client DNS cache
