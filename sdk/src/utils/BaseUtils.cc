@@ -51,38 +51,40 @@ std::string TimeUtils::transTimeToGmtTime(const std::time_t& t) {
     return date.str();
 }
 std::time_t TimeUtils::transGMTFormatStringToTime(const std::string& t) {
-    std::istringstream ss(t);
+    const char* date = t.c_str();
     std::tm tm;
     std::time_t tt = -1;
-    ss >> std::get_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+    int ms;
+    std::string wday_name;
+    wday_name.resize(3);
+    std::string mon_name;
+    mon_name.resize(3);
+    auto result = sscanf(date, "%3s, %2d %3s %4d %2d:%2d:%2d GMT", &wday_name[0], &tm.tm_mday, &mon_name[0],
+                         &tm.tm_year, &tm.tm_hour, &tm.tm_min, &tm.tm_sec);
+    std::map<std::string, int> mon_map = {
+            {"Jan", 1}, {"Feb", 2}, {"Mar", 3}, {"Apr", 4},  {"May", 5},  {"Jun", 6},
+            {"Jul", 7}, {"Aug", 8}, {"Sep", 9}, {"Oct", 10}, {"Nov", 11}, {"Dec", 12},
+    };
 
+    if (mon_map.count(mon_name) != 0) {
+        tm.tm_mon = mon_map[mon_name];
+    } else {
+        return -1;
+    }
+
+    if (result == 7) {
+        tm.tm_year = tm.tm_year - 1900;
+        tm.tm_mon = tm.tm_mon - 1;
 #ifdef _WIN32
-    tt = _mkgmtime64(&tm);
+        tt = _mkgmtime64(&tm);
 #else
-    tt = timegm(&tm);
+        tt = timegm(&tm);
 #endif  // _WIN32
-
+    }
     return tt < 0 ? -1 : tt;
 }
-std::string TimeUtils::transLastModifiedTimeToString(std::time_t& t) {
-    std::stringstream date;
-    std::tm tm;
-#ifdef _WIN32
-    ::gmtime_s(&tm, &t);
-#else
-    ::gmtime_r(&t, &tm);
-#endif
-#if defined(__GNUG__) && __GNUC__ < 5
-    char tmbuff[26];
-    strftime(tmbuff, 26, "%Y-%m-%dT%H:%M:%S.000Z", &tm);
-    date << tmbuff;
-#else
-    date.imbue(std::locale::classic());
-    date << std::put_time(&tm, "%Y-%m-%dT%X.000Z");
-#endif
-    return date.str();
-}
 
+// UtcToUnixTime
 std::time_t TimeUtils::transLastModifiedStringToTime(const std::string& t) {
     const char* date = t.c_str();
     std::tm tm;
@@ -100,6 +102,25 @@ std::time_t TimeUtils::transLastModifiedStringToTime(const std::string& t) {
 #endif  // _WIN32
     }
     return tt < 0 ? -1 : tt;
+}
+// ToUtcTime
+std::string TimeUtils::transLastModifiedTimeToString(std::time_t& t) {
+    std::stringstream date;
+    std::tm tm;
+#ifdef _WIN32
+    ::gmtime_s(&tm, &t);
+#else
+    ::gmtime_r(&t, &tm);
+#endif
+#if defined(__GNUG__) && __GNUC__ < 5
+    char tmbuff[26];
+    strftime(tmbuff, 26, "%Y-%m-%dT%H:%M:%S.000Z", &tm);
+    date << tmbuff;
+#else
+    date.imbue(std::locale::classic());
+    date << std::put_time(&tm, "%Y-%m-%dT%X.000Z");
+#endif
+    return date.str();
 }
 
 void TimeUtils::sleepSecondTimes(long time) {
