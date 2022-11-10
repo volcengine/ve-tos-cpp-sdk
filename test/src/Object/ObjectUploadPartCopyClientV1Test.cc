@@ -140,14 +140,14 @@ TEST_F(ObjectUploadPartCopyClientV1Test, UploadpartToNonExistentNameTest) {
         auto out_2 = cliV1->uploadPartCopy(bkt_name, input);
         EXPECT_EQ(out_2.isSuccess(), false);
         EXPECT_EQ(out_2.error().getStatusCode(), 404);
-        EXPECT_EQ(out_2.error().getCode(), "NotFound");
+        EXPECT_EQ(out_2.error().getCode(), "NoSuchUpload");
         // 复制段使用不存在的UploadID
         input.setDestinationKey(dstKey);
         input.setUploadId("1234");
         auto out_3 = cliV1->uploadPartCopy(bkt_name, input);
         EXPECT_EQ(out_3.isSuccess(), false);
         EXPECT_EQ(out_3.error().getStatusCode(), 404);
-        EXPECT_EQ(out_3.error().getCode(), "NotFound");
+        EXPECT_EQ(out_3.error().getCode(), "NoSuchUpload");
         // 复制段使用不存在的源桶
         input.setUploadId(upload.result().getUploadId());
         input.setSourceBucket(bkt_name_);

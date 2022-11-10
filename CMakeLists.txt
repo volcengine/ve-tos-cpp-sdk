@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.4.0
+        VERSION 2.4.1
         LANGUAGES CXX)
 
 # project settings
@@ -44,6 +44,7 @@ find_package(CURL 7.61.0)
 if (CURL_FOUND)
     add_definitions(-DCURL_VERSION_7610)
 else ()
+    message(STATUS "Try to find an older version of CURL")
     find_package(CURL)
     if (NOT CURL_FOUND)
         message(FATAL_ERROR "Could not find curl")
