@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-test
-        VERSION 2.4.0
+        VERSION 2.4.1
         LANGUAGES CXX)
 
 include(FetchContent)
 FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG e2239ee6043f73722e7aa812a459f54a28552929 # release-1.11.0
+        GIT_TAG 2fe3bd994b3189899d93f1d5a881e725e046fdc2 # release-1.8.1
 )
 
 FetchContent_GetProperties(googletest)

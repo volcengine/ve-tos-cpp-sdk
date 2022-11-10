@@ -144,14 +144,14 @@ TEST_F(ObjectUploadPartAndCompleteClientV1Test, listpartsToNonExistentNameTest) 
     auto part2 = cliV1->listUploadedParts(bkt_name, input_part_list);
     EXPECT_EQ(part2.isSuccess(), false);
     EXPECT_EQ(part2.error().getStatusCode(), 404);
-    EXPECT_EQ(part2.error().getCode(), "NotFound");
+    EXPECT_EQ(part2.error().getCode(), "NoSuchUpload");
 
     input_part_list.setKey(obj_name_);
     input_part_list.setUploadId(upload.result().getUploadId());
     auto part3 = cliV1->listUploadedParts(bkt_name, input_part_list);
     EXPECT_EQ(part3.isSuccess(), false);
     EXPECT_EQ(part3.error().getStatusCode(), 404);
-    EXPECT_EQ(part3.error().getCode(), "NotFound");
+    EXPECT_EQ(part3.error().getCode(), "NoSuchUpload");
 
     input_part_list.setKey(obj_name);
     auto part4 = cliV1->listUploadedParts(bkt_name, input_part_list);
@@ -197,13 +197,13 @@ TEST_F(ObjectUploadPartAndCompleteClientV1Test, CompleteToNonExistentNameTest) {
     auto com_2 = cliV1->completeMultipartUpload(bkt_name, input_upload_complete_2);
     EXPECT_EQ(com_2.isSuccess(), false);
     EXPECT_EQ(com_2.error().getStatusCode(), 404);
-    EXPECT_EQ(com_2.error().getCode(), "NotFound");
+    EXPECT_EQ(com_2.error().getCode(), "NoSuchUpload");
 
     CompleteMultipartUploadInput input_upload_complete_3(obj_name_, upload.result().getUploadId(), vec);
     auto com_3 = cliV1->completeMultipartUpload(bkt_name, input_upload_complete_3);
     EXPECT_EQ(com_3.isSuccess(), false);
     EXPECT_EQ(com_3.error().getStatusCode(), 404);
-    EXPECT_EQ(com_3.error().getCode(), "NotFound");
+    EXPECT_EQ(com_3.error().getCode(), "NoSuchUpload");
 }
 
 }  // namespace VolcengineTos

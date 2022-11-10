@@ -105,10 +105,10 @@ public:
             j.at("NextUploadIDMarker").get_to(nextUploadIdMarker_);
 
         nlohmann::json commonPrefixes = j.at("CommonPrefixes");
-        for (auto& commonPrefixes : commonPrefixes) {
+        for (auto& commonPrefixe : commonPrefixes) {
             ListedCommonPrefix lc;
-            if (commonPrefixes.contains("Prefix"))
-                lc.setPrefix(commonPrefixes.at("Prefix").get<std::string>());
+            if (commonPrefixe.contains("Prefix"))
+                lc.setPrefix(commonPrefixe.at("Prefix").get<std::string>());
             commonPrefixes_.emplace_back(lc);
         }
 
