@@ -6,17 +6,14 @@
 namespace VolcengineTos {
 class ObjectAppendGetClientV1Test : public ::testing::Test {
 protected:
-    ObjectAppendGetClientV1Test() {
-    }
+    ObjectAppendGetClientV1Test() = default;
 
-    ~ObjectAppendGetClientV1Test() override {
-    }
+    ~ObjectAppendGetClientV1Test() override = default;
 
     static void SetUpTestCase() {
         ClientConfig conf;
         conf.endPoint = TestConfig::Endpoint;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
 
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
         TestUtils::CreateBucket(cliV2, bkt_name);
@@ -26,17 +23,14 @@ protected:
     static void TearDownTestCase() {
         TestUtils::CleanBucket(cliV2, bkt_name);
         cliV2 = nullptr;
-        cliV1 = nullptr;
     }
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
-    static std::shared_ptr<TosClient> cliV1;
     static std::string bkt_name;
 };
 
 std::shared_ptr<TosClientV2> ObjectAppendGetClientV1Test::cliV2 = nullptr;
-std::shared_ptr<TosClient> ObjectAppendGetClientV1Test::cliV1 = nullptr;
 std::string ObjectAppendGetClientV1Test::bkt_name = "";
 
 TEST_F(ObjectAppendGetClientV1Test, AppendWithoutParametersTest) {
@@ -45,7 +39,7 @@ TEST_F(ObjectAppendGetClientV1Test, AppendWithoutParametersTest) {
     for (int i = 0; i < (128 << 10); ++i) {
         *part0 << "1";
     }
-    auto output = cliV1->appendObject(bkt_name, obj_key, part0, 0);
+    auto output = cliV2->appendObject(bkt_name, obj_key, part0, 0);
     if (!output.isSuccess()) {
         std::cout << output.error().String() << std::endl;
     }
@@ -54,7 +48,7 @@ TEST_F(ObjectAppendGetClientV1Test, AppendWithoutParametersTest) {
     for (int i = 0; i < (256 << 10); ++i) {
         *part1 << "1";
     }
-    auto output1 = cliV1->appendObject(bkt_name, obj_key, part1, output.result().getNextAppendOffset());
+    auto output1 = cliV2->appendObject(bkt_name, obj_key, part1, output.result().getNextAppendOffset());
     if (!output1.isSuccess()) {
         std::cout << output1.error().String() << std::endl;
     }
@@ -78,7 +72,7 @@ TEST_F(ObjectAppendGetClientV1Test, AppendObjectToNonexistentBucketTest) {
     }
     std::string bkt_name_ = TestUtils::GetBucketName(TestConfig::TestPrefix);
 
-    auto output = cliV1->appendObject(bkt_name_, obj_key, part0, 0);
+    auto output = cliV2->appendObject(bkt_name_, obj_key, part0, 0);
     EXPECT_EQ(output.isSuccess(), false);
     EXPECT_EQ(output.error().getStatusCode(), 404);
     EXPECT_EQ(output.error().getMessage() == "The specified bucket does not exist.", true);
@@ -96,7 +90,7 @@ TEST_F(ObjectAppendGetClientV1Test, AppendObjectToNonexistentBucketTest) {
 //    RequestOptionBuilder rob;
 //    rob.withContentMD5(dataMd5);
 //    AppendObjectV2Input input_append(bkt_name, obj_key, 0, part0);
-//    auto output = cliV1->appendObject(input_append);
+//    auto output = cliV2->appendObject(input_append);
 //    EXPECT_EQ(output.isSuccess(), false);
 //}
 }  // namespace VolcengineTos

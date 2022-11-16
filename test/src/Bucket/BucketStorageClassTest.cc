@@ -49,7 +49,7 @@ TEST_F(BucketStorageClassTest, BucketStorageClassWithALLParametersTest) {
     PutBucketStorageClassInput putBucketStorageClassInput(bucketName, StorageClassType::IA);
     auto putOutput = cliV2->putBucketStorageClass(putBucketStorageClassInput);
     EXPECT_EQ(putOutput.isSuccess(), true);
-    TimeUtils::sleepSecondTimes(10);
+    TimeUtils::sleepSecondTimes(92);
     auto headOutput2 = cliV2->headBucket(headBucketV2Input);
     EXPECT_EQ(headOutput2.isSuccess(), true);
     EXPECT_EQ(headOutput2.result().getStorageClass() == StorageClassType::IA, true);
