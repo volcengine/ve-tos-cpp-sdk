@@ -149,6 +149,37 @@ void CloseClient();
 
 class TosClientV2 : public TosClient {
 public:
+    using TosClient::abortMultipartUpload;
+    using TosClient::appendObject;
+    using TosClient::completeMultipartUpload;
+    using TosClient::copyObject;
+    using TosClient::copyObjectFrom;
+    using TosClient::copyObjectTo;
+    using TosClient::createBucket;
+    using TosClient::createMultipartUpload;
+    using TosClient::deleteBucket;
+    using TosClient::deleteBucketPolicy;
+    using TosClient::deleteMultiObjects;
+    using TosClient::deleteObject;
+    using TosClient::getBucketPolicy;
+    using TosClient::getObject;
+    using TosClient::getObjectAcl;
+    using TosClient::headBucket;
+    using TosClient::headObject;
+    using TosClient::listBuckets;
+    using TosClient::listMultipartUploads;
+    using TosClient::listObjects;
+    using TosClient::listObjectVersions;
+    using TosClient::listUploadedParts;
+    using TosClient::preSignedURL;
+    using TosClient::putBucketPolicy;
+    using TosClient::putObject;
+    using TosClient::putObjectAcl;
+    using TosClient::setObjectMeta;
+    using TosClient::uploadFile;
+    using TosClient::uploadPart;
+    using TosClient::uploadPartCopy;
+
     TosClientV2(const std::string& region, const std::string& accessKeyId, const std::string& secretKeyId);
     TosClientV2(const std::string& region, const StaticCredentials& cred);
     TosClientV2(const std::string& region, const std::string& accessKeyId, const std::string& secretKeyId,

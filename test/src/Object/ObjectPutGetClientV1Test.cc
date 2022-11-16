@@ -18,7 +18,6 @@ protected:
         conf.endPoint = TestConfig::HTTPsEndpoint;
         conf.enableVerifySSL = false;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
 
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
         TestUtils::CreateBucket(cliV2, bkt_name);
@@ -27,18 +26,15 @@ protected:
     // Tears down the stuff shared by all tests in this test case.
     static void TearDownTestCase() {
         TestUtils::CleanBucket(cliV2, bkt_name);
-        cliV1 = nullptr;
         cliV2 = nullptr;
     }
 
 public:
-    static std::shared_ptr<TosClient> cliV1;
     static std::shared_ptr<TosClientV2> cliV2;
 
     static std::string bkt_name;
 };
 
-std::shared_ptr<TosClient> ObjectPutGetClientV1Test::cliV1 = nullptr;
 std::shared_ptr<TosClientV2> ObjectPutGetClientV1Test::cliV2 = nullptr;
 std::string ObjectPutGetClientV1Test::bkt_name = "";
 
@@ -50,11 +46,11 @@ TEST_F(ObjectPutGetClientV1Test, PutObjectWithoutParametersTest) {
             "()_+<>?,./   :'";
     auto ss = std::make_shared<std::stringstream>(data);
 
-    auto output_obj_put = cliV1->putObject(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(bkt_name, obj_key, ss);
 
     EXPECT_EQ(output_obj_put.isSuccess(), true);
 
-    auto output_obj_get = cliV1->getObject(bkt_name, obj_key);
+    auto output_obj_get = cliV2->getObject(bkt_name, obj_key);
 
     auto content_output = output_obj_get.result().getContent();
     std::string ss_;
@@ -76,7 +72,7 @@ TEST_F(ObjectPutGetClientV1Test, PutZeroSizeObjectTest) {
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     std::string data = "";
     auto ss = std::make_shared<std::stringstream>(data);
-    auto output_obj_put = cliV1->putObject(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(bkt_name, obj_key, ss);
     EXPECT_EQ(output_obj_put.isSuccess(), true);
 }
 TEST_F(ObjectPutGetClientV1Test, PutObjectWithErrorNameTest) {
@@ -85,7 +81,7 @@ TEST_F(ObjectPutGetClientV1Test, PutObjectWithErrorNameTest) {
     std::string data = "";
     auto ss = std::make_shared<std::stringstream>(data);
 
-    auto output_obj_put = cliV1->putObject(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(bkt_name, obj_key, ss);
     EXPECT_EQ(output_obj_put.isSuccess(), false);
     EXPECT_EQ(output_obj_put.error().getMessage() == error_message, true);
 }
@@ -99,7 +95,7 @@ TEST_F(ObjectPutGetClientV1Test, PutObjectWithErrorMd5Test) {
     RequestOptionBuilder rob;
     rob.withContentMD5(dataMd5);
     auto ss = std::make_shared<std::stringstream>(data);
-    auto output_obj_put = cliV1->putObject(bkt_name, obj_key, ss, rob);
+    auto output_obj_put = cliV2->putObject(bkt_name, obj_key, ss, rob);
     EXPECT_EQ(output_obj_put.isSuccess(), false);
     EXPECT_EQ(output_obj_put.error().getMessage() == "The Content-MD5 you specified did not match what we received.",
               true);
@@ -128,7 +124,7 @@ TEST_F(ObjectPutGetClientV1Test, PutObjectWithErrorMd5Test) {
 //    // rob.withStorageClass(StorageClassType::STANDARD);
 //
 //    auto ss = std::make_shared<std::stringstream>(data);
-//    auto output_obj_put = cliV1->putObject(bkt_name, obj_key, ss, rob);
+//    auto output_obj_put = cliV2->putObject(bkt_name, obj_key, ss, rob);
 //    EXPECT_EQ(output_obj_put.isSuccess(), true);
 //
 //    GetObjectV2Input input_obj_get(bkt_name, obj_key);
@@ -153,7 +149,7 @@ TEST_F(ObjectPutGetClientV1Test, PutObjectToNoExistingBucketTest) {
             "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./ :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*"
             "()_+<>?,./   :'";
     auto ss = std::make_shared<std::stringstream>(data);
-    auto output_obj_put = cliV1->putObject(bkt_name_, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(bkt_name_, obj_key, ss);
     EXPECT_EQ(output_obj_put.isSuccess(), false);
     EXPECT_EQ(output_obj_put.error().getStatusCode(), 404);
     EXPECT_EQ(output_obj_put.error().getMessage() == "The specified bucket does not exist.", true);
@@ -161,13 +157,13 @@ TEST_F(ObjectPutGetClientV1Test, PutObjectToNoExistingBucketTest) {
 
 TEST_F(ObjectPutGetClientV1Test, GetObjectWithNoExistingNameTest) {
     std::string obj_key = "111";
-    auto res_obj_get = cliV1->getObject(bkt_name, obj_key);
+    auto res_obj_get = cliV2->getObject(bkt_name, obj_key);
     EXPECT_EQ(res_obj_get.isSuccess(), false);
     EXPECT_EQ(res_obj_get.error().getStatusCode() == 404, true);
     EXPECT_EQ(res_obj_get.error().getMessage() == "The specified key does not exist.", true);
 
     std::string bkt_name_ = TestUtils::GetBucketName(TestConfig::TestPrefix);
-    auto res_obj_get_ = cliV1->getObject(bkt_name_, obj_key);
+    auto res_obj_get_ = cliV2->getObject(bkt_name_, obj_key);
     EXPECT_EQ(res_obj_get_.isSuccess(), false);
     EXPECT_EQ(res_obj_get_.error().getStatusCode() == 404, true);
     EXPECT_EQ(res_obj_get_.error().getMessage() == "The specified bucket does not exist.", true);
@@ -180,7 +176,7 @@ TEST_F(ObjectPutGetClientV1Test, GetObjectWithRangeTest) {
             "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*"
             "()_+<>?,./   :'";
     auto ss = std::make_shared<std::stringstream>(data);
-    auto output_obj_put = cliV1->putObject(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(bkt_name, obj_key, ss);
     EXPECT_EQ(output_obj_put.isSuccess(), true);
 
     RequestOptionBuilder rob_get;
@@ -189,7 +185,7 @@ TEST_F(ObjectPutGetClientV1Test, GetObjectWithRangeTest) {
     int length_range = end - begin + 1;
     rob_get.withRange(begin, end);
 
-    auto res_obj_get = cliV1->getObject(bkt_name, obj_key, rob_get);
+    auto res_obj_get = cliV2->getObject(bkt_name, obj_key, rob_get);
     auto content_output = res_obj_get.result().getContent();
     std::string ss_;
 

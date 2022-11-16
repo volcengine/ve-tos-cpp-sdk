@@ -42,6 +42,7 @@ std::string DownLoadFileTest::workPath = "";
 
 TEST_F(DownLoadFileTest, DownLoadFileWithoutCheckpointTest) {
     std::string filePath = workPath + "test/testdata/" + "downloadFile1";
+    remove(filePath.c_str());
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     std::fstream file;
     file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
@@ -140,6 +141,7 @@ static void ProgressCallback(std::shared_ptr<DataTransferStatus> datatransfersta
 // 源数据发生变化的场景
 TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithObjectChangedTest) {
     std::string filePath = workPath + "test/testdata/" + "downloadFile2";
+    remove(filePath.c_str());
     std::string objectName = "Test-DownloadFile";
     std::fstream file;
     file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
@@ -205,7 +207,7 @@ static void DownloadCallBack(std::shared_ptr<DownloadEvent> event) {
 }
 TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithProcessTest) {
     std::string filePath = workPath + "test/testdata/" + "downloadFile3";
-
+    remove(filePath.c_str());
     std::string objectName = "Test-DownloadFile";
     std::fstream file;
     file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);

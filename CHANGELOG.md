@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2022.11.16 Version 2.4.2
+
+-fix: Add ClientV1 compatibility
+
 ### 2022.11.10 Version 2.4.1
 
 -fix: GCC 4.8.5 compatibility
