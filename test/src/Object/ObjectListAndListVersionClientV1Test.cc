@@ -17,7 +17,6 @@ protected:
         ClientConfig conf;
         conf.endPoint = TestConfig::Endpoint;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
 
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
         TestUtils::CreateBucket(cliV2, bkt_name);
@@ -27,25 +26,23 @@ protected:
     static void TearDownTestCase() {
         TestUtils::CleanBucket(cliV2, bkt_name);
         cliV2 = nullptr;
-        cliV1 = nullptr;
+        cliV2 = nullptr;
     }
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
-    static std::shared_ptr<TosClient> cliV1;
 
     static std::string bkt_name;
 };
 
 std::shared_ptr<TosClientV2> ObjectListAndListVersionClientV1Test::cliV2 = nullptr;
-std::shared_ptr<TosClient> ObjectListAndListVersionClientV1Test::cliV1 = nullptr;
 
 std::string ObjectListAndListVersionClientV1Test::bkt_name = "";
 
 TEST_F(ObjectListAndListVersionClientV1Test, ListObjectFromNonexistentBucketTest) {
     std::string nonexistent_bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
     ListObjectsInput input_list;
-    auto output = cliV1->listObjects(nonexistent_bkt_name, input_list);
+    auto output = cliV2->listObjects(nonexistent_bkt_name, input_list);
     EXPECT_EQ(output.isSuccess(), false);
     EXPECT_EQ(output.error().getStatusCode(), 404);
     EXPECT_EQ(output.error().getMessage() == "The specified bucket does not exist.", true);
@@ -53,7 +50,7 @@ TEST_F(ObjectListAndListVersionClientV1Test, ListObjectFromNonexistentBucketTest
 TEST_F(ObjectListAndListVersionClientV1Test, ListObjectVersionsFromNonexistentBucketTest) {
     std::string nonexistent_bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
     ListObjectVersionsInput input_list_version;
-    auto output = cliV1->listObjectVersions(nonexistent_bkt_name, input_list_version);
+    auto output = cliV2->listObjectVersions(nonexistent_bkt_name, input_list_version);
     EXPECT_EQ(output.isSuccess(), false);
     EXPECT_EQ(output.error().getStatusCode(), 404);
     EXPECT_EQ(output.error().getMessage() == "The specified bucket does not exist.", true);
@@ -78,7 +75,7 @@ TEST_F(ObjectListAndListVersionClientV1Test, ListObjectWith100ObjectsTest) {
     for (int t = 0; t < 10; ++t) {
         next_marker = start_marker;
         input_list.setMarker(next_marker);
-        auto output = cliV1->listObjects(bkt_name, input_list);
+        auto output = cliV2->listObjects(bkt_name, input_list);
         EXPECT_EQ(output.isSuccess(), true);
         start_marker = output.result().getNextMarker();
         auto content = output.result().getContents();
@@ -108,7 +105,7 @@ TEST_F(ObjectListAndListVersionClientV1Test, ListObjectWith3PrefixObjectsTest) {
     input_list.setPrefix("11/22/33/");
     input_list.setDelimiter("/");
     input_list.setMaxKeys(10);
-    auto output = cliV1->listObjects(bkt_name, input_list);
+    auto output = cliV2->listObjects(bkt_name, input_list);
     EXPECT_EQ(output.isSuccess(), true);
 }
 
@@ -118,7 +115,7 @@ TEST_F(ObjectListAndListVersionClientV1Test, DeleteMultiObjectsTest) {
     TestUtils::PutObject(cliV2, bkt_name_, "todelete-001", "1111");
     ListObjectsInput input_list;
     input_list.setMaxKeys(10);
-    auto output_1 = cliV1->listObjects(bkt_name_, input_list);
+    auto output_1 = cliV2->listObjects(bkt_name_, input_list);
     EXPECT_EQ(output_1.result().getContents().size(), 1);
 
     std::vector<ObjectTobeDeleted> otds(2);
@@ -131,10 +128,10 @@ TEST_F(ObjectListAndListVersionClientV1Test, DeleteMultiObjectsTest) {
     DeleteMultiObjectsInput input;
     input.setQuiet(false);
     input.setObjectTobeDeleteds(otds);
-    auto output = cliV1->deleteMultiObjects(bkt_name_, input);
+    auto output = cliV2->deleteMultiObjects(bkt_name_, input);
     EXPECT_EQ(output.isSuccess(), true);
 
-    auto output_2 = cliV1->listObjects(bkt_name_, input_list);
+    auto output_2 = cliV2->listObjects(bkt_name_, input_list);
     EXPECT_EQ(output_2.result().getContents().size(), 0);
     TestUtils::CleanBucket(cliV2, bkt_name_);
 }
@@ -152,7 +149,7 @@ TEST_F(ObjectListAndListVersionClientV1Test, DeleteFromNonexistentBucketTest) {
     input.setQuiet(false);
     input.setObjectTobeDeleteds(otds);
 
-    auto output = cliV1->deleteMultiObjects(bkt_name_, input);
+    auto output = cliV2->deleteMultiObjects(bkt_name_, input);
     EXPECT_EQ(output.isSuccess(), false);
     EXPECT_EQ(output.error().getStatusCode(), 404);
 }

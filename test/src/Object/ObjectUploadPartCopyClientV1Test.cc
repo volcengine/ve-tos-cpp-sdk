@@ -6,17 +6,14 @@
 namespace VolcengineTos {
 class ObjectUploadPartCopyClientV1Test : public ::testing::Test {
 protected:
-    ObjectUploadPartCopyClientV1Test() {
-    }
+    ObjectUploadPartCopyClientV1Test() = default;
 
-    ~ObjectUploadPartCopyClientV1Test() override {
-    }
+    ~ObjectUploadPartCopyClientV1Test() override = default;
 
     static void SetUpTestCase() {
         ClientConfig conf;
         conf.endPoint = TestConfig::Endpoint;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
 
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
         TestUtils::CreateBucket(cliV2, bkt_name);
@@ -25,17 +22,15 @@ protected:
     // Tears down the stuff shared by all tests in this test case.
     static void TearDownTestCase() {
         TestUtils::CleanBucket(cliV2, bkt_name);
-        cliV1 = nullptr;
+        cliV2 = nullptr;
     }
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
-    static std::shared_ptr<TosClient> cliV1;
     static std::string bkt_name;
 };
 
 std::shared_ptr<TosClientV2> ObjectUploadPartCopyClientV1Test::cliV2 = nullptr;
-std::shared_ptr<TosClient> ObjectUploadPartCopyClientV1Test::cliV1 = nullptr;
 std::string ObjectUploadPartCopyClientV1Test::bkt_name = "";
 
 TEST_F(ObjectUploadPartCopyClientV1Test, UploadPartCopyTest) {
@@ -45,15 +40,15 @@ TEST_F(ObjectUploadPartCopyClientV1Test, UploadPartCopyTest) {
         *ss << 1;
     }
 
-    auto srcPut = cliV1->putObject(bkt_name, obj_name, ss);
+    auto srcPut = cliV2->putObject(bkt_name, obj_name, ss);
     EXPECT_EQ(srcPut.isSuccess(), true);
 
     std::string dstKey = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 
-    auto upload = cliV1->createMultipartUpload(bkt_name, dstKey);
+    auto upload = cliV2->createMultipartUpload(bkt_name, dstKey);
     EXPECT_EQ(upload.isSuccess(), true);
     // 获取要copy的对象大小
-    auto head = cliV1->headObject(bkt_name, obj_name);
+    auto head = cliV2->headObject(bkt_name, obj_name);
     EXPECT_EQ(head.isSuccess(), true);
     int64_t size = head.result().getObjectMeta().getContentLength();
 
@@ -75,11 +70,11 @@ TEST_F(ObjectUploadPartCopyClientV1Test, UploadPartCopyTest) {
         input.setPartSize(partLen);
         input.setPartNumber(i + 1);
         input.setSourceKey(obj_name);
-        auto res = cliV1->uploadPartCopy(bkt_name, input);
+        auto res = cliV2->uploadPartCopy(bkt_name, input);
         copyParts[i] = res.result();
     }
     CompleteMultipartCopyUploadInput input(dstKey, upload.result().getUploadId(), copyParts);
-    auto complete = cliV1->completeMultipartUpload(bkt_name, input);
+    auto complete = cliV2->completeMultipartUpload(bkt_name, input);
     EXPECT_EQ(complete.isSuccess(), true);
 
     std::string content = TestUtils::GetObjectContentByStream(cliV2, bkt_name, dstKey);
@@ -98,15 +93,15 @@ TEST_F(ObjectUploadPartCopyClientV1Test, UploadpartToNonExistentNameTest) {
         *ss << 1;
     }
 
-    auto srcPut = cliV1->putObject(bkt_name, obj_name, ss);
+    auto srcPut = cliV2->putObject(bkt_name, obj_name, ss);
     EXPECT_EQ(srcPut.isSuccess(), true);
 
     std::string dstKey = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 
-    auto upload = cliV1->createMultipartUpload(bkt_name, dstKey);
+    auto upload = cliV2->createMultipartUpload(bkt_name, dstKey);
     EXPECT_EQ(upload.isSuccess(), true);
     // 获取要copy的对象大小
-    auto head = cliV1->headObject(bkt_name, obj_name);
+    auto head = cliV2->headObject(bkt_name, obj_name);
     EXPECT_EQ(head.isSuccess(), true);
     int64_t size = head.result().getObjectMeta().getContentLength();
 
@@ -130,46 +125,46 @@ TEST_F(ObjectUploadPartCopyClientV1Test, UploadpartToNonExistentNameTest) {
         input.setSourceKey(obj_name);
 
         // 从不存在的桶复制段
-        auto out_1 = cliV1->uploadPartCopy(bkt_name_, input);
+        auto out_1 = cliV2->uploadPartCopy(bkt_name_, input);
         EXPECT_EQ(out_1.isSuccess(), false);
         EXPECT_EQ(out_1.error().getStatusCode(), 404);
         EXPECT_EQ(out_1.error().getCode(), "NoSuchBucket");
         // 复制段使用不存在的对象名
         std::string dstKey_ = TestUtils::GetObjectKey(TestConfig::TestPrefix);
         input.setDestinationKey(dstKey_);
-        auto out_2 = cliV1->uploadPartCopy(bkt_name, input);
+        auto out_2 = cliV2->uploadPartCopy(bkt_name, input);
         EXPECT_EQ(out_2.isSuccess(), false);
         EXPECT_EQ(out_2.error().getStatusCode(), 404);
         EXPECT_EQ(out_2.error().getCode(), "NoSuchUpload");
         // 复制段使用不存在的UploadID
         input.setDestinationKey(dstKey);
         input.setUploadId("1234");
-        auto out_3 = cliV1->uploadPartCopy(bkt_name, input);
+        auto out_3 = cliV2->uploadPartCopy(bkt_name, input);
         EXPECT_EQ(out_3.isSuccess(), false);
         EXPECT_EQ(out_3.error().getStatusCode(), 404);
         EXPECT_EQ(out_3.error().getCode(), "NoSuchUpload");
         // 复制段使用不存在的源桶
         input.setUploadId(upload.result().getUploadId());
         input.setSourceBucket(bkt_name_);
-        auto out_4 = cliV1->uploadPartCopy(bkt_name, input);
+        auto out_4 = cliV2->uploadPartCopy(bkt_name, input);
         EXPECT_EQ(out_4.isSuccess(), false);
         EXPECT_EQ(out_4.error().getStatusCode(), 404);
         EXPECT_EQ(out_4.error().getCode(), "NoSuchBucket");
         // 复制段使用不存在的源对象名
         input.setSourceBucket(bkt_name);
         input.setSourceKey(obj_name_);
-        auto out_5 = cliV1->uploadPartCopy(bkt_name, input);
+        auto out_5 = cliV2->uploadPartCopy(bkt_name, input);
         EXPECT_EQ(out_5.isSuccess(), false);
         EXPECT_EQ(out_5.error().getStatusCode(), 404);
         EXPECT_EQ(out_5.error().getCode(), "NoSuchKey");
         // todo:复制段使用不存在的VersionID
         //
         input.setSourceKey(obj_name);
-        auto res = cliV1->uploadPartCopy(bkt_name, input);
+        auto res = cliV2->uploadPartCopy(bkt_name, input);
         copyParts[i] = res.result();
     }
     CompleteMultipartCopyUploadInput input(dstKey, upload.result().getUploadId(), copyParts);
-    auto complete = cliV1->completeMultipartUpload(bkt_name, input);
+    auto complete = cliV2->completeMultipartUpload(bkt_name, input);
     EXPECT_EQ(complete.isSuccess(), true);
 
     std::string content = TestUtils::GetObjectContentByStream(cliV2, bkt_name, dstKey);

@@ -18,21 +18,17 @@ protected:
         conf.enableVerifySSL = TestConfig::enableVerifySSL;
 
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
     }
 
     // Tears down the stuff shared by all tests in this test case.
     static void TearDownTestCase() {
         cliV2 = nullptr;
-        cliV1 = nullptr;
     }
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
-    static std::shared_ptr<TosClient> cliV1;
 };
 std::shared_ptr<TosClientV2> BucketDeleteTest::cliV2 = nullptr;
-std::shared_ptr<TosClient> BucketDeleteTest::cliV1 = nullptr;
 
 TEST_F(BucketDeleteTest, DeleteExistentBucketTest) {
     std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefix);
@@ -66,18 +62,18 @@ TEST_F(BucketDeleteTest, DeleteExistentBucketClientV1Test) {
     CreateBucketInput input_v1;
     input_v1.setBucket(bkt);
 
-    auto output_v1 = cliV1->createBucket(input_v1);
+    auto output_v1 = cliV2->createBucket(input_v1);
     EXPECT_EQ(output_v1.isSuccess(), true);
 
-    auto output_v1_delete = cliV1->deleteBucket(bkt);
+    auto output_v1_delete = cliV2->deleteBucket(bkt);
     EXPECT_EQ(output_v1.isSuccess(), true);
 }
 TEST_F(BucketDeleteTest, DeleteNonExistentBucketClientV1Test) {
     std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefix);
-    auto output_v1_head = cliV1->headBucket(bkt);
+    auto output_v1_head = cliV2->headBucket(bkt);
     EXPECT_EQ(output_v1_head.isSuccess(), false);
 
-    auto output_v1_delete = cliV1->deleteBucket(bkt);
+    auto output_v1_delete = cliV2->deleteBucket(bkt);
     EXPECT_EQ(output_v1_delete.isSuccess(), false);
 }
 

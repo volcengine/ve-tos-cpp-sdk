@@ -6,17 +6,14 @@
 namespace VolcengineTos {
 class ObjectCopyClientV1Test : public ::testing::Test {
 protected:
-    ObjectCopyClientV1Test() {
-    }
+    ObjectCopyClientV1Test() = default;
 
-    ~ObjectCopyClientV1Test() override {
-    }
+    ~ObjectCopyClientV1Test() override = default;
 
     static void SetUpTestCase() {
         ClientConfig conf;
         conf.endPoint = TestConfig::Endpoint;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
 
         src_bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
         src_obj_name = TestUtils::GetObjectKey(TestConfig::TestPrefix);
@@ -40,7 +37,6 @@ protected:
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
-    static std::shared_ptr<TosClient> cliV1;
 
     static std::string src_bkt_name;
     static std::string src_obj_name;
@@ -50,7 +46,6 @@ public:
 };
 
 std::shared_ptr<TosClientV2> ObjectCopyClientV1Test::cliV2 = nullptr;
-std::shared_ptr<TosClient> ObjectCopyClientV1Test::cliV1 = nullptr;
 
 std::string ObjectCopyClientV1Test::src_bkt_name = "";
 std::string ObjectCopyClientV1Test::src_obj_name = "";
@@ -59,7 +54,7 @@ std::string ObjectCopyClientV1Test::obj_name = "";
 std::string ObjectCopyClientV1Test::data = "";
 
 TEST_F(ObjectCopyClientV1Test, CopyObjectToOtherBucketTest) {
-    auto output_obj_copy = cliV1->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name);
+    auto output_obj_copy = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
     std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
@@ -69,7 +64,7 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectToOtherBucketTest) {
 }
 
 TEST_F(ObjectCopyClientV1Test, CopyObjectToCurrentBucketTest) {
-    auto output_obj_copy = cliV1->copyObject(src_bkt_name, src_obj_name, obj_name);
+    auto output_obj_copy = cliV2->copyObject(src_bkt_name, src_obj_name, obj_name);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
     std::string tmp_string = TestUtils::GetObjectContent(cliV2, src_bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, src_bkt_name, obj_name);
@@ -82,7 +77,7 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectWithCopyStrategyTest) {
     RequestOptionBuilder rob;
     rob.withMetadataDirective("COPY");
 
-    auto output_obj_copy = cliV1->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name, rob);
+    auto output_obj_copy = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name, rob);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
     std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
@@ -94,7 +89,7 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectWithReplaceStrategyTest) {
     RequestOptionBuilder rob;
     rob.withMetadataDirective("REPLACE");
     rob.withMeta("self-test", "no");
-    auto output_obj_copy = cliV1->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name, rob);
+    auto output_obj_copy = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name, rob);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
     std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
@@ -107,15 +102,15 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectWithNonexistentNameTest) {
     std::string src_bkt_name_ = TestUtils::GetBucketName(TestConfig::TestPrefix);
     std::string src_obj_name_ = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 
-    auto output_obj_copy_0 = cliV1->copyObjectTo(src_bkt_name, bkt_name_, obj_name, src_obj_name);
+    auto output_obj_copy_0 = cliV2->copyObjectTo(src_bkt_name, bkt_name_, obj_name, src_obj_name);
     EXPECT_EQ(output_obj_copy_0.isSuccess(), false);
     EXPECT_EQ(output_obj_copy_0.error().getStatusCode(), 404);
 
-    auto output_obj_copy_1 = cliV1->copyObjectTo(src_bkt_name_, bkt_name, obj_name, src_obj_name);
+    auto output_obj_copy_1 = cliV2->copyObjectTo(src_bkt_name_, bkt_name, obj_name, src_obj_name);
     EXPECT_EQ(output_obj_copy_1.isSuccess(), false);
     EXPECT_EQ(output_obj_copy_1.error().getStatusCode(), 404);
 
-    auto output_obj_copy_2 = cliV1->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name_);
+    auto output_obj_copy_2 = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name_);
     EXPECT_EQ(output_obj_copy_2.isSuccess(), false);
     EXPECT_EQ(output_obj_copy_2.error().getStatusCode(), 404);
 }
