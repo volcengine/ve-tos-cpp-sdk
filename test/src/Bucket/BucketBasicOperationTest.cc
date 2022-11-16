@@ -17,22 +17,18 @@ protected:
         conf.enableVerifySSL = TestConfig::enableVerifySSL;
         conf.endPoint = TestConfig::Endpoint;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
-        cliV1 = std::make_shared<TosClient>(TestConfig::Endpoint, TestConfig::Region, TestConfig::Ak, TestConfig::Sk);
     }
 
     // Tears down the stuff shared by all tests in this test case.
     static void TearDownTestCase() {
         cliV2 = nullptr;
-        cliV1 = nullptr;
     }
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
-    static std::shared_ptr<TosClient> cliV1;
 };
 
 std::shared_ptr<TosClientV2> BucketBasicOperationTest::cliV2 = nullptr;
-std::shared_ptr<TosClient> BucketBasicOperationTest::cliV1 = nullptr;
 
 TEST_F(BucketBasicOperationTest, CreateBucketTest) {
     std::string bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
