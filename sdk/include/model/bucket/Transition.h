@@ -30,6 +30,9 @@ public:
     void setStorageClass(StorageClassType storageClass) {
         storageClass_ = storageClass;
     }
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
 
 private:
     std::time_t date_ = 0;

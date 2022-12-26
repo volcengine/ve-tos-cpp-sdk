@@ -17,6 +17,9 @@ public:
     void setPermission(const PermissionType& permission) {
         permission_ = permission;
     }
+    const std::string& getStringFormatPermission() const {
+        return PermissionTypetoString[permission_];
+    }
 
 private:
     GranteeV2 grantee_;

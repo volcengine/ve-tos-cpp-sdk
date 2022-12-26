@@ -283,4 +283,26 @@ TEST_F(ObjectUploadPartAndCompleteTest, CompleteToNonExistentNameTest) {
     EXPECT_EQ(com_3.error().getCode(), "NoSuchUpload");
 }
 
+TEST_F(ObjectUploadPartAndCompleteTest, CreateMultipartUploadEmptyfileTest) {
+    std::string obj_name = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    CreateMultipartUploadInput input_part_create(bkt_name, obj_name);
+
+    auto upload = cliV2->createMultipartUpload(input_part_create);
+
+    // generate some data..
+    auto ss1 = std::make_shared<std::stringstream>();
+    UploadPartV2Input input_upload_part(bkt_name, obj_name, upload.result().getUploadId(), ss1->tellg(), 1, ss1);
+    auto part1 = cliV2->uploadPart(input_upload_part);
+    EXPECT_EQ(part1.isSuccess(), true);
+    auto part_1 = UploadedPartV2(part1.result().getPartNumber(), part1.result().getETag());
+    std::vector<UploadedPartV2> vec = {part_1};
+    CompleteMultipartUploadV2Input input_upload_complete(bkt_name, obj_name, upload.result().getUploadId(), vec);
+    auto com = cliV2->completeMultipartUpload(input_upload_complete);
+    EXPECT_EQ(com.isSuccess(), true);
+
+    GetObjectV2Input input_obj_get(bkt_name, obj_name);
+    auto got = cliV2->getObject(input_obj_get);
+    EXPECT_EQ(got.isSuccess(), true);
+}
+
 }  // namespace VolcengineTos

@@ -13,6 +13,9 @@ void VolcengineTos::GetObjectAclV2Output::fromJsonString(const std::string& inpu
             owner_.setDisplayName(j.at("Owner").at("DisplayName").get<std::string>());
         }
     }
+    if (j.contains("BucketOwnerEntrusted")) {
+        setBucketOwnerEntrusted(j.at("BucketOwnerEntrusted").get<bool>());
+    }
     json grants = j.at("Grants");
     for (auto& grant : grants) {
         GrantV2 g;

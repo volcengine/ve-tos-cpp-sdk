@@ -1,5 +1,6 @@
 #include "RequestBuilder.h"
 #include "common/Common.h"
+#include "auth/SignV4.h"
 using namespace VolcengineTos;
 
 std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
@@ -13,6 +14,24 @@ std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
         path = "/";
         path += object_;
     }
+
+    auto req = std::make_shared<TosRequest>(scheme_, method, host, path, headers_, query_);
+    return req;
+}
+std::shared_ptr<TosRequest> RequestBuilder::buildSignedURL(const std::string& method) {
+    std::string host, path;
+    if (bucket_.empty()) {
+        host = host_;
+        path = "/";
+        path += object_;
+    } else {
+        host = bucket_;
+        host += ".";
+        host += host_;
+        path = "/";
+        path += object_;
+    }
+
     auto req = std::make_shared<TosRequest>(scheme_, method, host, path, headers_, query_);
     return req;
 }
@@ -38,8 +57,9 @@ std::shared_ptr<TosRequest> RequestBuilder::Build(const std::string& method, std
     return req;
 }
 
-std::string copySource(const std::string& bucket, const std::string& object, const std::string& versionID) {
+std::string copySource(const std::string& bucket, const std::string& object_, const std::string& versionID) {
     std::string ret;
+    auto object = SignV4::uriEncode(object_, false);
     if (versionID.empty()) {
         return ret.append("/").append(bucket).append("/").append(object);
     }

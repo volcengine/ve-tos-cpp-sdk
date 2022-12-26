@@ -55,6 +55,9 @@ public:
     void setPublicSource(const PublicSource& publicSource) {
         publicSource_ = publicSource;
     }
+    const std::string& getStringFormatRedirectType() const {
+        return RedirectTypetoString[redirectType_];
+    }
 
 private:
     RedirectType redirectType_ = RedirectType::NotSet;

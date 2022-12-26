@@ -31,6 +31,12 @@ public:
     void setCanned(const CannedType& canned) {
         canned_ = canned;
     }
+    const std::string& getStringFormatType() const {
+        return GranteeTypetoString[type_];
+    }
+    const std::string& getStringFormatCanned() const {
+        return CannedTypetoString[canned_];
+    }
 
 private:
     std::string id_;

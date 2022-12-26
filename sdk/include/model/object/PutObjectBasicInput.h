@@ -7,6 +7,8 @@ class PutObjectBasicInput {
 public:
     PutObjectBasicInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }
+    PutObjectBasicInput(std::string bucket) : bucket_(std::move(bucket)) {
+    }
     PutObjectBasicInput() = default;
     ~PutObjectBasicInput() = default;
 

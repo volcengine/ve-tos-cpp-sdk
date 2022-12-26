@@ -1,11 +1,15 @@
 #pragma once
 
 #include <string>
+#include <utility>
 #include "Type.h"
 namespace VolcengineTos {
 class HeadObjectV2Input {
 public:
     HeadObjectV2Input(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
+    }
+    HeadObjectV2Input(std::string bucket, std::string key, std::string versionId)
+            : bucket_(std::move(bucket)), key_(std::move(key)), versionID_(std::move(versionId)) {
     }
     HeadObjectV2Input() = default;
     ~HeadObjectV2Input() = default;

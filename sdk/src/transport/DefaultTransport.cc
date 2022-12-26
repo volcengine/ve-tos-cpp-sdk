@@ -19,6 +19,10 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
 std::shared_ptr<TosResponse> DefaultTransport::roundTrip(const std::shared_ptr<TosRequest>& request) {
     auto httpReq = std::make_shared<HttpRequest>(request->getMethod());
 
+    if (request->getFileContent() != nullptr) {
+        httpReq->setResponseOutput(request->getFileContent());
+    }
+
     httpReq->setUrl(request->toUrl());
     httpReq->setHeaders(request->getHeaders());
     httpReq->setMethod(request->getMethod());

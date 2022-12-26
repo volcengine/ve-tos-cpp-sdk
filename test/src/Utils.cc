@@ -64,8 +64,7 @@ std::string TestUtils::GetObjectContent(const std::shared_ptr<TosClientV2>& clie
     auto content_output = output_obj_get.result().getContent();
     std::string ss_;
     auto stream = content_output.get();
-    auto header = output_obj_get.result().getGetObjectBasicOutput().getRequestInfo().getHeaders();
-    auto content_length = std::stoi(header["Content-Length"]);
+    auto content_length = output_obj_get.result().getGetObjectBasicOutput().getContentLength();
     char streamBuffer[content_length + 1];
     memset(streamBuffer, 0, content_length + 1);
     while (stream->good()) {

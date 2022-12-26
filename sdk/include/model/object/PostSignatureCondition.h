@@ -10,6 +10,8 @@ public:
     }
     PostSignatureCondition(std::string key, std::string value) : key_(std::move(key)), value_(std::move(value)) {
     }
+    PostSignatureCondition() = default;
+    virtual ~PostSignatureCondition() = default;
     const std::string& getKey() const {
         return key_;
     }

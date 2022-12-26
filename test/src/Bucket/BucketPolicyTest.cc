@@ -33,9 +33,8 @@ public:
 
 std::shared_ptr<TosClientV2> BucketPolicyTest::cliV2 = nullptr;
 std::string BucketPolicyTest::bucketName = "";
-std::string BucketPolicyTest::Policy =
-        "{\"Statement\":[{\"Action\":[\"*\"],\"Effect\":\"Allow\",\"Principal\":\"*\","
-        "\"Resource\":[\"trn:tos:::sdktestpolicybucket/*\",\"trn:tos:::sdktestpolicybucket\"],\"Sid\":\"internal public\"}]}";
+std::string BucketPolicyTest::Policy = R"({"Statement": [{"Sid": "internal public","Effect": "Allow","Action":
+["tos:ListBucket"],"Principal": "*","Resource": ["trn:tos:::sdktestpolicybucket/*","trn:tos:::sdktestpolicybucket"]}]})";
 TEST_F(BucketPolicyTest, BucketPolicyWithoutParametersTest) {
     PutBucketPolicyInput putBucketPolicyInput(bucketName);
     auto putOutput = cliV2->putBucketPolicy(putBucketPolicyInput);

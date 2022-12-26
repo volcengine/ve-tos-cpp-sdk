@@ -81,6 +81,13 @@ public:
             lo.setHashCrc64Ecma(stoull(object.at("HashCrc64ecma").get<std::string>()));
         return lo;
     }
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
+    const std::string& getStringFormatLastModified() const {
+        auto lastModified = lastModified_;
+        return TimeUtils::transLastModifiedTimeToString(lastModified);
+    }
 
 private:
     std::string key_;

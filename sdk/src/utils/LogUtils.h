@@ -84,6 +84,14 @@ public:
 
 private:
     void init_logger() {
+        // 创建 logFilePath 的父目录文件夹
+        bool ret = FileUtils::CreateDirectory(logFilePath, true);
+        if (!ret) {
+            // 错误处理，创建文件夹失败的场景
+            std::cout << "invalid file path, mkdir failed" << std::endl;
+            return;
+        }
+
         // _mt 为线程安全的日志
         logger_ = spdlog::rotating_logger_mt(loggerName, logFilePath, logMaxFileSize, logMaxFiles);
     }

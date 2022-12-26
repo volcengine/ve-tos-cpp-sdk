@@ -12,7 +12,7 @@ public:
 
     std::string String() {
         std::ostringstream ss;
-        if (isClientError) {
+        if (isClientError_) {
             ss << "TosClientError: {message=" << message_ << "}";
         } else {
             ss << "TosServerError: {statusCode=" << statusCode_ << ", ";
@@ -54,11 +54,11 @@ public:
     void setHostId(const std::string& hostId) {
         hostID_ = hostId;
     }
-    bool isClientError1() const {
-        return isClientError;
+    bool isClientError() const {
+        return isClientError_;
     }
-    void setIsClientError(bool isclienterror) {
-        isClientError = isclienterror;
+    void setIsClientError(bool isClientError) {
+        isClientError = isClientError;
     }
     const std::string& getResource() const {
         return resource_;
@@ -68,7 +68,7 @@ public:
     }
 
 private:
-    bool isClientError = false;
+    bool isClientError_ = false;
     int statusCode_ = 400;
     std::string code_;
     std::string message_;

@@ -131,6 +131,12 @@ public:
     void setPreHashCrc64Ecma(uint64_t prehashcrc64ecma) {
         preHashCrc64ecma_ = prehashcrc64ecma;
     }
+    const std::shared_ptr<std::iostream>& getFileContent() const {
+        return fileContent_;
+    }
+    void setFileContent(const std::shared_ptr<std::iostream>& fileContent) {
+        fileContent_ = fileContent;
+    }
 
 private:
     std::string scheme_;
@@ -140,6 +146,7 @@ private:
     std::string timeout_;
     int64_t contentLength_ = 0;
     std::shared_ptr<std::iostream> content_;
+    std::shared_ptr<std::iostream> fileContent_;
     std::map<std::string, std::string> headers_;
     std::map<std::string, std::string> queries_;
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};
