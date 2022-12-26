@@ -198,7 +198,7 @@ TEST_F(ObjectPutGetClientV1Test, GetObjectWithRangeTest) {
     }
     std::string tmp_string(streamBuffer);
     bool length_compare = (tmp_string.size() == length_range);
-    bool content_length_compare = data.compare(begin, length_range - 1, tmp_string);
+    bool content_length_compare = (data.compare(begin, length_range, tmp_string) == 0);
     bool content_compare = (data.substr(begin, length_range) == tmp_string);
     EXPECT_EQ(content_length_compare & length_compare, true);
     EXPECT_EQ(content_compare, true);

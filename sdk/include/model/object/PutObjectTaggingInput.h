@@ -7,6 +7,8 @@ class PutObjectTaggingInput {
 public:
     PutObjectTaggingInput() = default;
     virtual ~PutObjectTaggingInput() = default;
+    PutObjectTaggingInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
+    }
     PutObjectTaggingInput(std::string bucket, std::string key, const TagSet& tagSet)
             : bucket_(std::move(bucket)), key_(std::move(key)), tagSet_(tagSet) {
     }

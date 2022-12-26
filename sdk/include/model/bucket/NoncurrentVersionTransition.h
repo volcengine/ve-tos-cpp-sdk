@@ -23,6 +23,9 @@ public:
     void setStorageClass(StorageClassType storageClass) {
         storageClass_ = storageClass;
     }
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
 
 private:
     int noncurrentDays_ = 0;

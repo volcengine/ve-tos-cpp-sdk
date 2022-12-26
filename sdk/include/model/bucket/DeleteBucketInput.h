@@ -4,7 +4,7 @@
 namespace VolcengineTos {
 class DeleteBucketInput {
 public:
-    DeleteBucketInput(std::string bucket) : bucket_(std::move(bucket)) {
+    explicit DeleteBucketInput(std::string bucket) : bucket_(std::move(bucket)) {
     }
     DeleteBucketInput() = default;
     ~DeleteBucketInput() = default;

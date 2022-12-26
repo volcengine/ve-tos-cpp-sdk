@@ -7,11 +7,9 @@
 namespace VolcengineTos {
 class ObjectListAndListVersionTest : public ::testing::Test {
 protected:
-    ObjectListAndListVersionTest() {
-    }
+    ObjectListAndListVersionTest() = default;
 
-    ~ObjectListAndListVersionTest() override {
-    }
+    ~ObjectListAndListVersionTest() override = default;
 
     static void SetUpTestCase() {
         ClientConfig conf;
@@ -99,7 +97,7 @@ TEST_F(ObjectListAndListVersionTest, ListObjectWith3PrefixObjectsTest) {
     std::string obj_name_2 = "11/22/34/4444";
     TestUtils::PutObject(cliV2, bkt_name, obj_name_2, "111");
     ListObjectsV2Input input_list(bkt_name);
-    input_list.setPrefix("11/22/33/");
+    input_list.setPrefix("11/22/3");
     input_list.setDelimiter("/");
     auto output = cliV2->listObjects(input_list);
     EXPECT_EQ(output.isSuccess(), true);

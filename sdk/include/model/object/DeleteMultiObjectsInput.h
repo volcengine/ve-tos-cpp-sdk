@@ -24,6 +24,9 @@ public:
     void setBucket(const std::string& bucket) {
         bucket_ = bucket;
     }
+    void addObjectTobeDeleted(const ObjectTobeDeleted& objectTobeDeleted) {
+        objectTobeDeleteds_.push_back(objectTobeDeleted);
+    }
 
 private:
     std::vector<ObjectTobeDeleted> objectTobeDeleteds_;

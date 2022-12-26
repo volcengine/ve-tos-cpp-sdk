@@ -32,11 +32,18 @@ public:
     void setGrant(const std::vector<GrantV2>& grant) {
         grant_ = grant;
     }
+    bool isBucketOwnerEntrusted() const {
+        return bucketOwnerEntrusted_;
+    }
+    void setBucketOwnerEntrusted(bool bucketOwnerEntrusted) {
+        bucketOwnerEntrusted_ = bucketOwnerEntrusted;
+    }
 
 private:
     RequestInfo requestInfo_;
     std::string versionId_;
     Owner owner_;
     std::vector<GrantV2> grant_;
+    bool bucketOwnerEntrusted_ = false;
 };
 }  // namespace VolcengineTos

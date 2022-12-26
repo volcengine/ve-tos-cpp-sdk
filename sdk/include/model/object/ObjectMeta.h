@@ -65,10 +65,19 @@ public:
         expires_ = expires;
     }
     const std::string& getEtags() const {
-        return etags_;
+        return etag_;
     }
     void setEtags(const std::string& etags) {
-        etags_ = etags;
+        etag_ = etags;
+    }
+    void setContentLength2(long contentLength) {
+        contentLength_ = contentLength;
+    }
+    const std::string& getEtag() const {
+        return etag_;
+    }
+    void setEtag(const std::string& etag) {
+        etag_ = etag;
     }
     const std::string& getVersionId() const {
         return versionID_;
@@ -150,7 +159,7 @@ private:
     std::string lastModified_;
     std::string cacheControl_;
     std::string expires_;
-    std::string etags_;
+    std::string etag_;
     std::string versionID_;
     bool deleteMarker_;
     // "" or "appendable"

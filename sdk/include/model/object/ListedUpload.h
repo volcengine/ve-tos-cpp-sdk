@@ -36,6 +36,13 @@ public:
     void setInitiated(time_t initiated) {
         initiated_ = initiated;
     }
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
+    const std::string& getStringFormatInitiated() const {
+        auto initiated = initiated_;
+        return TimeUtils::transLastModifiedTimeToString(initiated);
+    }
 
 private:
     std::string key_;

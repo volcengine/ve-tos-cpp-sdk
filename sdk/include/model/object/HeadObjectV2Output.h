@@ -14,10 +14,16 @@ public:
         requestInfo_ = requestinfo;
     }
     const std::string& getETags() const {
-        return eTags_;
+        return eTag_;
     }
     void setETags(const std::string& etags) {
-        eTags_ = etags;
+        eTag_ = etags;
+    }
+    const std::string& getETag() const {
+        return eTag_;
+    }
+    void setETag(const std::string& eTag) {
+        eTag_ = eTag;
     }
     time_t getLastModified() const {
         return lastModified_;
@@ -129,9 +135,13 @@ public:
     }
     void fromResponse(TosResponse& res);
 
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
+
 private:
     RequestInfo requestInfo_;
-    std::string eTags_;
+    std::string eTag_;
     std::time_t lastModified_ = 0;
     bool deleteMarker_;
     std::string ssecAlgorithm_;

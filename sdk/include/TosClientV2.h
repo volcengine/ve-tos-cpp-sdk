@@ -142,6 +142,42 @@
 #include "model/acl/PreSignedPostSignatureInput.h"
 #include "model/acl/PreSignedPostSignatureOutput.h"
 #include "SchemeHostParameter.h"
+#include "model/bucket/PutBucketReplicationInput.h"
+#include "model/bucket/PutBucketReplicationOutput.h"
+#include "model/bucket/GetBucketReplicationInput.h"
+#include "model/bucket/GetBucketReplicationOutput.h"
+#include "model/bucket/DeleteBucketReplicationInput.h"
+#include "model/bucket/DeleteBucketReplicationOutput.h"
+#include "model/bucket/PutBucketVersioningInput.h"
+#include "model/bucket/PutBucketVersioningOutput.h"
+#include "model/bucket/GetBucketVersioningInput.h"
+#include "model/bucket/GetBucketVersioningOutput.h"
+#include "model/bucket/PutBucketWebsiteInput.h"
+#include "model/bucket/PutBucketWebsiteOutput.h"
+#include "model/bucket/GetBucketWebsiteInput.h"
+#include "model/bucket/GetBucketWebsiteOutput.h"
+#include "model/bucket/DeleteBucketWebsiteInput.h"
+#include "model/bucket/DeleteBucketWebsiteOutput.h"
+#include "model/bucket/PutBucketCustomDomainInput.h"
+#include "model/bucket/PutBucketCustomDomainOutput.h"
+#include "model/bucket/ListBucketCustomDomainInput.h"
+#include "model/bucket/ListBucketCustomDomainOutput.h"
+#include "model/bucket/DeleteBucketCustomDomainInput.h"
+#include "model/bucket/DeleteBucketCustomDomainOutput.h"
+#include "model/bucket/PutBucketNotificationInput.h"
+#include "model/bucket/PutBucketNotificationOutput.h"
+#include "model/bucket/GetBucketNotificationInput.h"
+#include "model/bucket/GetBucketNotificationOutput.h"
+#include "model/bucket/PutBucketRealTimeLogInput.h"
+#include "model/bucket/PutBucketRealTimeLogOutput.h"
+#include "model/bucket/GetBucketRealTimeLogInput.h"
+#include "model/bucket/GetBucketRealTimeLogOutput.h"
+#include "model/bucket/DeleteBucketRealTimeLogInput.h"
+#include "model/bucket/DeleteBucketRealTimeLogOutput.h"
+#include "model/object/ResumableCopyObjectInput.h"
+#include "model/object/ResumableCopyObjectOutput.h"
+#include "model/acl/PreSignedPolicyURLOutput.h"
+#include "model/acl/PreSignedPolicyURLInput.h"
 namespace VolcengineTos {
 
 void InitializeClient();
@@ -194,81 +230,110 @@ public:
 
     ~TosClientV2() override = default;
 
-    Outcome<TosError, CreateBucketV2Output> createBucket(const CreateBucketV2Input& input);
-    Outcome<TosError, HeadBucketV2Output> headBucket(const HeadBucketV2Input& input);
-    Outcome<TosError, DeleteBucketOutput> deleteBucket(const DeleteBucketInput& input);
+    Outcome<TosError, CreateBucketV2Output> createBucket(const CreateBucketV2Input& input) const;
+    Outcome<TosError, HeadBucketV2Output> headBucket(const HeadBucketV2Input& input) const;
+    Outcome<TosError, DeleteBucketOutput> deleteBucket(const DeleteBucketInput& input) const;
 
-    Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input);
+    Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input) const;
 
-    Outcome<TosError, GetObjectToFileOutput> getObjectToFile(const GetObjectToFileInput& input);
+    Outcome<TosError, GetObjectToFileOutput> getObjectToFile(const GetObjectToFileInput& input) const;
 
-    Outcome<TosError, HeadObjectV2Output> headObject(const HeadObjectV2Input& input);
+    Outcome<TosError, HeadObjectV2Output> headObject(const HeadObjectV2Input& input) const;
 
-    Outcome<TosError, CopyObjectV2Output> copyObject(const CopyObjectV2Input& input);
+    Outcome<TosError, CopyObjectV2Output> copyObject(const CopyObjectV2Input& input) const;
 
-    Outcome<TosError, DeleteObjectOutput> deleteObject(const DeleteObjectInput& input);
+    Outcome<TosError, DeleteObjectOutput> deleteObject(const DeleteObjectInput& input) const;
 
-    Outcome<TosError, DeleteMultiObjectsOutput> deleteMultiObjects(DeleteMultiObjectsInput& input);
+    Outcome<TosError, DeleteMultiObjectsOutput> deleteMultiObjects(DeleteMultiObjectsInput& input) const;
 
-    Outcome<TosError, PutObjectV2Output> putObject(const PutObjectV2Input& input);
-    Outcome<TosError, PutObjectFromFileOutput> putObjectFromFile(const PutObjectFromFileInput& input);
+    Outcome<TosError, PutObjectV2Output> putObject(const PutObjectV2Input& input) const;
+    Outcome<TosError, PutObjectFromFileOutput> putObjectFromFile(const PutObjectFromFileInput& input) const;
 
-    Outcome<TosError, AppendObjectV2Output> appendObject(const AppendObjectV2Input& input);
+    Outcome<TosError, AppendObjectV2Output> appendObject(const AppendObjectV2Input& input) const;
 
-    Outcome<TosError, SetObjectMetaOutput> setObjectMeta(const SetObjectMetaInput& input);
+    Outcome<TosError, SetObjectMetaOutput> setObjectMeta(const SetObjectMetaInput& input) const;
 
-    Outcome<TosError, ListObjectsV2Output> listObjects(const ListObjectsV2Input& input);
+    Outcome<TosError, ListObjectsV2Output> listObjects(const ListObjectsV2Input& input) const;
 
-    Outcome<TosError, ListObjectVersionsV2Output> listObjectVersions(const ListObjectVersionsV2Input& input);
+    Outcome<TosError, ListObjectVersionsV2Output> listObjectVersions(const ListObjectVersionsV2Input& input) const;
 
-    Outcome<TosError, PutObjectAclV2Output> putObjectAcl(const PutObjectAclV2Input& input);
+    Outcome<TosError, PutObjectAclV2Output> putObjectAcl(const PutObjectAclV2Input& input) const;
 
-    Outcome<TosError, GetObjectAclV2Output> getObjectAcl(const GetObjectAclV2Input& input);
+    Outcome<TosError, GetObjectAclV2Output> getObjectAcl(const GetObjectAclV2Input& input) const;
 
-    Outcome<TosError, CreateMultipartUploadOutput> createMultipartUpload(const CreateMultipartUploadInput& input);
+    Outcome<TosError, CreateMultipartUploadOutput> createMultipartUpload(const CreateMultipartUploadInput& input) const;
 
-    Outcome<TosError, UploadPartV2Output> uploadPart(const UploadPartV2Input& input);
+    Outcome<TosError, UploadPartV2Output> uploadPart(const UploadPartV2Input& input) const;
 
-    Outcome<TosError, UploadPartFromFileOutput> uploadPartFromFile(const UploadPartFromFileInput& input);
+    Outcome<TosError, UploadPartFromFileOutput> uploadPartFromFile(const UploadPartFromFileInput& input) const;
 
-    Outcome<TosError, CompleteMultipartUploadV2Output> completeMultipartUpload(CompleteMultipartUploadV2Input& input);
+    Outcome<TosError, CompleteMultipartUploadV2Output> completeMultipartUpload(
+            CompleteMultipartUploadV2Input& input) const;
 
-    Outcome<TosError, AbortMultipartUploadOutput> abortMultipartUpload(const AbortMultipartUploadInput& input);
-    Outcome<TosError, UploadPartCopyV2Output> uploadPartCopy(const UploadPartCopyV2Input& input);
+    Outcome<TosError, AbortMultipartUploadOutput> abortMultipartUpload(const AbortMultipartUploadInput& input) const;
+    Outcome<TosError, UploadPartCopyV2Output> uploadPartCopy(const UploadPartCopyV2Input& input) const;
 
-    Outcome<TosError, ListPartsOutput> listParts(const ListPartsInput& input);
+    Outcome<TosError, ListPartsOutput> listParts(const ListPartsInput& input) const;
 
-    Outcome<TosError, ListMultipartUploadsV2Output> listMultipartUploads(const ListMultipartUploadsV2Input& input);
+    Outcome<TosError, ListMultipartUploadsV2Output> listMultipartUploads(
+            const ListMultipartUploadsV2Input& input) const;
 
-    Outcome<TosError, UploadFileV2Output> uploadFile(const UploadFileV2Input& input);
-    Outcome<TosError, DownloadFileOutput> downloadFile(const DownloadFileInput& input);
+    Outcome<TosError, UploadFileV2Output> uploadFile(const UploadFileV2Input& input) const;
+    Outcome<TosError, DownloadFileOutput> downloadFile(const DownloadFileInput& input) const;
 
-    Outcome<TosError, PreSignedURLOutput> preSignedURL(const PreSignedURLInput& input);
+    Outcome<TosError, PreSignedURLOutput> preSignedURL(const PreSignedURLInput& input) const;
 
     // 2.4.0
-    Outcome<TosError, PutBucketCORSOutput> putBucketCORS(const PutBucketCORSInput& input);
-    Outcome<TosError, GetBucketCORSOutput> getBucketCORS(const GetBucketCORSInput& input);
-    Outcome<TosError, DeleteBucketCORSOutput> deleteBucketCORS(const DeleteBucketCORSInput& input);
-    Outcome<TosError, ListObjectsType2Output> listObjectsType2(const ListObjectsType2Input& input);
-    Outcome<TosError, PutBucketStorageClassOutput> putBucketStorageClass(const PutBucketStorageClassInput& input);
-    Outcome<TosError, GetBucketLocationOutput> getBucketLocation(const GetBucketLocationInput& input);
-    Outcome<TosError, PutBucketLifecycleOutput> putBucketLifecycle(const PutBucketLifecycleInput& input);
-    Outcome<TosError, GetBucketLifecycleOutput> getBucketLifecycle(const GetBucketLifecycleInput& input);
-    Outcome<TosError, DeleteBucketLifecycleOutput> deleteBucketLifecycle(const DeleteBucketLifecycleInput& input);
-    Outcome<TosError, PutBucketPolicyOutput> putBucketPolicy(const PutBucketPolicyInput& input);
-    Outcome<TosError, GetBucketPolicyOutput> getBucketPolicy(const GetBucketPolicyInput& input);
-    Outcome<TosError, DeleteBucketPolicyOutput> deleteBucketPolicy(const DeleteBucketPolicyInput& input);
-    Outcome<TosError, PutBucketMirrorBackOutput> putBucketMirrorBack(const PutBucketMirrorBackInput& input);
-    Outcome<TosError, GetBucketMirrorBackOutput> getBucketMirrorBack(const GetBucketMirrorBackInput& input);
-    Outcome<TosError, DeleteBucketMirrorBackOutput> deleteBucketMirrorBack(const DeleteBucketMirrorBackInput& input);
-    Outcome<TosError, PutObjectTaggingOutput> putObjectTagging(const PutObjectTaggingInput& input);
-    Outcome<TosError, GetObjectTaggingOutput> getObjectTagging(const GetObjectTaggingInput& input);
-    Outcome<TosError, DeleteObjectTaggingOutput> deleteObjectTagging(const DeleteObjectTaggingInput& input);
-    Outcome<TosError, PutBucketAclOutput> putBucketAcl(const PutBucketAclInput& input);
-    Outcome<TosError, GetBucketAclOutput> getBucketAcl(const GetBucketAclInput& input);
-    Outcome<TosError, FetchObjectOutput> fetchObject(const FetchObjectInput& input);
-    Outcome<TosError, PutFetchTaskOutput> putFetchTask(const PutFetchTaskInput& input);
-    Outcome<TosError, PreSignedPostSignatureOutput> preSignedPostSignature(const PreSignedPostSignatureInput& input);
+    Outcome<TosError, PutBucketCORSOutput> putBucketCORS(const PutBucketCORSInput& input) const;
+    Outcome<TosError, GetBucketCORSOutput> getBucketCORS(const GetBucketCORSInput& input) const;
+    Outcome<TosError, DeleteBucketCORSOutput> deleteBucketCORS(const DeleteBucketCORSInput& input) const;
+    Outcome<TosError, ListObjectsType2Output> listObjectsType2(const ListObjectsType2Input& input) const;
+    Outcome<TosError, PutBucketStorageClassOutput> putBucketStorageClass(const PutBucketStorageClassInput& input) const;
+    Outcome<TosError, GetBucketLocationOutput> getBucketLocation(const GetBucketLocationInput& input) const;
+    Outcome<TosError, PutBucketLifecycleOutput> putBucketLifecycle(const PutBucketLifecycleInput& input) const;
+    Outcome<TosError, GetBucketLifecycleOutput> getBucketLifecycle(const GetBucketLifecycleInput& input) const;
+    Outcome<TosError, DeleteBucketLifecycleOutput> deleteBucketLifecycle(const DeleteBucketLifecycleInput& input) const;
+    Outcome<TosError, PutBucketPolicyOutput> putBucketPolicy(const PutBucketPolicyInput& input) const;
+    Outcome<TosError, GetBucketPolicyOutput> getBucketPolicy(const GetBucketPolicyInput& input) const;
+    Outcome<TosError, DeleteBucketPolicyOutput> deleteBucketPolicy(const DeleteBucketPolicyInput& input) const;
+    Outcome<TosError, PutBucketMirrorBackOutput> putBucketMirrorBack(const PutBucketMirrorBackInput& input) const;
+    Outcome<TosError, GetBucketMirrorBackOutput> getBucketMirrorBack(const GetBucketMirrorBackInput& input) const;
+    Outcome<TosError, DeleteBucketMirrorBackOutput> deleteBucketMirrorBack(
+            const DeleteBucketMirrorBackInput& input) const;
+    Outcome<TosError, PutObjectTaggingOutput> putObjectTagging(const PutObjectTaggingInput& input) const;
+    Outcome<TosError, GetObjectTaggingOutput> getObjectTagging(const GetObjectTaggingInput& input) const;
+    Outcome<TosError, DeleteObjectTaggingOutput> deleteObjectTagging(const DeleteObjectTaggingInput& input) const;
+    Outcome<TosError, PutBucketAclOutput> putBucketAcl(const PutBucketAclInput& input) const;
+    Outcome<TosError, GetBucketAclOutput> getBucketAcl(const GetBucketAclInput& input) const;
+    Outcome<TosError, FetchObjectOutput> fetchObject(const FetchObjectInput& input) const;
+    Outcome<TosError, PutFetchTaskOutput> putFetchTask(const PutFetchTaskInput& input) const;
+    Outcome<TosError, PreSignedPostSignatureOutput> preSignedPostSignature(
+            const PreSignedPostSignatureInput& input) const;
+
+    // 2.5.0
+    Outcome<TosError, PutBucketReplicationOutput> putBucketReplication(const PutBucketReplicationInput& input) const;
+    Outcome<TosError, GetBucketReplicationOutput> getBucketReplication(const GetBucketReplicationInput& input) const;
+    Outcome<TosError, DeleteBucketReplicationOutput> deleteBucketReplication(
+            const DeleteBucketReplicationInput& input) const;
+    Outcome<TosError, PutBucketVersioningOutput> putBucketVersioning(const PutBucketVersioningInput& input) const;
+    Outcome<TosError, GetBucketVersioningOutput> getBucketVersioning(const GetBucketVersioningInput& input) const;
+    Outcome<TosError, PutBucketWebsiteOutput> putBucketWebsite(const PutBucketWebsiteInput& input) const;
+    Outcome<TosError, GetBucketWebsiteOutput> getBucketWebsite(const GetBucketWebsiteInput& input) const;
+    Outcome<TosError, DeleteBucketWebsiteOutput> deleteBucketWebsite(const DeleteBucketWebsiteInput& input) const;
+    Outcome<TosError, PutBucketCustomDomainOutput> putBucketCustomDomain(const PutBucketCustomDomainInput& input) const;
+    Outcome<TosError, ListBucketCustomDomainOutput> listBucketCustomDomain(
+            const ListBucketCustomDomainInput& input) const;
+    Outcome<TosError, DeleteBucketCustomDomainOutput> deleteBucketCustomDomain(
+            const DeleteBucketCustomDomainInput& input) const;
+    Outcome<TosError, PutBucketNotificationOutput> putBucketNotification(const PutBucketNotificationInput& input) const;
+    Outcome<TosError, GetBucketNotificationOutput> getBucketNotification(const GetBucketNotificationInput& input) const;
+    Outcome<TosError, PutBucketRealTimeLogOutput> putBucketRealTimeLog(const PutBucketRealTimeLogInput& input) const;
+    Outcome<TosError, GetBucketRealTimeLogOutput> getBucketRealTimeLog(const GetBucketRealTimeLogInput& input) const;
+    Outcome<TosError, DeleteBucketRealTimeLogOutput> deleteBucketRealTimeLog(
+            const DeleteBucketRealTimeLogInput& input) const;
+
+    Outcome<TosError, ResumableCopyObjectOutput> resumableCopyObject(const ResumableCopyObjectInput& input) const;
+    Outcome<TosError, PreSignedPolicyURLOutput> preSignedPolicyURL(const PreSignedPolicyURLInput& input) const;
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;

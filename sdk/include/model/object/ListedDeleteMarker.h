@@ -35,6 +35,10 @@ public:
     void setVersionId(const std::string& versionid) {
         versionID_ = versionid;
     }
+    const std::string& getStringFormatLastModified() const {
+        auto lastModified = lastModified_;
+        return TimeUtils::transLastModifiedTimeToString(lastModified);
+    }
 
 private:
     bool isLatest_;

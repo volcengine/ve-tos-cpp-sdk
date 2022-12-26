@@ -19,11 +19,12 @@ protected:
         bucketName = TestUtils::GetBucketName(TestConfig::TestPrefix);
         objectKey = TestUtils::GetObjectKey(TestConfig::TestPrefix);
         TestUtils::CreateBucket(cliV2, bucketName);
+        TestUtils::PutObject(cliV2, bucketName, objectKey, "123456");
     }
 
     // Tears down the stuff shared by all tests in this test case.
     static void TearDownTestCase() {
-        //        TestUtils::CleanBucket(cliV2, bucketName);
+        TestUtils::CleanBucket(cliV2, bucketName);
         cliV2 = nullptr;
     }
 
@@ -89,6 +90,39 @@ TEST_F(PreSignedPostSignatureTest, PreSignedPostSignatureTest) {
               << res.getOriginPolicy() << "\n"
               << res.getSignature() << "\n"
               << "-----" << std::endl;
+}
+
+TEST_F(PreSignedPostSignatureTest, PreSignedURLWithAlternativeEndpointTest) {
+    PreSignedURLInput input(HttpMethodType::Get, "", "111", 86400);
+    input.setAlternativeEndpoint("www.baidu.com");
+    auto output = cliV2->preSignedURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+}
+TEST_F(PreSignedPostSignatureTest, PreSignedURLTest) {
+    PreSignedURLInput input(HttpMethodType::Get, bucketName, objectKey, 86400);
+    auto output = cliV2->preSignedURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+}
+TEST_F(PreSignedPostSignatureTest, PreSignedPolicyURLTest) {
+    auto condition1 = PolicySignatureCondition("key", "", "starts-with");
+    std::vector<PolicySignatureCondition> conditions{condition1};
+    PreSignedPolicyURLInput input(bucketName, 86400, conditions);
+    auto output = cliV2->preSignedPolicyURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    auto getUrl = output.result().GetSignedURLForGetOrHead(objectKey, {});
+    auto listUrl = output.result().GetSignedURLForGetOrHead("111", {});
+}
+
+TEST_F(PreSignedPostSignatureTest, PreSignedPolicyURLWithAlternativeEndpointTest) {
+    auto condition1 = PolicySignatureCondition("key", "", "starts-with");
+    std::vector<PolicySignatureCondition> conditions{condition1};
+    PreSignedPolicyURLInput input(bucketName, 86400, conditions);
+    input.setIsCustomDomain(true);
+    input.setAlternativeEndpoint("www.baidu.com");
+    auto output = cliV2->preSignedPolicyURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    auto getUrl = output.result().GetSignedURLForGetOrHead(objectKey, {});
+    auto listUrl = output.result().GetSignedURLForGetOrHead("111", {});
 }
 
 }  // namespace VolcengineTos

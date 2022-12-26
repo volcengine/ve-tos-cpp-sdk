@@ -54,6 +54,18 @@ public:
     void setMaxAgeSeconds(int maxAgeSeconds) {
         maxAgeSeconds_ = maxAgeSeconds;
     }
+    void addAllowedOrigin(const std::string& allowedOrigins) {
+        allowedOrigins_.push_back(allowedOrigins);
+    }
+    void addAllowedMethod(const std::string& allowedMethods) {
+        allowedMethods_.push_back(allowedMethods);
+    }
+    void addAllowedHeader(const std::string& allowedHeaders) {
+        allowedHeaders_.push_back(allowedHeaders);
+    }
+    void addExposeHeader(const std::string& exposeHeaders) {
+        exposeHeaders_.push_back(exposeHeaders);
+    }
 
 private:
     std::string id_;

@@ -2,7 +2,6 @@
 #pragma once
 
 #include "model/RequestInfo.h"
-#include "MirrorBackRule.h"
 namespace VolcengineTos {
 class GetBucketMirrorBackOutput {
 public:

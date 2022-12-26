@@ -14,27 +14,35 @@ enum class ACLType {
     PublicReadWrite,
     AuthenticatedRead,
     BucketOwnerRead,
-    BucketOwnerFullControl
+    BucketOwnerFullControl,
+    BucketOwnerEntrusted
 };
-static std::map<ACLType, std::string> ACLTypetoString{{ACLType::NotSet, ""},
-                                                      {ACLType::Private, "private"},
-                                                      {ACLType::PublicRead, "public-read"},
-                                                      {ACLType::PublicReadWrite, "public-read-write"},
-                                                      {ACLType::AuthenticatedRead, "authenticated-read"},
-                                                      {ACLType::BucketOwnerRead, "bucket-owner-read"},
-                                                      {ACLType::BucketOwnerFullControl, "bucket-owner-full-control"}};
+static std::map<ACLType, std::string> ACLTypetoString{
+        {ACLType::NotSet, ""},
+        {ACLType::Private, "private"},
+        {ACLType::PublicRead, "public-read"},
+        {ACLType::PublicReadWrite, "public-read-write"},
+        {ACLType::AuthenticatedRead, "authenticated-read"},
+        {ACLType::BucketOwnerRead, "bucket-owner-read"},
+        {ACLType::BucketOwnerFullControl, "bucket-owner-full-control"},
+        {ACLType::BucketOwnerEntrusted, "bucket-owner-entrusted"},
+};
 static std::map<std::string, ACLType> StringtoACLType{{"private", ACLType::Private},
                                                       {"public-read", ACLType::PublicRead},
                                                       {"public-read-write", ACLType::PublicReadWrite},
                                                       {"authenticated-read", ACLType::AuthenticatedRead},
                                                       {"bucket-owner-read", ACLType::BucketOwnerRead},
-                                                      {"bucket-owner-full-control", ACLType::BucketOwnerFullControl}};
+                                                      {"bucket-owner-full-control", ACLType::BucketOwnerFullControl},
+                                                      {"bucket-owner-entrusted", ACLType::BucketOwnerEntrusted}};
 
-enum class StorageClassType { NotSet = 0, STANDARD, IA };
-static std::map<StorageClassType, std::string> StorageClassTypetoString{
-        {StorageClassType::NotSet, ""}, {StorageClassType::STANDARD, "STANDARD"}, {StorageClassType::IA, "IA"}};
+enum class StorageClassType { NotSet = 0, STANDARD, IA, ARCHIVE_FR };
+static std::map<StorageClassType, std::string> StorageClassTypetoString{{StorageClassType::NotSet, ""},
+                                                                        {StorageClassType::STANDARD, "STANDARD"},
+                                                                        {StorageClassType::IA, "IA"},
+                                                                        {StorageClassType::ARCHIVE_FR, "ARCHIVE_FR"}};
 static std::map<std::string, StorageClassType> StringtoStorageClassType{{"STANDARD", StorageClassType::STANDARD},
-                                                                        {"IA", StorageClassType::IA}};
+                                                                        {"IA", StorageClassType::IA},
+                                                                        {"ARCHIVE_FR", StorageClassType::ARCHIVE_FR}};
 
 enum MetadataDirectiveType { COPY = 0, REPLACE };
 static std::map<MetadataDirectiveType, std::string> MetadataDirectiveTypetoString{{COPY, "COPY"}, {REPLACE, "REPLACE"}};
@@ -95,41 +103,41 @@ static std::map<RedirectType, std::string> RedirectTypetoString{
 static std::map<std::string, RedirectType> StringtoRedirectType{
         {"", RedirectType::NotSet}, {"Mirror", RedirectType::RedirectMirror}, {"Async", RedirectType::RedirectAsync}};
 
-enum class StorageClassInheritDirectiveType { NotSet = 0, StorageClassIDDestinationBucket, StorageClassIDSourceObject };
+enum class StorageClassInheritDirectiveType { NotSet = 0, DestinationBucket, SourceObject };
 static std::map<StorageClassInheritDirectiveType, std::string> StorageClassInheritDirectiveTypetoString{
         {StorageClassInheritDirectiveType::NotSet, ""},
-        {StorageClassInheritDirectiveType::StorageClassIDDestinationBucket, "DESTINATION_BUCKET"},
-        {StorageClassInheritDirectiveType::StorageClassIDSourceObject, "SOURCE_OBJECT"}};
+        {StorageClassInheritDirectiveType::DestinationBucket, "DESTINATION_BUCKET"},
+        {StorageClassInheritDirectiveType::SourceObject, "SOURCE_OBJECT"}};
 static std::map<std::string, StorageClassInheritDirectiveType> StringtoStorageClassInheritDirectiveType{
         {"", StorageClassInheritDirectiveType::NotSet},
-        {"DESTINATION_BUCKET", StorageClassInheritDirectiveType::StorageClassIDDestinationBucket},
-        {"SOURCE_OBJECT", StorageClassInheritDirectiveType::StorageClassIDSourceObject}};
+        {"DESTINATION_BUCKET", StorageClassInheritDirectiveType::DestinationBucket},
+        {"SOURCE_OBJECT", StorageClassInheritDirectiveType::SourceObject}};
 
-enum class VersioningStatusType { NotSet = 0, VersioningStatusEnabled, VersioningStatusSuspended };
+enum class VersioningStatusType { NotSet = 0, Enabled, Suspended };
 static std::map<VersioningStatusType, std::string> VersioningStatusTypetoString{
         {VersioningStatusType::NotSet, ""},
-        {VersioningStatusType::VersioningStatusEnabled, "Enabled"},
-        {VersioningStatusType::VersioningStatusSuspended, "Suspended"}};
+        {VersioningStatusType::Enabled, "Enabled"},
+        {VersioningStatusType::Suspended, "Suspended"}};
 static std::map<std::string, VersioningStatusType> StringtoVersioningStatusType{
         {"", VersioningStatusType::NotSet},
-        {"Enabled", VersioningStatusType::VersioningStatusEnabled},
-        {"Suspended", VersioningStatusType::VersioningStatusSuspended}};
+        {"Enabled", VersioningStatusType::Enabled},
+        {"Suspended", VersioningStatusType::Suspended}};
 
-enum class ProtocolType { NotSet = 0, ProtocolHttp, ProtocolHttps };
+enum class ProtocolType { NotSet = 0, Http, Https };
 static std::map<ProtocolType, std::string> ProtocolTypetoString{
-        {ProtocolType::NotSet, ""}, {ProtocolType::ProtocolHttp, "http"}, {ProtocolType::ProtocolHttps, "https"}};
+        {ProtocolType::NotSet, ""}, {ProtocolType::Http, "http"}, {ProtocolType::Https, "https"}};
 static std::map<std::string, ProtocolType> StringtoProtocolType{
-        {"", ProtocolType::NotSet}, {"http", ProtocolType::ProtocolHttp}, {"https", ProtocolType::ProtocolHttps}};
+        {"", ProtocolType::NotSet}, {"http", ProtocolType::Http}, {"https", ProtocolType::Https}};
 
-enum class CertStatusType { NotSet = 0, CertStatusBound, CertStatusUnbound, CertStatusExpired };
+enum class CertStatusType { NotSet = 0, Bound, Unbound, Expired };
 static std::map<CertStatusType, std::string> CertStatusTypetoString{{CertStatusType::NotSet, ""},
-                                                                    {CertStatusType::CertStatusBound, "CertBound"},
-                                                                    {CertStatusType::CertStatusUnbound, "CertUnbound"},
-                                                                    {CertStatusType::CertStatusExpired, "CertExpired"}};
+                                                                    {CertStatusType::Bound, "CertBound"},
+                                                                    {CertStatusType::Unbound, "CertUnbound"},
+                                                                    {CertStatusType::Expired, "CertExpired"}};
 static std::map<std::string, CertStatusType> StringtoCertStatusType{{"", CertStatusType::NotSet},
-                                                                    {"CertBound", CertStatusType::CertStatusBound},
-                                                                    {"CertUnbound", CertStatusType::CertStatusUnbound},
-                                                                    {"CertExpired", CertStatusType::CertStatusExpired}};
+                                                                    {"CertBound", CertStatusType::Bound},
+                                                                    {"CertUnbound", CertStatusType::Unbound},
+                                                                    {"CertExpired", CertStatusType::Expired}};
 
 enum LogLevel {
     LogOff = 0,
@@ -309,6 +317,38 @@ struct DownloadEvent {
 using DownloadEventChange = std::function<void(std::shared_ptr<DownloadEvent>)>;
 struct DownloadEventListener {
     DownloadEventChange eventChange_;
+};
+
+// ResumableCopyObject 相关回调
+struct CopyPartInfo {
+    int partNumber_;
+    int64_t copySourceRangeStart_;
+    int64_t copySourceRangeEnd_;
+    std::shared_ptr<std::string> eTag_;  // copy part succeed 事件发生时有值
+};
+using CopyEventType = int;
+static const CopyEventType CopyEventCreateMultipartUploadSucceed = 1;
+static const CopyEventType CopyEventCreateMultipartUploadFailed = 2;
+static const CopyEventType CopyEventUploadPartSucceed = 3;
+static const CopyEventType CopyEventUploadPartFailed = 4;
+static const CopyEventType CopyEventUploadPartAborted = 5;
+static const CopyEventType CopyEventCompleteMultipartUploadSucceed = 6;
+static const CopyEventType CopyEventCompleteMultipartUploadFailed = 7;
+struct CopyEvent {
+    CopyEventType type_;
+    bool error_;
+    std::string bucket_;
+    std::string key_;
+    std::shared_ptr<std::string> uploadId_;
+    std::string srcBucket_;
+    std::string srcKey_;
+    std::string srcVersionId_;
+    std::shared_ptr<std::string> checkpointFile_;
+    std::shared_ptr<CopyPartInfo> copyPartInfo_;
+};
+using CopyEventChange = std::function<void(std::shared_ptr<CopyEvent>)>;
+struct CopyEventListener {
+    CopyEventChange eventChange_;
 };
 
 class CancelHook {

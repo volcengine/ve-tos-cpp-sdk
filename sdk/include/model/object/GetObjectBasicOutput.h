@@ -24,10 +24,16 @@ public:
         contentRange_ = contentrange;
     }
     const std::string& getETags() const {
-        return eTags_;
+        return eTag_;
     }
     void setETags(const std::string& etags) {
-        eTags_ = etags;
+        eTag_ = etags;
+    }
+    const std::string& getETag() const {
+        return eTag_;
+    }
+    void setETag(const std::string& eTag) {
+        eTag_ = eTag;
     }
     time_t getLastModified() const {
         return lastModified_;
@@ -136,7 +142,7 @@ private:
     RequestInfo requestInfo_;
 
     std::string contentRange_;
-    std::string eTags_;
+    std::string eTag_;
     std::time_t lastModified_;
     bool deleteMarker_ = 0;
     std::string ssecAlgorithm_;

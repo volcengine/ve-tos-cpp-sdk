@@ -1,6 +1,7 @@
 #include "../TestConfig.h"
 #include "../Utils.h"
 #include "TosClientV2.h"
+#include "utils/LogUtils.h"
 #include <gtest/gtest.h>
 
 namespace VolcengineTos {
@@ -16,6 +17,8 @@ protected:
         ClientConfig conf;
         conf.enableVerifySSL = TestConfig::enableVerifySSL;
         conf.endPoint = TestConfig::Endpoint;
+        //        LogUtils::SetLogger("/Users/bytedance/cpp_workspace/test/ve-tos-cpp-sdk/logg/loggg", "tos-cpp-sdk",
+        //                            LogLevel::LogDebug);
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
     }
 

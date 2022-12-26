@@ -20,13 +20,26 @@ public:
     const StorageClassType& getStorageClass() const {
         return storageClass_;
     }
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
     void setStorageClass(const StorageClassType& storageClass) {
         storageClass_ = storageClass;
+    }
+    AzRedundancyType getAzRedundancy() const {
+        return azRedundancy_;
+    }
+    void setAzRedundancy(AzRedundancyType azRedundancy) {
+        azRedundancy_ = azRedundancy;
+    }
+    const std::string& getStringFormatAzRedundancy() const {
+        return AzRedundancyTypetoString[azRedundancy_];
     }
 
 private:
     RequestInfo requestInfo_;
     std::string region_;
     StorageClassType storageClass_ = StorageClassType::NotSet;
+    AzRedundancyType azRedundancy_ = AzRedundancyType::NotSet;
 };
 }  // namespace VolcengineTos

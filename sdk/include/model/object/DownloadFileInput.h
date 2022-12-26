@@ -1,9 +1,17 @@
 #pragma once
 #include "HeadObjectV2Input.h"
 #include <string>
+#include <utility>
 namespace VolcengineTos {
 class DownloadFileInput {
 public:
+    DownloadFileInput(std::string bucket, std::string key) : headObjectV2Input_(std::move(bucket), std::move(key)) {
+    }
+    DownloadFileInput(std::string bucket, std::string key, std::string versionId)
+            : headObjectV2Input_(std::move(bucket), std::move(key), std::move(versionId)) {
+    }
+    DownloadFileInput() = default;
+    virtual ~DownloadFileInput() = default;
     const HeadObjectV2Input& getHeadObjectV2Input() const {
         return headObjectV2Input_;
     }
@@ -63,6 +71,67 @@ public:
     }
     void setCancelHook(const std::shared_ptr<CancelHook>& cancelhook) {
         cancelHook_ = cancelhook;
+    }
+
+    const std::string& getBucket() const {
+        return headObjectV2Input_.getBucket();
+    }
+    void setBucket(const std::string& bucket) {
+        headObjectV2Input_.setBucket(bucket);
+    }
+    const std::string& getKey() const {
+        return headObjectV2Input_.getKey();
+    }
+    void setKey(const std::string& key) {
+        headObjectV2Input_.setKey(key);
+    }
+    const std::string& getVersionId() const {
+        return headObjectV2Input_.getVersionId();
+    }
+    void setVersionId(const std::string& versionid) {
+        headObjectV2Input_.setSsecKeyMd5(versionid);
+    }
+    const std::string& getIfMatch() const {
+        return headObjectV2Input_.getIfMatch();
+    }
+    void setIfMatch(const std::string& ifmatch) {
+        headObjectV2Input_.setIfMatch(ifmatch);
+    }
+    time_t getIfModifiedSince() const {
+        return headObjectV2Input_.getIfModifiedSince();
+    }
+    void setIfModifiedSince(time_t ifmodifiedsince) {
+        headObjectV2Input_.setIfModifiedSince(ifmodifiedsince);
+    }
+    const std::string& getIfNoneMatch() const {
+        return headObjectV2Input_.getIfNoneMatch();
+    }
+    void setIfNoneMatch(const std::string& ifnonematch) {
+        headObjectV2Input_.setIfNoneMatch(ifnonematch);
+    }
+    time_t getIfUnmodifiedSince() const {
+        return headObjectV2Input_.getIfUnmodifiedSince();
+    }
+    void setIfUnmodifiedSince(time_t ifunmodifiedsince) {
+        headObjectV2Input_.setIfUnmodifiedSince(ifunmodifiedsince);
+    }
+    const std::string& getSsecAlgorithm() const {
+        return headObjectV2Input_.getSsecAlgorithm();
+    }
+    void setSsecAlgorithm(const std::string& ssecalgorithm) {
+        headObjectV2Input_.setSsecAlgorithm(ssecalgorithm);
+    }
+    const std::string& getSsecKey() const {
+        return headObjectV2Input_.getSsecKey();
+    }
+    void setSsecKey(const std::string& sseckey) {
+        headObjectV2Input_.setSsecKey(sseckey);
+    }
+    const std::string& getSsecKeyMd5() const {
+        return headObjectV2Input_.getSsecKeyMd5();
+    }
+    void setSsecKeyMd5(const std::string& sseckeymd5) {
+        headObjectV2Input_.setSsecKeyMd5(sseckeymd5);
     }
 
 private:

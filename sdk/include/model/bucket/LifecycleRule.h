@@ -2,6 +2,7 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 #include "Transition.h"
 #include "Expiration.h"
 #include "NoncurrentVersionTransition.h"
@@ -44,6 +45,9 @@ public:
     StatusType getStatus() const {
         return status_;
     }
+    const std::string& getStringFormatStatus() const {
+        return StatusTypetoString[status_];
+    }
     void setStatus(StatusType status) {
         status_ = status;
     }
@@ -59,6 +63,12 @@ public:
     void setExpiratioon(const std::shared_ptr<Expiration>& expiratioon) {
         expiration_ = expiratioon;
     }
+    void setExpiratioon(time_t date) {
+        expiration_ = std::make_shared<Expiration>(date);
+    }
+    void setExpiratioon(int days) {
+        expiration_ = std::make_shared<Expiration>(days);
+    }
     const std::vector<NoncurrentVersionTransition>& getNoncurrentVersionTransitions() const {
         return noncurrentVersionTransitions_;
     }
@@ -72,18 +82,49 @@ public:
             const std::shared_ptr<NoncurrentVersionExpiration>& noncurrentVersionExpiration) {
         noncurrentVersionExpiration_ = noncurrentVersionExpiration;
     }
+    void setNoncurrentVersionExpiration(int noncurrentDays) {
+        noncurrentVersionExpiration_ = std::make_shared<NoncurrentVersionExpiration>(noncurrentDays);
+    }
     const std::vector<Tag>& getTags() const {
         return tags_;
     }
     void setTags(const std::vector<Tag>& tags) {
         tags_ = tags;
     }
+
     const std::shared_ptr<AbortInCompleteMultipartUpload>& getAbortInCompleteMultipartUpload() const {
         return abortInCompleteMultipartUpload_;
     }
     void setAbortInCompleteMultipartUpload(
             const std::shared_ptr<AbortInCompleteMultipartUpload>& abortInCompleteMultipartUpload) {
         abortInCompleteMultipartUpload_ = abortInCompleteMultipartUpload;
+    }
+    bool hasExpiration() const {
+        if (expiration_ != nullptr) {
+            return true;
+        }
+        return false;
+    }
+    bool hasNoncurrentVersionExpiration() const {
+        if (noncurrentVersionExpiration_ != nullptr) {
+            return true;
+        }
+        return false;
+    }
+    bool hasAbortInCompleteMultipartUpload() const {
+        if (abortInCompleteMultipartUpload_ != nullptr) {
+            return true;
+        }
+        return false;
+    }
+    void addTag(const Tag& tag) {
+        tags_.push_back(tag);
+    }
+    void addTransition(const Transition& transition) {
+        transitions_.push_back(transition);
+    }
+    void addNoncurrentVersionTransition(const NoncurrentVersionTransition& noncurrentVersionTransition) {
+        noncurrentVersionTransitions_.push_back(noncurrentVersionTransition);
     }
 
 private:

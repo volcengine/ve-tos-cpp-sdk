@@ -3,6 +3,7 @@
 #include <string>
 #include "model/acl/Owner.h"
 #include "Type.h"
+#include "utils/BaseUtils.h"
 namespace VolcengineTos {
 class ListedObjectVersionV2 {
 public:
@@ -59,6 +60,13 @@ public:
     }
     void setHashCrc64Ecma(uint64_t hashcrc64ecma) {
         hashCrc64ecma_ = hashcrc64ecma;
+    }
+    const std::string& getStringFormatStorageClass() const {
+        return StorageClassTypetoString[storageClass_];
+    }
+    const std::string& getStringFormatLastModified() const {
+        auto lastModified = lastModified_;
+        return TimeUtils::transLastModifiedTimeToString(lastModified);
     }
 
 private:

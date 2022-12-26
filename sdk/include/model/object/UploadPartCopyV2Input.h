@@ -112,6 +112,36 @@ public:
     void setCopySourceSsecKeyMd5(const std::string& copysourcesseckeymd5) {
         copySourceSSECKeyMd5_ = copysourcesseckeymd5;
     }
+    const std::string& getSsecAlgorithm() const {
+        return ssecAlgorithm_;
+    }
+    void setSsecAlgorithm(const std::string& ssecAlgorithm) {
+        ssecAlgorithm_ = ssecAlgorithm;
+    }
+    const std::string& getSsecKeyMd5() const {
+        return ssecKeyMD5_;
+    }
+    void setSsecKeyMd5(const std::string& ssecKeyMd5) {
+        ssecKeyMD5_ = ssecKeyMd5;
+    }
+    const std::string& getSsecKey() const {
+        return ssecKey_;
+    }
+    void setSsecKey(const std::string& ssecKey) {
+        ssecKey_ = ssecKey;
+    }
+    const std::string& getServerSideEncryption() const {
+        return serverSideEncryption_;
+    }
+    void setServerSideEncryption(const std::string& serverSideEncryption) {
+        serverSideEncryption_ = serverSideEncryption;
+    }
+    const std::string& getCopySourceRange() const {
+        return copySourceRange_;
+    }
+    void setCopySourceRange(const std::string& copySourceRange) {
+        copySourceRange_ = copySourceRange;
+    }
 
 private:
     std::string bucket_;
@@ -124,6 +154,7 @@ private:
     std::string srcVersionID_;
     int64_t copySourceRangeStart_ = 0;
     int64_t copySourceRangeEnd_ = 0;
+    std::string copySourceRange_;
 
     std::string copySourceIfMatch_;
     std::time_t copySourceIfModifiedSince_ = 0;
@@ -133,5 +164,11 @@ private:
     std::string copySourceSSECAlgorithm_;  // 可扩展，不定义为枚举，当前只支持 AES256，TOS SDK 会做强校验
     std::string copySourceSSECKey_;
     std::string copySourceSSECKeyMd5_;
+
+    std::string
+            ssecAlgorithm_;  // 客户自定义密钥的加密方式，可扩展，不定义为枚举，当前只支持 AES256，TOS SDK 会做强校验
+    std::string ssecKeyMD5_;
+    std::string ssecKey_;
+    std::string serverSideEncryption_;  // TOS 管理密钥的加密方式，可扩展，当前只支持 AES256
 };
 }  // namespace VolcengineTos

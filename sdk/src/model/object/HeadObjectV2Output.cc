@@ -14,7 +14,7 @@ static std::map<std::string, std::string> userMeta(const std::map<std::string, s
     return meta;
 }
 void VolcengineTos::HeadObjectV2Output::fromResponse(TosResponse& res) {
-    eTags_ = res.findHeader(http::HEADER_ETAG);
+    eTag_ = res.findHeader(http::HEADER_ETAG);
     lastModified_ = TimeUtils::transGMTFormatStringToTime(res.findHeader(http::HEADER_LAST_MODIFIED));
     deleteMarker_ = res.findHeader(HEADER_DELETE_MARKER) == "true";
     ssecAlgorithm_ = res.findHeader(HEADER_SSE_CUSTOMER_ALGORITHM);
@@ -23,6 +23,7 @@ void VolcengineTos::HeadObjectV2Output::fromResponse(TosResponse& res) {
     websiteRedirectLocation_ = res.findHeader(HEADER_WEBSITE_REDIRECT_LOCATION);
     objectType_ = res.findHeader(HEADER_OBJECT_TYPE);
     storageClass_ = StringtoStorageClassType[res.findHeader(HEADER_STORAGE_CLASS)];
+
     if (!res.findHeader(HEADER_CRC64).empty()) {
         hashCrc64ecma_ = stoull(res.findHeader(HEADER_CRC64));
     }

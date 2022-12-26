@@ -63,6 +63,30 @@ TEST_F(UploadFileTest, UploadFileWithoutCheckpointTest) {
     bool check_data = (data == temp);
     EXPECT_EQ(check_data, true);
 }
+TEST_F(UploadFileTest, UploadEmptyFileWithoutCheckpointTest) {
+    std::string filePath = workPath + "test/testdata/" + "uploadFile2";
+
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    UploadFileV2Input input;
+    // 对象名和桶名
+    CreateMultipartUploadInput createMultiPartInput(bucketName, objectName);
+    input.setCreateMultipartUploadInput(createMultiPartInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(false);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 待上传文件的路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    auto output = cliV2->uploadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+
+    GetObjectV2Input input_obj_get(bucketName, objectName);
+    auto out_obj_get = cliV2->getObject(input_obj_get);
+    EXPECT_EQ(out_obj_get.isSuccess(), true);
+    EXPECT_EQ(out_obj_get.result().getContentLength(), 0);
+}
 //  带上进度条、限流、事件、cancel等
 static void ProgressCallback(std::shared_ptr<DataTransferStatus> datatransferstatus) {
     int64_t consumedBytes = datatransferstatus->consumedBytes_;
