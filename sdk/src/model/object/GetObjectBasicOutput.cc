@@ -17,7 +17,7 @@ void VolcengineTos::GetObjectBasicOutput::fromResponse(TosResponse& res) {
     requestInfo_ = res.GetRequestInfo();
 
     contentRange_ = res.findHeader(http::HEADER_CONTENT_RANGE);
-    eTags_ = res.findHeader(http::HEADER_ETAG);
+    eTag_ = res.findHeader(http::HEADER_ETAG);
     // 注意由于是头部信息的 modified，所以是 GMT 格式的
     lastModified_ = TimeUtils::transGMTFormatStringToTime(res.findHeader(http::HEADER_LAST_MODIFIED));
     deleteMarker_ = res.findHeader(HEADER_DELETE_MARKER) == "true";

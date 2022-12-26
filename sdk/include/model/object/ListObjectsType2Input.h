@@ -60,6 +60,12 @@ public:
     void setEncodingType(const std::string& encodingType) {
         encodingType_ = encodingType;
     }
+    bool isListOnlyOnce() const {
+        return listOnlyOnce_;
+    }
+    void setListOnlyOnce(bool listOnlyOnce) {
+        listOnlyOnce_ = listOnlyOnce;
+    }
 
 private:
     std::string bucket_;
@@ -69,6 +75,6 @@ private:
     std::string continuationToken_;
     int maxKeys_ = 0;
     std::string encodingType_;
-    //    bool listOnlyOnce_ = false;
+    bool listOnlyOnce_ = false;
 };
 }  // namespace VolcengineTos

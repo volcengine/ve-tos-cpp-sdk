@@ -62,6 +62,12 @@ public:
     void setGrants(const std::vector<GrantV2>& grants) {
         grants_ = grants;
     }
+    const std::string& getGrantWrite() const {
+        return grantWrite_;
+    }
+    void setGrantWrite(const std::string& grantWrite) {
+        grantWrite_ = grantWrite;
+    }
     std::string toJsonString() const {
         nlohmann::json j;
         if (!owner_.getId().empty())
@@ -98,6 +104,7 @@ private:
     std::string grantFullControl_;
     std::string grantRead_;
     std::string grantReadAcp_;
+    std::string grantWrite_;
     std::string grantWriteAcp_;
     Owner owner_;
     std::vector<GrantV2> grants_;

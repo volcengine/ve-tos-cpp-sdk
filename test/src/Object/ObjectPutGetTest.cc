@@ -3,7 +3,7 @@
 #include "TosClientV2.h"
 #include "../../../sdk/src/auth/SignV4.h"
 #include <gtest/gtest.h>
-
+#include <dirent.h>
 namespace VolcengineTos {
 class ObjectPutGetTest : public ::testing::Test {
 protected:
@@ -221,6 +221,7 @@ TEST_F(ObjectPutGetTest, GetObjectWithNoExistingNameTest) {
     auto res_obj_get = cliV2->getObject(input_obj_get);
     EXPECT_EQ(res_obj_get.isSuccess(), false);
     EXPECT_EQ(res_obj_get.error().getStatusCode() == 404, true);
+    EXPECT_EQ(res_obj_get.error().getCode() == "NoSuchKey", true);
     EXPECT_EQ(res_obj_get.error().getMessage() == "The specified key does not exist.", true);
 
     std::string bkt_name_ = TestUtils::GetBucketName(TestConfig::TestPrefix);
@@ -270,7 +271,51 @@ TEST_F(ObjectPutGetTest, GetObjectWithRangeTest) {
     }
     std::string tmp_string(streamBuffer);
     bool length_compare = (tmp_string.size() == length_range);
-    bool content_length_compare = data.compare(begin, length_range - 1, tmp_string);
+    bool content_length_compare = (data.compare(begin, length_range, tmp_string) == 0);
+    bool content_compare = (data.substr(begin, length_range) == tmp_string);
+    EXPECT_EQ(content_length_compare & length_compare, true);
+    EXPECT_EQ(content_compare, true);
+}
+
+TEST_F(ObjectPutGetTest, GetObjectWithRange2Test) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+
+    std::string data =
+            "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*"
+            "()_+<>?,./   :'";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put.setContent(ss);
+    input_obj_put_basic.setBucket(bkt_name);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    GetObjectV2Input input_obj_get;
+    input_obj_get.setBucket(bkt_name);
+    input_obj_get.setKey(obj_key);
+    int64_t begin = 10;
+    int64_t end = 119;
+    int length_range = end - begin + 1;
+
+    input_obj_get.setRange("bytes=10-119");
+    auto res_obj_get = cliV2->getObject(input_obj_get);
+    auto basic_output = res_obj_get.result().getGetObjectBasicOutput();
+    auto content_output = res_obj_get.result().getContent();
+    std::string ss_;
+
+    auto stream = content_output.get();
+    char streamBuffer[256];
+    memset(streamBuffer, 0, 256);
+    while (stream->good()) {
+        stream->read(streamBuffer, 256);
+        auto bytesRead = stream->gcount();
+    }
+    std::string tmp_string(streamBuffer);
+    bool length_compare = (tmp_string.size() == length_range);
+    bool content_length_compare = (data.compare(begin, length_range, tmp_string) == 0);
     bool content_compare = (data.substr(begin, length_range) == tmp_string);
     EXPECT_EQ(content_length_compare & length_compare, true);
     EXPECT_EQ(content_compare, true);
@@ -288,6 +333,20 @@ TEST_F(ObjectPutGetTest, PutGetObjectFromFileTest) {
     EXPECT_EQ(output_obj_put.isSuccess(), true);
     GetObjectToFileInput input_obj_get(bkt_name, obj_key, filePath2);
     auto out_obj_get = cliV2->getObjectToFile(input_obj_get);
+    EXPECT_EQ(out_obj_get.isSuccess(), true);
+}
+
+TEST_F(ObjectPutGetTest, PutGetObjectFromEmptyFileTest) {
+    auto workPath = FileUtils::getWorkPath();
+    std::cout << workPath << std::endl;
+    std::string filePath1 = workPath + "test/testdata/" + "uploadFile2";
+
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    PutObjectFromFileInput input_obj_put(bkt_name, obj_key, filePath1);
+    auto output_obj_put = cliV2->putObjectFromFile(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+    GetObjectV2Input input_obj_get(bkt_name, obj_key);
+    auto out_obj_get = cliV2->getObject(input_obj_get);
     EXPECT_EQ(out_obj_get.isSuccess(), true);
 }
 

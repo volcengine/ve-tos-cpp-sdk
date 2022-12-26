@@ -1,9 +1,16 @@
 #pragma once
 
 #include <string>
+#include <utility>
 namespace VolcengineTos {
 class ObjectTobeDeleted {
 public:
+    explicit ObjectTobeDeleted(std::string key) : key_(std::move(key)) {
+    }
+    ObjectTobeDeleted(std::string key, std::string versionId) : key_(std::move(key)), versionID_(std::move(versionId)) {
+    }
+    ObjectTobeDeleted() = default;
+    virtual ~ObjectTobeDeleted() = default;
     const std::string& getKey() const {
         return key_;
     }

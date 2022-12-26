@@ -47,6 +47,22 @@ TEST_F(ObjectACLTest, PutGetObjectAclWithHeadTest) {
     auto output_ = cliV2->putObjectAcl(input_put_acl);
     EXPECT_EQ(output_.isSuccess(), true);
 }
+TEST_F(ObjectACLTest, PutGetObjectOwnerEntrustedAclWithHeadTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    std::string data = "1234567890abcd";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    PutObjectAclV2Input input_put_acl(bkt_name, obj_key);
+    input_put_acl.setAcl(ACLType::BucketOwnerEntrusted);
+    auto output_ = cliV2->putObjectAcl(input_put_acl);
+    EXPECT_EQ(output_.isSuccess(), true);
+    GetObjectAclV2Input input_get_acl_(bkt_name, obj_key);
+    auto output_obj_get_acl_ = cliV2->getObjectAcl(input_get_acl_);
+    EXPECT_EQ(output_obj_get_acl_.result().isBucketOwnerEntrusted(), true);
+}
 TEST_F(ObjectACLTest, PutGetObjectAclWithBodyTest) {
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     std::string data = "1234567890abcd";
@@ -121,7 +137,45 @@ TEST_F(ObjectACLTest, PutGetObjectAclWithBody2Test) {
     bool check_Grantee_type_ =
             (output_obj_get_acl_.result().getGrant()[0].getGrantee().getType() == GranteeType::Group);
     bool check_Permission_ = (output_obj_get_acl_.result().getGrant()[0].getPermission() == PermissionType::WriteAcp);
-    EXPECT_EQ(check_Grantee_type_ & check_Permission_, true);
+    EXPECT_EQ(check_Grantee_type_ & check_Permission_ & !output_obj_get_acl_.result().isBucketOwnerEntrusted(), true);
+}
+
+TEST_F(ObjectACLTest, PutGetObjectAclWithBody3Test) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    std::string data = "1234567890abcd";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+    GetObjectAclV2Input input_get_acl(bkt_name, obj_key);
+    auto output_obj_get_acl = cliV2->getObjectAcl(input_get_acl);
+    bool check_id = (output_obj_get_acl.result().getOwner().getId() ==
+                     output_obj_get_acl.result().getGrant()[0].getGrantee().getId());
+    bool check_Grantee_type =
+            (output_obj_get_acl.result().getGrant()[0].getGrantee().getType() == GranteeType::CanonicalUser);
+    bool check_Permission = (output_obj_get_acl.result().getGrant()[0].getPermission() == PermissionType::FullControl);
+    EXPECT_EQ(check_id & check_Grantee_type & check_Permission, true);
+
+    PutObjectAclV2Input input_put_acl(bkt_name, obj_key);
+    input_put_acl.setBucketOwnerEntrusted(true);
+    Owner owner;
+    owner.setId("test-cid");
+    GranteeV2 granteev2;
+    granteev2.setType(GranteeType::Group);
+    granteev2.setCanned(CannedType::AllUsers);
+    GrantV2 grantv2;
+    grantv2.setGrantee(granteev2);
+    grantv2.setPermission(PermissionType::WriteAcp);
+    input_put_acl.setOwner(owner);
+    input_put_acl.setGrants({grantv2});
+    auto output_ = cliV2->putObjectAcl(input_put_acl);
+    EXPECT_EQ(output_.isSuccess(), true);
+    GetObjectAclV2Input input_get_acl_(bkt_name, obj_key);
+    auto output_obj_get_acl_ = cliV2->getObjectAcl(input_get_acl_);
+    bool check_Grantee_type_ =
+            (output_obj_get_acl_.result().getGrant()[0].getGrantee().getType() == GranteeType::Group);
+    bool check_Permission_ = (output_obj_get_acl_.result().getGrant()[0].getPermission() == PermissionType::WriteAcp);
+    EXPECT_EQ(check_Grantee_type_ & check_Permission_ & output_obj_get_acl_.result().isBucketOwnerEntrusted(), true);
 }
 
 TEST_F(ObjectACLTest, PutObjectAclWithNonexistentNameTest) {

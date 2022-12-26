@@ -38,10 +38,10 @@ public:
         partNumber_ = partnumber;
     }
     const std::string& getContentMd5() const {
-        return contentMD5;
+        return contentMD5_;
     }
     void setContentMd5(const std::string& contentmd5) {
-        contentMD5 = contentmd5;
+        contentMD5_ = contentmd5;
     }
     const std::string& getSsecAlgorithm() const {
         return ssecAlgorithm_;
@@ -86,7 +86,7 @@ private:
     std::string uploadID_;
     int partNumber_ = 0;
 
-    std::string contentMD5;
+    std::string contentMD5_;
 
     std::string
             ssecAlgorithm_;  // 客户自定义密钥的加密方式，可扩展，不定义为枚举，当前只支持 AES256，TOS SDK 会做强校验

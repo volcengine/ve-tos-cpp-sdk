@@ -44,6 +44,7 @@ public:
     static std::string signingKey(const SignKeyInfo& info, const std::string& buf);
 
     static std::string uriEncode(const std::string& in, bool encodeSlash);
+    static std::string encodeQuery(std::vector<std::pair<std::string, std::string>> query);
 
 private:
     std::vector<std::pair<std::string, std::string>> signedHeader(const std::map<std::string, std::string>& header,
@@ -63,7 +64,6 @@ private:
                        const Credential& cred);
 
     static std::string encodePath(const std::string& path);
-    static std::string encodeQuery(std::vector<std::pair<std::string, std::string>> query);
 
     static std::time_t utcTimeNow() {
         return time(nullptr);

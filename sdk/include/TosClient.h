@@ -52,7 +52,7 @@
 #include "ClientConfig.h"
 
 namespace VolcengineTos {
-static const char* TOS_SDK_VERSION = "v2.4.2";
+static const char* TOS_SDK_VERSION = "v2.5.0";
 #ifdef WIN32
 static const char* PLATFORM_NAME = "windows";
 #elif __linux__
@@ -102,7 +102,7 @@ public:
     [[gnu::deprecated]] Outcome<TosError, CreateBucketOutput> createBucket(const CreateBucketInput& input);
     [[gnu::deprecated]] Outcome<TosError, HeadBucketOutput> headBucket(const std::string& bucket);
     [[gnu::deprecated]] Outcome<TosError, DeleteBucketOutput> deleteBucket(const std::string& bucket);
-    [[gnu::deprecated]] Outcome<TosError, ListBucketsOutput> listBuckets(const ListBucketsInput& input);
+    Outcome<TosError, ListBucketsOutput> listBuckets(const ListBucketsInput& input);
     // 设置桶策略
     [[gnu::deprecated]] Outcome<TosError, PutBucketPolicyOutput> putBucketPolicy(const std::string& bucket,
                                                                                  const std::string& policy);

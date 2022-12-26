@@ -3,7 +3,6 @@
 #include <string>
 #include <Type.h>
 #include <vector>
-#include "MirrorBackRule.h"
 
 namespace VolcengineTos {
 class GetBucketLifecycleInput {

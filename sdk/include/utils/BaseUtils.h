@@ -17,6 +17,7 @@ const char PATH_DELIMITER = '/';
 const wchar_t WPATH_DELIMITER = L'/';
 #endif
 #include <sys/stat.h>
+#include <set>
 namespace VolcengineTos {
 
 static const char base64_url_alphabet[] = {
@@ -85,6 +86,9 @@ public:
     static bool CreateDirectory(const std::string& folder, bool endWithFileName);
 };
 
+static std::set<std::string> s3Endpoint{"tos-s3-cn-beijing.volces.com",    "tos-s3-cn-guangzhou.volces.com",
+                                        "tos-s3-cn-shanghai.volces.com",   "tos-s3-cn-beijing.ivolces.com",
+                                        "tos-s3-cn-guangzhou.ivolces.com", "tos-s3-cn-shanghai.ivolces.com"};
 class NetUtils {
 public:
     static bool isNotIP(std::string ip) {
@@ -96,6 +100,12 @@ public:
         // 再检查是不是 ipv4
         if (checkV4(ip))
             return false;
+        return true;
+    }
+    static bool isS3Endpoint(const std::string& endPoint) {
+        if (s3Endpoint.count(endPoint) == 0) {
+            return false;
+        }
         return true;
     }
 

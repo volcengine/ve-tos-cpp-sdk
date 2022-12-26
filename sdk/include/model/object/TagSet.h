@@ -19,6 +19,9 @@ public:
     void setTags(const std::vector<Tag>& tags) {
         tags_ = tags;
     }
+    void addTag(const Tag& tag) {
+        tags_.push_back(tag);
+    }
 
 private:
     std::vector<Tag> tags_;

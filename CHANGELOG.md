@@ -1,5 +1,17 @@
 ## Release Note
 
+### 2022.11.16 Version 2.5.0
+
+-add: Add bucket replication interface
+-add: Add bucket multi version interface
+-add: Add bucket website interface
+-add: Add bucket notification interface
+-add: Add bucket custom domain interface
+-add: Add bucket realtime log interface
+-add: Add resume copy interface
+-add: Add directory share interface
+-fix: Fix uploadFile not support empty file
+
 ### 2022.11.16 Version 2.4.2
 
 -fix: Add ClientV1 compatibility

@@ -66,6 +66,9 @@ public:
         return transferedBytes_;
     }
 
+    void setResponseOutput(const std::shared_ptr<std::iostream>& responseOutput) {
+        responseOutput_ = responseOutput;
+    }
     std::shared_ptr<std::iostream> responseOutput() {
         return responseOutput_;
     }

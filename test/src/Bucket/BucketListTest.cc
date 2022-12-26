@@ -39,7 +39,7 @@ TEST_F(BucketListTest, ListBucketTest) {
     auto output_list_all_part1 = cliV2->listBuckets(input_list);
     EXPECT_EQ(output_list_all_part1.isSuccess(), true);
     auto buckets_part1 = output_list_all_part1.result().getBuckets();
-    for (auto bkt_ : buckets_part1) {
+    for (const auto& bkt_ : buckets_part1) {
         std::string bkt_name = bkt_.getName();
         if (bkt_name.rfind(testPrefix, 0) == 0 && bkt_.getLocation() == TestConfig::Region) {
             std::cout << "Delete bucket name:" << bkt_name << std::endl;

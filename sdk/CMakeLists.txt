@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.4.2
+        VERSION 2.5.0
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -197,6 +197,42 @@ set(SDK_HEADER
         include/model/object/PutFetchTaskOutput.h
         include/model/acl/PreSignedPostSignatureInput.h
         include/model/acl/PreSignedPostSignatureOutput.h
+        include/model/bucket/PutBucketReplicationInput.h
+        include/model/bucket/PutBucketReplicationOutput.h
+        include/model/bucket/GetBucketReplicationInput.h
+        include/model/bucket/GetBucketReplicationOutput.h
+        include/model/bucket/DeleteBucketReplicationInput.h
+        include/model/bucket/DeleteBucketReplicationOutput.h
+        include/model/bucket/PutBucketVersioningInput.h
+        include/model/bucket/PutBucketVersioningOutput.h
+        include/model/bucket/GetBucketVersioningInput.h
+        include/model/bucket/GetBucketVersioningOutput.h
+        include/model/bucket/PutBucketWebsiteInput.h
+        include/model/bucket/PutBucketWebsiteOutput.h
+        include/model/bucket/GetBucketWebsiteInput.h
+        include/model/bucket/GetBucketWebsiteOutput.h
+        include/model/bucket/DeleteBucketWebsiteInput.h
+        include/model/bucket/DeleteBucketWebsiteOutput.h
+        include/model/bucket/PutBucketNotificationInput.h
+        include/model/bucket/PutBucketNotificationOutput.h
+        include/model/bucket/GetBucketNotificationInput.h
+        include/model/bucket/GetBucketNotificationOutput.h
+        include/model/bucket/PutBucketCustomDomainInput.h
+        include/model/bucket/PutBucketCustomDomainOutput.h
+        include/model/bucket/ListBucketCustomDomainInput.h
+        include/model/bucket/ListBucketCustomDomainOutput.h
+        include/model/bucket/DeleteBucketCustomDomainInput.h
+        include/model/bucket/DeleteBucketCustomDomainOutput.h
+        include/model/bucket/PutBucketRealTimeLogInput.h
+        include/model/bucket/PutBucketRealTimeLogOutput.h
+        include/model/bucket/GetBucketRealTimeLogInput.h
+        include/model/bucket/GetBucketRealTimeLogOutput.h
+        include/model/bucket/DeleteBucketRealTimeLogInput.h
+        include/model/bucket/DeleteBucketRealTimeLogOutput.h
+        include/model/acl/PreSignedPolicyURLInput.h
+        include/model/acl/PreSignedPolicyURLOutput.h
+        include/model/object/ResumableCopyObjectInput.h
+        include/model/object/ResumableCopyObjectOutput.h
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc

@@ -140,6 +140,43 @@
 #include "model/acl/PreSignedPostSignatureInput.h"
 #include "model/acl/PreSignedPostSignatureOutput.h"
 #include "SchemeHostParameter.h"
+#include "model/object/ResumableCopyObjectInput.h"
+#include "model/object/ResumableCopyObjectOutput.h"
+#include "model/object/ResumableCopyCheckpoint.h"
+#include "model/acl/PreSignedPolicyURLOutput.h"
+#include "model/acl/PreSignedPolicyURLInput.h"
+#include "model/bucket/PutBucketReplicationInput.h"
+#include "model/bucket/PutBucketReplicationOutput.h"
+#include "model/bucket/GetBucketReplicationInput.h"
+#include "model/bucket/GetBucketReplicationOutput.h"
+#include "model/bucket/DeleteBucketReplicationInput.h"
+#include "model/bucket/DeleteBucketReplicationOutput.h"
+#include "model/bucket/PutBucketVersioningInput.h"
+#include "model/bucket/PutBucketVersioningOutput.h"
+#include "model/bucket/GetBucketVersioningInput.h"
+#include "model/bucket/GetBucketVersioningOutput.h"
+#include "model/bucket/PutBucketWebsiteInput.h"
+#include "model/bucket/PutBucketWebsiteOutput.h"
+#include "model/bucket/GetBucketWebsiteInput.h"
+#include "model/bucket/GetBucketWebsiteOutput.h"
+#include "model/bucket/DeleteBucketWebsiteInput.h"
+#include "model/bucket/DeleteBucketWebsiteOutput.h"
+#include "model/bucket/PutBucketCustomDomainInput.h"
+#include "model/bucket/PutBucketCustomDomainOutput.h"
+#include "model/bucket/ListBucketCustomDomainInput.h"
+#include "model/bucket/ListBucketCustomDomainOutput.h"
+#include "model/bucket/DeleteBucketCustomDomainInput.h"
+#include "model/bucket/DeleteBucketCustomDomainOutput.h"
+#include "model/bucket/PutBucketNotificationInput.h"
+#include "model/bucket/PutBucketNotificationOutput.h"
+#include "model/bucket/GetBucketNotificationInput.h"
+#include "model/bucket/GetBucketNotificationOutput.h"
+#include "model/bucket/PutBucketRealTimeLogInput.h"
+#include "model/bucket/PutBucketRealTimeLogOutput.h"
+#include "model/bucket/GetBucketRealTimeLogInput.h"
+#include "model/bucket/GetBucketRealTimeLogOutput.h"
+#include "model/bucket/DeleteBucketRealTimeLogInput.h"
+#include "model/bucket/DeleteBucketRealTimeLogOutput.h"
 namespace VolcengineTos {
 class TosClientImpl {
 public:
@@ -166,7 +203,8 @@ public:
     Outcome<TosError, GetObjectOutput> getObject(const std::string& bucket, const std::string& objectKey,
                                                  const RequestOptionBuilder& builder);
     Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input,
-                                                   std::shared_ptr<uint64_t> hashCrc64ecma);
+                                                   std::shared_ptr<uint64_t> hashCrc64ecma,
+                                                   std::shared_ptr<std::iostream> fileContent);
     Outcome<TosError, GetObjectToFileOutput> getObjectToFile(const GetObjectToFileInput& input);
     Outcome<TosError, HeadObjectOutput> headObject(const std::string& bucket, const std::string& objectKey);
     Outcome<TosError, HeadObjectOutput> headObject(const std::string& bucket, const std::string& objectKey,
@@ -298,6 +336,39 @@ public:
     Outcome<TosError, PutFetchTaskOutput> putFetchTask(const PutFetchTaskInput& input);
     Outcome<TosError, PreSignedPostSignatureOutput> preSignedPostSignature(const PreSignedPostSignatureInput& input);
 
+    // 2.5.0
+    Outcome<TosError, ResumableCopyObjectOutput> resumableCopyObject(const ResumableCopyObjectInput& input);
+    Outcome<TosError, PreSignedPolicyURLOutput> preSignedPolicyURL(const PreSignedPolicyURLInput& input);
+    Outcome<TosError, PutBucketReplicationOutput> putBucketReplication(const PutBucketReplicationInput& input);
+    Outcome<TosError, GetBucketReplicationOutput> getBucketReplication(const GetBucketReplicationInput& input);
+    Outcome<TosError, DeleteBucketReplicationOutput> deleteBucketReplication(const DeleteBucketReplicationInput& input);
+    Outcome<TosError, PutBucketVersioningOutput> putBucketVersioning(const PutBucketVersioningInput& input);
+    Outcome<TosError, GetBucketVersioningOutput> getBucketVersioning(const GetBucketVersioningInput& input);
+    Outcome<TosError, PutBucketWebsiteOutput> putBucketWebsite(const PutBucketWebsiteInput& input);
+    Outcome<TosError, GetBucketWebsiteOutput> getBucketWebsite(const GetBucketWebsiteInput& input);
+    Outcome<TosError, DeleteBucketWebsiteOutput> deleteBucketWebsite(const DeleteBucketWebsiteInput& input);
+    Outcome<TosError, PutBucketCustomDomainOutput> putBucketCustomDomain(const PutBucketCustomDomainInput& input);
+    Outcome<TosError, ListBucketCustomDomainOutput> listBucketCustomDomain(const ListBucketCustomDomainInput& input);
+    Outcome<TosError, DeleteBucketCustomDomainOutput> deleteBucketCustomDomain(
+            const DeleteBucketCustomDomainInput& input);
+    Outcome<TosError, PutBucketNotificationOutput> putBucketNotification(const PutBucketNotificationInput& input);
+    Outcome<TosError, GetBucketNotificationOutput> getBucketNotification(const GetBucketNotificationInput& input);
+    Outcome<TosError, PutBucketRealTimeLogOutput> putBucketRealTimeLog(const PutBucketRealTimeLogInput& input);
+    Outcome<TosError, GetBucketRealTimeLogOutput> getBucketRealTimeLog(const GetBucketRealTimeLogInput& input);
+    Outcome<TosError, DeleteBucketRealTimeLogOutput> deleteBucketRealTimeLog(const DeleteBucketRealTimeLogInput& input);
+
+    void setMaxRetryCount(int maxretrycount);
+    void setCredential(const std::string& accessKeyId, const std::string& secretKeyId);
+    void setCredential(const std::string& accessKeyId, const std::string& secretKeyId,
+                       const std::string& securityToken);
+    const std::string& getAK() const;
+    const std::string& getSK() const;
+    const std::string& getSecurityToken() const;
+    const std::string& getRegion() const;
+    const std::string& getEndpoint() const;
+    void setRegion(const std::string& region);
+    void setRegionEndpoint(const std::string& region, const std::string& endpoint);
+
 protected:
     /**
      * URL_MODE_DEFAULT url pattern is http(s)://{bucket}.domain/{object}
@@ -324,10 +395,11 @@ private:
     std::shared_ptr<Transport> transport_;
     Config config_;
     bool connectWithIP_ = false;
+    bool connectWithS3EndPoint_ = false;
+
     std::map<std::string, std::string> supportedRegion_ = {{"cn-beijing", "https://tos-cn-beijing.volces.com"},
                                                            {"cn-guangzhou", "https://tos-cn-guangzhou.volces.com"},
                                                            {"cn-shanghai", "https://tos-cn-shanghai.volces.com"}};
-
     void getObject(RequestBuilder& rb, Outcome<TosError, GetObjectOutput>& res);
     void headObject(RequestBuilder& rb, Outcome<TosError, HeadObjectOutput>& res);
     void deleteObject(RequestBuilder& rb, Outcome<TosError, DeleteObjectOutput>& res);
@@ -358,7 +430,7 @@ private:
                                                              const UploadFileV2Input& input,
                                                              const UploadFileInfoV2& info,
                                                              const std::string& checkpointFilePath,
-                                                             std::shared_ptr<UploadEvent> event);
+                                                             const std::shared_ptr<UploadEvent>& event);
     Outcome<TosError, UploadFileCheckpointV2> getCheckpoint(const UploadFileV2Input& input,
                                                             const UploadFileInfoV2& fileInfo,
                                                             const std::string& checkpointFilePath,
@@ -382,6 +454,20 @@ private:
     Outcome<TosError, DownloadFileOutput> downloadPartConcurrent(
             const DownloadFileInput& input, const HeadObjectV2Output& headOutput, DownloadFileCheckpoint checkpoint,
             const std::string& checkpointPath, const DownloadFileFileInfo& dfi, std::shared_ptr<DownloadEvent> event);
+
+    Outcome<TosError, ResumableCopyCheckpoint> getCheckpoint(const ResumableCopyObjectInput& input,
+                                                             const HeadObjectV2Input& headInput,
+                                                             const HeadObjectV2Output& headOutput,
+                                                             const std::shared_ptr<CopyEvent>& event,
+                                                             const std::string checkpointFilePath);
+    Outcome<TosError, ResumableCopyCheckpoint> initCheckpoint(const ResumableCopyObjectInput& input,
+                                                              const HeadObjectV2Input& headInput,
+                                                              const HeadObjectV2Output& headOutput,
+                                                              const std::shared_ptr<CopyEvent>& event);
+    Outcome<TosError, ResumableCopyObjectOutput> resumableCopyConcurrent(const ResumableCopyObjectInput& input,
+                                                                         ResumableCopyCheckpoint checkpoint,
+                                                                         const std::string& checkpointFilePath,
+                                                                         std::shared_ptr<CopyEvent> event);
     void uploadPart(RequestBuilder& rb, const UploadPartInput& input, Outcome<TosError, UploadPartOutput>& res);
 
     void listUploadedParts(RequestBuilder& rb, const std::string& uploadId,
@@ -393,6 +479,7 @@ private:
     void init(const std::string& endpoint, const std::string& region);
     void initWithConfig(const std::string& endpoint, const std::string& region, const ClientConfig& config);
     void init(const std::string& endpoint, const std::string& region, const ClientConfig& config);
+    void initRegionEndpoint(const std::string& endpoint, const std::string& region);
     SchemeHostParameter initSchemeAndHost(const std::string& endpoint);
     int64_t calContentLength(const std::shared_ptr<std::iostream>& content);
     void SetCrc64ParmToReq(const std::shared_ptr<TosRequest>& req);

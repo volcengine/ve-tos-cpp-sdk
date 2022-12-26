@@ -44,7 +44,7 @@ TEST_F(BucketStorageClassTest, BucketStorageClassWithALLParametersTest) {
     HeadBucketV2Input headBucketV2Input(bucketName);
     auto headOutput = cliV2->headBucket(headBucketV2Input);
     EXPECT_EQ(headOutput.isSuccess(), true);
-    EXPECT_EQ(headOutput.result().getStorageClass() != StorageClassType::IA, true);
+    EXPECT_EQ(headOutput.result().getStorageClass() == StorageClassType::STANDARD, true);
 
     PutBucketStorageClassInput putBucketStorageClassInput(bucketName, StorageClassType::IA);
     auto putOutput = cliV2->putBucketStorageClass(putBucketStorageClassInput);
@@ -53,6 +53,14 @@ TEST_F(BucketStorageClassTest, BucketStorageClassWithALLParametersTest) {
     auto headOutput2 = cliV2->headBucket(headBucketV2Input);
     EXPECT_EQ(headOutput2.isSuccess(), true);
     EXPECT_EQ(headOutput2.result().getStorageClass() == StorageClassType::IA, true);
+
+    putBucketStorageClassInput.setStorageClass(StorageClassType::ARCHIVE_FR);
+    auto putOutput2 = cliV2->putBucketStorageClass(putBucketStorageClassInput);
+    EXPECT_EQ(putOutput2.isSuccess(), true);
+    TimeUtils::sleepSecondTimes(92);
+    auto headOutput3 = cliV2->headBucket(headBucketV2Input);
+    EXPECT_EQ(headOutput3.isSuccess(), true);
+    EXPECT_EQ(headOutput3.result().getStorageClass() == StorageClassType::ARCHIVE_FR, true);
 }
 
 TEST_F(BucketStorageClassTest, BucketStorageClassWithNonExistentBucketNameTest) {

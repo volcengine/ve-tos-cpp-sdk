@@ -17,6 +17,9 @@
 #include "model/object/PostPolicyInner.h"
 #include "model/object/CopyObjectInner.h"
 #include "model/object/UploadPartCopyInner.h"
+#include "model/object/ResumableCopyPartInfo.h"
+#include "model/object/ResumableCopyCheckpoint.h"
+#include "model/acl/PolicyURLInner.h"
 #include <cstring>
 #include <fstream>
 #include <sys/stat.h>
@@ -24,6 +27,7 @@
 #include <thread>
 #include <mutex>
 #include <queue>
+#include <openssl/sha.h>
 
 using namespace VolcengineTos;
 
@@ -63,6 +67,9 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region)
     urlMode_ = schemeHostParameter.urlMode_;
     if (!NetUtils::isNotIP(host_)) {
         connectWithIP_ = true;
+    }
+    if (NetUtils::isS3Endpoint(host_)) {
+        connectWithS3EndPoint_ = true;
     }
 }
 TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const StaticCredentials& cred,
@@ -120,6 +127,9 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     if (!NetUtils::isNotIP(host_)) {
         connectWithIP_ = true;
     }
+    if (NetUtils::isS3Endpoint(host_)) {
+        connectWithS3EndPoint_ = true;
+    }
 }
 
 SchemeHostParameter TosClientImpl::initSchemeAndHost(const std::string& endpoint) {
@@ -161,19 +171,7 @@ std::string isValidBucketName(const std::string& name) {
 }
 
 std::string isValidKey(const std::string& key) {
-    if (key.empty()) {
-        return "invalid object name, the length must be [1, 696]";
-    }
-    if (!StringUtils::isValidUTF8(key)) {
-        return "invalid object name, the character set is illegal";
-    }
-    if (key[0] == '\\' || key.find("//") != key.npos) {
-        return "invalid object name, the object name can not start with '\\'";
-    }
-    if (key[0] == '.' && key.length() == 1) {
-        return "invalid object name, the object name can not use '.'";
-    }
-    if (key.length() > 696) {
+    if (key.length() < 1) {
         return "invalid object name, the length must be [1, 696]";
     }
     return "";
@@ -385,6 +383,7 @@ Outcome<TosError, HeadBucketV2Output> TosClientImpl::headBucket(const HeadBucket
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     output.setRegion(tosRes.result()->findHeader(HEADER_BUCKET_REGION));
     output.setStorageClass(StringtoStorageClassType[tosRes.result()->findHeader(HEADER_STORAGE_CLASS)]);
+    output.setAzRedundancy(StringtoAzRedundancyType[tosRes.result()->findHeader(HEADER_AZ_REDUNDANCY)]);
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -652,7 +651,8 @@ static void getObjectSetOptionHeader(RequestBuilder& rb, const GetObjectV2Input&
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
 }
 Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2Input& input,
-                                                              std::shared_ptr<uint64_t> hashCrc64ecma) {
+                                                              std::shared_ptr<uint64_t> hashCrc64ecma,
+                                                              std::shared_ptr<std::iostream> fileContent) {
     Outcome<TosError, GetObjectV2Output> res;
     std::string check = isValidNames(input.getBucket(), {input.getKey()});
     if (!check.empty()) {
@@ -685,6 +685,9 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
     auto rb = newBuilder(input.getBucket(), input.getKey());
     getObjectSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodGet, nullptr);
+    if (fileContent != nullptr) {
+        req->setFileContent(fileContent);
+    }
     // 设置进度条回调
     auto handler = input.getDataTransferListener();
     SetProcessHandlerToReq(req, handler);
@@ -739,15 +742,6 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
         res.setSuccess(false);
         return res;
     }
-    const GetObjectV2Input& basic_input = input.getGetObjectInput();
-    auto res_ = this->getObject(basic_input, nullptr);
-    if (!res_.isSuccess()) {
-        res.setE(res_.error());
-        res.setSuccess(false);
-        return res;
-    }
-    GetObjectToFileOutput output;
-    output.setGetObjectBasicOutput(res_.result().getGetObjectBasicOutput());
     // write to file
     bool ret = FileUtils::CreateDirectory(input.getFilePath(), true);
     if (!ret) {
@@ -759,9 +753,9 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
         res.setSuccess(false);
         return res;
     }
-    auto content = std::make_shared<std::fstream>(
+    auto fileContent = std::make_shared<std::fstream>(
             input.getFilePath(), std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
-    if (!content->good()) {
+    if (!fileContent->good()) {
         TosError error;
         error.setIsClientError(true);
         error.setMessage("open file failed");
@@ -769,9 +763,20 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
         res.setSuccess(false);
         return res;
     }
-    auto resContent = res_.result().getContent();
-    *content << resContent->rdbuf();
-    content->close();
+
+    const GetObjectV2Input& basic_input = input.getGetObjectInput();
+    auto res_ = this->getObject(basic_input, nullptr, fileContent);
+    if (!res_.isSuccess()) {
+        res.setE(res_.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetObjectToFileOutput output;
+    output.setGetObjectBasicOutput(res_.result().getGetObjectBasicOutput());
+
+    //    auto resContent = res_.result().getContent();
+    //    *content << resContent->rdbuf();
+    fileContent->close();
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -995,8 +1000,6 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(De
 
     rb.withHeader(http::HEADER_CONTENT_MD5, dataMd5);
     rb.withQuery("delete", "");
-    //    std::cout << data << std::endl;
-    //    std::cout << dataMd5 << std::endl;
     auto req = rb.Build(http::MethodPost, std::make_shared<std::stringstream>(data));
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
@@ -1228,12 +1231,10 @@ Outcome<TosError, int> validateInput(const std::string& bucket, const std::strin
     return ret;
 }
 std::string getCheckpointPath(const std::string& bucket, const std::string& key, const std::string& checkPointFile,
-                              const std::string uploadFilePath) {
+                              const std::string& uploadFilePath) {
     std::stringstream ret;
-    std::string objKey(StringUtils::stringReplace(key, "/", "_"));
     std::string originPath;
-
-    originPath = bucket + "." + objKey;
+    originPath = bucket + "." + key;
 
     std::string base64md5Path = CryptoUtils::md5SumURLEncoding(originPath);
     if (checkPointFile.empty()) {
@@ -1392,6 +1393,14 @@ Outcome<TosError, std::vector<UploadFilePartInfoV2>> getPartInfoFromFileV2(int64
         }
         partInfoList.emplace_back(info);
     }
+
+    if (uploadFileSize == 0) {
+        UploadFilePartInfoV2 info;
+        info.setPartNum(1);
+        info.setOffset(0);
+        info.setPartSize(0);
+        partInfoList.emplace_back(info);
+    }
     ret.setR(partInfoList);
     ret.setSuccess(true);
     return ret;
@@ -1508,7 +1517,7 @@ void uploadEventCompleteMultipartUploadFailed(const std::shared_ptr<UploadEvent>
 }
 Outcome<TosError, UploadFileCheckpointV2> TosClientImpl::initCheckpoint(
         const std::string& bucket, const std::string& key, const UploadFileV2Input& input, const UploadFileInfoV2& info,
-        const std::string& checkpointFilePath, std::shared_ptr<UploadEvent> event) {
+        const std::string& checkpointFilePath, const std::shared_ptr<UploadEvent>& event) {
     Outcome<TosError, UploadFileCheckpointV2> ret;
     TosError error;
 
@@ -1807,6 +1816,11 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                                             part.getPartSize());
 
                 auto upiBasic = upi.getUploadPartBasicInput();
+                // 同步CreateMultipart 中的参数到 upi 中
+                upiBasic.setSsecKeyMd5(input.getCreateMultipartUploadInput().getSsecKeyMd5());
+                upiBasic.setSsecKey(input.getCreateMultipartUploadInput().getSsecKey());
+                upiBasic.setSsecAlgorithm(input.getCreateMultipartUploadInput().getSsecAlgorithm());
+                upiBasic.setServerSideEncryption(input.getCreateMultipartUploadInput().getServerSideEncryption());
                 // 设置限流
                 upiBasic.setRateLimiter(input.getRateLimiter());
                 // 设置回调
@@ -2179,7 +2193,7 @@ Outcome<TosError, DownloadFileCheckpoint> TosClientImpl::initCheckpoint(const Do
 }
 
 std::string getDownloadCheckpointPath(const std::string& bucket, const std::string& key, const std::string& versionId,
-                                      const std::string& checkPointFile, const std::string filePath) {
+                                      const std::string& checkPointFile, const std::string& filePath) {
     std::stringstream ret;
     std::string originPath;
     if (versionId.empty()) {
@@ -2410,6 +2424,16 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                 input_obj_get.setKey(input.getHeadObjectV2Input().getKey());
                 input_obj_get.setRangeStart(part.getRangeStart());
                 input_obj_get.setRangeEnd(part.getRangeEnd());
+                // 同步参数到 input_obj_get 中
+                input_obj_get.setVersionId(input.getHeadObjectV2Input().getVersionId());
+                input_obj_get.setIfMatch(input.getHeadObjectV2Input().getIfMatch());
+                input_obj_get.setIfModifiedSince(input.getHeadObjectV2Input().getIfModifiedSince());
+                input_obj_get.setIfNoneMatch(input.getHeadObjectV2Input().getIfNoneMatch());
+                input_obj_get.setIfUnmodifiedSince(input.getHeadObjectV2Input().getIfUnmodifiedSince());
+                input_obj_get.setSsecKeyMd5(input.getHeadObjectV2Input().getSsecKeyMd5());
+                input_obj_get.setSsecKey(input.getHeadObjectV2Input().getSsecKey());
+                input_obj_get.setSsecAlgorithm(input.getHeadObjectV2Input().getSsecAlgorithm());
+
                 // 设置限流
                 input_obj_get.setRateLimiter(input.getRateLimiter());
                 // 设置回调
@@ -2417,7 +2441,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                     input_obj_get.setDataTransferListener({UploadDownloadFileProcessCallback, (void*)pProcessStat});
                 }
                 auto partHashCrc64ecma = std::make_shared<uint64_t>(0);
-                auto res = this->getObject(input_obj_get, partHashCrc64ecma);
+                auto res = this->getObject(input_obj_get, partHashCrc64ecma, nullptr);
 
                 // 下载后检查是否需要中断任务
                 if (cancel != nullptr) {
@@ -3023,6 +3047,7 @@ static std::string isValidCopySourceSSEC(const std::string& CopySourceSSECAlgori
     if (CopySourceSSECAlgorithm.empty() || CopySourceSSECKey.empty() || CopySourceSSECKeyMd5.empty()) {
         return "invalid encryption-decryption algorithm";
     }
+    return "";
 }
 
 static void setCopySourceSSECHeader(const std::string& CopySourceSSECAlgorithm, const std::string& CopySourceSSECKey,
@@ -3044,6 +3069,8 @@ static void copyObjectSetOptionHeader(RequestBuilder& rb, const CopyObjectV2Inpu
                   TimeUtils::transTimeToGmtTime(input.getCopySourceIfUnmodifiedSince()));
     setCopySourceSSECHeader(input.getCopySourceSsecAlgorithm(), input.getCopySourceSsecKey(),
                             input.getCopySourceSsecKeyMd5(), rb);
+    setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
+    rb.withHeader(HEADER_SSE, input.getServerSideEncryption());
     rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
     rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
     rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
@@ -3069,6 +3096,15 @@ Outcome<TosError, CopyObjectV2Output> TosClientImpl::copyObject(const CopyObject
     }
     check = isValidCopySourceSSEC(input.getCopySourceSsecAlgorithm(), input.getCopySourceSsecKey(),
                                   input.getCopySourceSsecKeyMd5());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    check = isValidSSEC(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3280,7 +3316,9 @@ static void uploadPartCopySetOptionHeader(RequestBuilder& rb, const UploadPartCo
     rb.withHeader(HEADER_COPY_SOURCE_IF_UNMODIFIED_SINCE,
                   TimeUtils::transTimeToGmtTime(input.getCopySourceIfUnmodifiedSince()));
 
-    if (input.getCopySourceRangeStart() != 0 || input.getCopySourceRangeEnd() != 0) {
+    if (!input.getCopySourceRange().empty()) {
+        rb.withHeader(HEADER_COPY_SOURCE_RANGE, input.getCopySourceRange());
+    } else if (input.getCopySourceRangeStart() != 0 || input.getCopySourceRangeEnd() != 0) {
         HttpRange range_;
         range_.setStart(input.getCopySourceRangeStart());
         range_.setEnd(input.getCopySourceRangeEnd());
@@ -3289,6 +3327,8 @@ static void uploadPartCopySetOptionHeader(RequestBuilder& rb, const UploadPartCo
 
     setCopySourceSSECHeader(input.getCopySourceSsecAlgorithm(), input.getCopySourceSsecKey(),
                             input.getCopySourceSsecKeyMd5(), rb);
+    setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
+    rb.withHeader(HEADER_SSE, input.getServerSideEncryption());
 }
 Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const UploadPartCopyV2Input& input) {
     Outcome<TosError, UploadPartCopyV2Output> res;
@@ -3305,6 +3345,15 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
     }
     check = isValidCopySourceSSEC(input.getCopySourceSsecAlgorithm(), input.getCopySourceSsecKey(),
                                   input.getCopySourceSsecKeyMd5());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    check = isValidSSEC(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3408,7 +3457,6 @@ Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::str
     std::string jsonRules(rules.toJsonString());
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
-        //        std::cout << ss->str() << std::endl;
     }
     auto rb = newBuilder(bucket, input.getKey());
     rb.withQuery("acl", "");
@@ -3426,6 +3474,19 @@ Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::str
     res.setR(output);
     return res;
 }
+
+void setAclGrant(const PutObjectAclV2Input& input, RequestBuilder& rb) {
+    if (input.getAcl() != ACLType::NotSet)
+        rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    if (!input.getGrantFullControl().empty())
+        rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+    if (!input.getGrantRead().empty())
+        rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+    if (!input.getGrantReadAcp().empty())
+        rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+    if (!input.getGrantWriteAcp().empty())
+        rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+}
 Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObjectAclV2Input& input) {
     Outcome<TosError, PutObjectAclV2Output> res;
     std::string check = isValidNames(input.getBucket(), {input.getKey()});
@@ -3441,11 +3502,10 @@ Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObj
     std::string jsonRules(input.toJsonString());
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
-        //        std::cout << ss->str() << std::endl;
     }
     auto rb = newBuilder(input.getBucket(), input.getKey());
     rb.withQuery("acl", "");
-    rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    setAclGrant(input, rb);
     rb.withHeader(HEADER_VERSIONID, input.getVersionId());
     auto req = rb.Build(http::MethodPut, ss);
     // 设置funcName
@@ -4245,19 +4305,39 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
         res.setSuccess(false);
         return res;
     }
+    if (connectWithS3EndPoint_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint");
+        res.setE(se);
+        return res;
+    }
+
     auto expires_ = input.getExpires();
     if (expires_ == 0) {
         expires_ = defaultSignExpires;
     }
     auto headers = input.getHeader();
     auto querys = input.getQuery();
+
+    auto schemeHostParameter = initSchemeAndHost(input.getAlternativeEndpoint());
+    std::string alternativeEndpoint_ = schemeHostParameter.host_;
+    std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
+    if (NetUtils::isS3Endpoint(host)) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint");
+        res.setE(se);
+        return res;
+    }
     auto rb = newBuilder(input.getBucket(), input.getKey(), input.getAlternativeEndpoint(), headers, querys);
-    auto req = rb.build(HttpMethodTypetoString[input.getHttpMethod()]);
+    auto req = rb.buildSignedURL(HttpMethodTypetoString[input.getHttpMethod()]);
     std::chrono::duration<int> ttl(expires_);
     auto query = signer_->signQuery(req, ttl);
     for (auto& iter : query) {
-        req->setSingleQuery(iter.first, iter.second);
+        req->setSingleQuery(SignV4::uriEncode(iter.first, true), SignV4::uriEncode(iter.second, true));
     }
+
     auto url = req->toUrl().toString();
     PreSignedURLOutput output;
     output.setSignUrl(url);
@@ -4409,58 +4489,57 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
     // 或者一次就列举完成了，到不了 maxkey 的情况
     // 或者携带 delimiter 列举 CommonPrefix 的情况
     // 检查默认值
-    //    if (input.isListOnlyOnce() || !output.isTruncated()) {
-    //        res.setSuccess(true);
-    //        res.setR(output);
-    //        return res;
-    //    } else {
-    //        // 第一次请求获取的结果
-    //        bool isTruncated = output.isTruncated();
-    //        int number =
-    //                static_cast<int>(output.getContents().size()) +
-    //                static_cast<int>(output.getCommonPrefixes().size());
-    //        int newMaxKey = input.getMaxKeys() - number;
-    //        auto content = output.getContents();
-    //        auto commonPrefixes = output.getCommonPrefixes();
-    //        rb.withQueryCheckEmpty("max-keys", std::to_string(newMaxKey));
-    //        rb.withQueryCheckEmpty("continuation-token", output.getNextContinuationToken());
-    //        while (isTruncated && newMaxKey > 0) {
-    //            auto req = rb.Build(http::MethodGet, nullptr);
-    //            auto tosRes = roundTrip(req, 200);
-    //            if (!tosRes.isSuccess()) {
-    //                res.setE(tosRes.error());
-    //                res.setSuccess(false);
-    //                return res;
-    //            }
-    //            ListObjectsType2Output outputTemp;
-    //            std::stringstream ss;
-    //            ss << tosRes.result()->getContent()->rdbuf();
-    //            outputTemp.fromJsonString(ss.str());
-    //            number = static_cast<int>(outputTemp.getContents().size()) +
-    //                     static_cast<int>(outputTemp.getCommonPrefixes().size());
-    //            newMaxKey -= number;
-    //            isTruncated = outputTemp.isTruncated();
-    //            rb.withQueryCheckEmpty("max-keys", std::to_string(newMaxKey));
-    //            rb.withQueryCheckEmpty("continuation-token", outputTemp.getNextContinuationToken());
-    //            // 重新计算结果
-    //            output.setKeyCount(outputTemp.getKeyCount());
-    //            output.setIsTruncated(outputTemp.isTruncated());
-    //            output.setNextContinuationToken(outputTemp.getNextContinuationToken());
-    //            // append 到当前两个 vector 的后面
-    //            auto tempContent = outputTemp.getContents();
-    //            content.insert(content.end(), tempContent.begin(), tempContent.end());
-    //            auto tempCommonPrefixes = outputTemp.getCommonPrefixes();
-    //            commonPrefixes.insert(commonPrefixes.end(), tempCommonPrefixes.begin(), tempCommonPrefixes.end());
-    //        }
-    //        output.setContents(content);
-    //        // 排序并筛选
-    //        sort(commonPrefixes.begin(), commonPrefixes.end());
-    //        commonPrefixes.erase(unique(commonPrefixes.begin(), commonPrefixes.end()), commonPrefixes.end());
-    //        output.setCommonPrefixes(commonPrefixes);
-    //        res.setSuccess(true);
-    //        res.setR(output);
-    //        return res;
-    //    }
+    if (input.isListOnlyOnce() || !output.isTruncated()) {
+        res.setSuccess(true);
+        res.setR(output);
+        return res;
+    } else {
+        // 第一次请求获取的结果
+        bool isTruncated = output.isTruncated();
+        int number =
+                static_cast<int>(output.getContents().size()) + static_cast<int>(output.getCommonPrefixes().size());
+        int newMaxKey = input.getMaxKeys() - number;
+        auto content = output.getContents();
+        auto commonPrefixes = output.getCommonPrefixes();
+        rb.withQueryCheckEmpty("max-keys", std::to_string(newMaxKey));
+        rb.withQueryCheckEmpty("continuation-token", output.getNextContinuationToken());
+        while (isTruncated && newMaxKey > 0) {
+            auto req = rb.Build(http::MethodGet, nullptr);
+            auto tosRes = roundTrip(req, 200);
+            if (!tosRes.isSuccess()) {
+                res.setE(tosRes.error());
+                res.setSuccess(false);
+                return res;
+            }
+            ListObjectsType2Output outputTemp;
+            std::stringstream ss;
+            ss << tosRes.result()->getContent()->rdbuf();
+            outputTemp.fromJsonString(ss.str());
+            number = static_cast<int>(outputTemp.getContents().size()) +
+                     static_cast<int>(outputTemp.getCommonPrefixes().size());
+            newMaxKey -= number;
+            isTruncated = outputTemp.isTruncated();
+            rb.withQueryCheckEmpty("max-keys", std::to_string(newMaxKey));
+            rb.withQueryCheckEmpty("continuation-token", outputTemp.getNextContinuationToken());
+            // 重新计算结果
+            output.setKeyCount(outputTemp.getKeyCount());
+            output.setIsTruncated(outputTemp.isTruncated());
+            output.setNextContinuationToken(outputTemp.getNextContinuationToken());
+            // append 到当前两个 vector 的后面
+            auto tempContent = outputTemp.getContents();
+            content.insert(content.end(), tempContent.begin(), tempContent.end());
+            auto tempCommonPrefixes = outputTemp.getCommonPrefixes();
+            commonPrefixes.insert(commonPrefixes.end(), tempCommonPrefixes.begin(), tempCommonPrefixes.end());
+        }
+        output.setContents(content);
+        // 排序并筛选
+        sort(commonPrefixes.begin(), commonPrefixes.end());
+        commonPrefixes.erase(unique(commonPrefixes.begin(), commonPrefixes.end()), commonPrefixes.end());
+        output.setCommonPrefixes(commonPrefixes);
+        res.setSuccess(true);
+        res.setR(output);
+        return res;
+    }
 }
 
 Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageClass(
@@ -4925,6 +5004,21 @@ Outcome<TosError, DeleteObjectTaggingOutput> TosClientImpl::deleteObjectTagging(
     return res;
 }
 
+void setAclGrant(const PutBucketAclInput& input, RequestBuilder& rb) {
+    if (input.getAcl() != ACLType::NotSet)
+        rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    if (!input.getGrantFullControl().empty())
+        rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+    if (!input.getGrantRead().empty())
+        rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+    if (!input.getGrantReadAcp().empty())
+        rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+    if (!input.getGrantWrite().empty())
+        rb.withHeader(HEADER_GRANT_WRITE, input.getGrantWrite());
+    if (!input.getGrantWriteAcp().empty())
+        rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+}
+
 Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucketAclInput& input) {
     Outcome<TosError, PutBucketAclOutput> res;
     std::string check = isValidBucketName(input.getBucket());
@@ -4947,7 +5041,7 @@ Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucke
         std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
         rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
     }
-    rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    setAclGrant(input, rb);
     rb.withQuery("acl", "");
     auto req = rb.Build(http::MethodPut, ss);
     auto tosRes = roundTrip(req, 200);
@@ -5142,6 +5236,14 @@ Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSign
         res.setSuccess(false);
         return res;
     }
+    if (connectWithS3EndPoint_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint");
+        res.setE(se);
+        return res;
+    }
+
     auto expires_ = input.getExpires();
     if (expires_ == 0) {
         expires_ = defaultSignExpires;
@@ -5215,6 +5317,1203 @@ Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSign
     return res;
 }
 
+Outcome<TosError, std::vector<ResumableCopyPartInfo>> getResumableCopyPartInfoFromSrcObject(int64_t srcObjectSize,
+                                                                                            int64_t partSize) {
+    Outcome<TosError, std::vector<ResumableCopyPartInfo>> ret;
+    auto partNum = srcObjectSize / partSize;
+    auto lastPartSize = srcObjectSize % partSize;
+    TosError error;
+    if (lastPartSize != 0)
+        partNum++;
+    if (partNum > 10000) {
+        error.setMessage("The split file parts number is larger than 10000, please increase your part size");
+        ret.setSuccess(false);
+        ret.setE(error);
+        return ret;
+    }
+    std::vector<ResumableCopyPartInfo> partInfoList;
+    for (int i = 0; i < partNum; i++) {
+        ResumableCopyPartInfo info;
+        info.setPartNum(i + 1);
+        info.setCopySourceRangeStart(i * partSize);
+        info.setCopySourceRangeEnd((i + 1) * partSize - 1);
+        partInfoList.emplace_back(info);
+    }
+    if (lastPartSize != 0) {
+        partInfoList[partNum - 1].setCopySourceRangeEnd((partNum - 1) * partSize + lastPartSize - 1);
+    }
+
+    if (partNum == 0) {
+        ResumableCopyPartInfo info;
+        info.setPartNum(1);
+        info.setCopySourceRangeStart(0);
+        info.setCopySourceRangeEnd(0);
+        partInfoList.emplace_back(info);
+    }
+    ret.setR(partInfoList);
+    ret.setSuccess(true);
+    return ret;
+}
+
+void initCopyEvent(const ResumableCopyObjectInput& input, const std::string& checkpointFilePath,
+                   const std::string& uploadId, const std::shared_ptr<CopyEvent>& event) {
+    event->type_ = 0;
+    event->error_ = false;
+    event->key_ = input.getKey();
+    event->bucket_ = input.getBucket();
+    event->uploadId_ = std::make_shared<std::string>(uploadId);
+    event->srcBucket_ = input.getSrcBucket();
+    event->srcKey_ = input.getSrcKey();
+    event->srcVersionId_ = input.getSrcVersionId();
+    event->checkpointFile_ = std::make_shared<std::string>(checkpointFilePath);
+    CopyPartInfo partInfo{};
+    partInfo.partNumber_ = 0;
+    partInfo.eTag_ = nullptr;
+    partInfo.copySourceRangeStart_ = 0;
+    partInfo.copySourceRangeEnd_ = 0;
+    event->copyPartInfo_ = std::make_shared<CopyPartInfo>(partInfo);
+}
+
+void copyEventCreateMultipartUploadSucceed(const std::shared_ptr<CopyEvent>& event,
+                                           const CopyEventChange& eventChange) {
+    event->type_ = 1;
+    event->copyPartInfo_ = nullptr;
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+void copyEventCreateMultipartUploadFailed(const std::shared_ptr<CopyEvent>& event, const CopyEventChange& eventChange) {
+    event->type_ = 2;
+    event->error_ = true;
+    event->copyPartInfo_ = nullptr;
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+void copyEventUploadPartCopySucceed(const std::shared_ptr<CopyEvent>& event, const CopyEventChange& eventChange,
+                                    const CopyPartInfo& partInfo) {
+    event->type_ = 3;
+    event->copyPartInfo_ = std::make_shared<CopyPartInfo>(partInfo);
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+void copyEventUploadPartCopyFailed(const std::shared_ptr<CopyEvent>& event, const CopyEventChange& eventChange,
+                                   const CopyPartInfo& partInfo) {
+    event->type_ = 4;
+    event->error_ = true;
+    event->copyPartInfo_ = std::make_shared<CopyPartInfo>(partInfo);
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+void copyEventUploadPartCopyAborted(const std::shared_ptr<CopyEvent>& event, const CopyEventChange& eventChange,
+                                    const CopyPartInfo& partInfo) {
+    event->type_ = 5;
+    event->error_ = true;
+    event->copyPartInfo_ = std::make_shared<CopyPartInfo>(partInfo);
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+void copyEventCompleteMultipartUploadSucceed(const std::shared_ptr<CopyEvent>& event,
+                                             const CopyEventChange& eventChange) {
+    event->type_ = 6;
+    event->copyPartInfo_ = nullptr;
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+void copyEventCompleteMultipartUploadFailed(const std::shared_ptr<CopyEvent>& event,
+                                            const CopyEventChange& eventChange) {
+    event->type_ = 7;
+    event->error_ = true;
+    event->copyPartInfo_ = nullptr;
+    if (eventChange != nullptr) {
+        eventChange(event);
+    }
+}
+Outcome<TosError, ResumableCopyCheckpoint> TosClientImpl::initCheckpoint(const ResumableCopyObjectInput& input,
+                                                                         const HeadObjectV2Input& headInput,
+                                                                         const HeadObjectV2Output& headOutput,
+                                                                         const std::shared_ptr<CopyEvent>& event) {
+    Outcome<TosError, ResumableCopyCheckpoint> ret;
+    TosError error;
+    auto partInfo = getResumableCopyPartInfoFromSrcObject(headOutput.getContentLength(), input.getPartSize());
+    if (!partInfo.isSuccess()) {
+        error.setMessage(partInfo.error().getMessage());
+        ret.setSuccess(false);
+        ret.setE(error);
+        return ret;
+    }
+
+    ResumableCopyCheckpoint checkpoint;
+    checkpoint.setBucket(input.getBucket());
+    checkpoint.setKey(input.getKey());
+    checkpoint.setPartSize(input.getPartSize());
+    checkpoint.setCopySourceIfMatch(input.getCopySourceIfMatch());
+    checkpoint.setCopySourceIfNoneMatch(input.getCopySourceIfNoneMatch());
+    auto copySourceIfModifiedSince = TimeUtils::transTimeToGmtTime(input.getCopySourceIfModifiedSince());
+    auto copySourceIfUnmodifiedSince = TimeUtils::transTimeToGmtTime(input.getCopySourceIfUnmodifiedSince());
+    checkpoint.setCopySourceIfModifiedSince(copySourceIfModifiedSince);
+    checkpoint.setCopySourceIfUnmodifiedSince(copySourceIfUnmodifiedSince);
+    checkpoint.setSsecKeyMd5(input.getSsecKeyMd5());
+    checkpoint.setSsecAlgorithm(input.getSsecAlgorithm());
+    checkpoint.setCopySourceSsecKeyMd5(input.getCopySourceSsecKeyMd5());
+    checkpoint.setCopySourceSsecAlgorithm(input.getCopySourceSsecAlgorithm());
+
+    checkpoint.setEncodingType(input.getEncodingType());
+    auto lastTime_ = headOutput.getLastModified();
+    ResumableCopyCopySourceObjectInfo objectInfo(headOutput.getETags(), headOutput.getHashCrc64Ecma(),
+                                                 TimeUtils::transLastModifiedTimeToString(lastTime_),
+                                                 headOutput.getContentLength());
+    checkpoint.setCopySourceObjectInfo(objectInfo);
+    checkpoint.setPartsInfo(partInfo.result());
+    CreateMultipartUploadInput createMultipartUploadInput;
+    createMultipartUploadInput.setKey(input.getKey());
+    createMultipartUploadInput.setBucket(input.getBucket());
+    createMultipartUploadInput.setSsecKeyMd5(input.getSsecKeyMd5());
+    createMultipartUploadInput.setSsecKey(input.getSsecKey());
+    createMultipartUploadInput.setSsecAlgorithm(input.getSsecAlgorithm());
+    createMultipartUploadInput.setEncodingType(input.getEncodingType());
+    createMultipartUploadInput.setStorageClass(input.getStorageClass());
+    createMultipartUploadInput.setAcl(input.getAcl());
+    createMultipartUploadInput.setMeta(input.getMeta());
+    createMultipartUploadInput.setServerSideEncryption(input.getServerSideEncryption());
+    createMultipartUploadInput.setExpires(input.getExpires());
+    createMultipartUploadInput.setGrantWriteAcp(input.getGrantWriteAcp());
+    createMultipartUploadInput.setGrantReadAcp(input.getGrantRead());
+    createMultipartUploadInput.setGrantFullControl(input.getGrantFullControl());
+    createMultipartUploadInput.setGrantRead(input.getGrantRead());
+    createMultipartUploadInput.setWebsiteRedirectLocation(input.getWebsiteRedirectLocation());
+    createMultipartUploadInput.setContentType(input.getContentType());
+    createMultipartUploadInput.setContentLanguage(input.getContentLanguage());
+    createMultipartUploadInput.setContentEncoding(input.getContentEncoding());
+    createMultipartUploadInput.setContentDisposition(input.getContentDisposition());
+    createMultipartUploadInput.setCacheControl(input.getCacheControl());
+
+    auto output = this->createMultipartUpload(createMultipartUploadInput);
+    if (!output.isSuccess()) {
+        copyEventCreateMultipartUploadFailed(event, input.getCopyEventListener().eventChange_);
+        error.setMessage(output.error().getMessage());
+        ret.setSuccess(false);
+        ret.setE(error);
+        return ret;
+    }
+    *event->uploadId_ = output.result().getUploadId();
+    copyEventCreateMultipartUploadSucceed(event, input.getCopyEventListener().eventChange_);
+    checkpoint.setUploadId(output.result().getUploadId());
+
+    ret.setSuccess(true);
+    ret.setR(checkpoint);
+
+    return ret;
+}
+ResumableCopyCheckpoint loadResumableCopyCheckpointFromFile(const std::string& checkpointFilePath) {
+    ResumableCopyCheckpoint rfc;
+    rfc.load(checkpointFilePath);
+    return rfc;
+}
+Outcome<TosError, ResumableCopyCheckpoint> TosClientImpl::getCheckpoint(const ResumableCopyObjectInput& input,
+                                                                        const HeadObjectV2Input& headInput,
+                                                                        const HeadObjectV2Output& headOutput,
+                                                                        const std::shared_ptr<CopyEvent>& event,
+                                                                        const std::string checkpointFilePath) {
+    Outcome<TosError, ResumableCopyCheckpoint> ret;
+    ResumableCopyCheckpoint checkpoint;
+    if (input.isEnableCheckpoint()) {
+        checkpoint = loadResumableCopyCheckpointFromFile(checkpointFilePath);
+    } else {
+        deleteCheckpointFile(checkpointFilePath);
+    }
+    bool valid = checkpoint.isValid(input, headOutput);
+    if (!valid) {
+        deleteCheckpointFile(checkpointFilePath);
+        return this->initCheckpoint(input, headInput, headOutput, event);
+    }
+    ret.setR(checkpoint);
+    ret.setSuccess(true);
+    return ret;
+}
+
+Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurrent(
+        const ResumableCopyObjectInput& input, ResumableCopyCheckpoint checkpoint,
+        const std::string& checkpointFilePath, std::shared_ptr<CopyEvent> event) {
+    Outcome<TosError, ResumableCopyObjectOutput> ret;
+    TosError error;
+    std::vector<ResumableCopyPartInfo> toCopy = checkpoint.getPartsInfo();
+    std::vector<std::thread> threadPool;
+    std::mutex lock_;
+    int64_t partSize_ = input.getPartSize();
+    auto eventChange = input.getCopyEventListener().eventChange_;
+    auto cancel = input.getCancelHook();
+    std::atomic<bool> isAbort(false);
+    std::atomic<bool> isSuccess(true);
+    auto logger = LogUtils::GetLogger();
+
+    for (int i = 0; i < input.getTaskNum(); i++) {
+        auto res = std::thread([&]() {
+            while (true) {
+                // 开始时检查是否需要中断任务
+                if (cancel != nullptr) {
+                    if (cancel->isCancel()) {
+                        break;
+                    }
+                }
+                // 发生严重错误，中断任务
+                if (isAbort) {
+                    break;
+                }
+                // 任务队列中取part
+                ResumableCopyPartInfo part;
+                {
+                    std::lock_guard<std::mutex> lck(lock_);
+                    if (toCopy.empty())
+                        break;
+                    part = toCopy.front();
+                    toCopy.erase(toCopy.begin());
+                }
+
+                if (part.isCompleted()) {
+                    continue;
+                }
+                // 基于 uploadPartCopy 上传数据
+                UploadPartCopyV2Input upci(checkpoint.getBucket(), checkpoint.getKey(), input.getSrcBucket(),
+                                           input.getSrcKey(), part.getPartNum(), checkpoint.getUploadId());
+                if (part.getCopySourceRangeStart() == 0 && part.getCopySourceRangeEnd() == 0) {
+                    upci.setCopySourceRange("bytes=0-0");
+                } else {
+                    upci.setCopySourceRangeStart(part.getCopySourceRangeStart());
+                    upci.setCopySourceRangeEnd(part.getCopySourceRangeEnd());
+                }
+
+                // 同步CreateMultipart 中的参数到 upci 中
+                upci.setSrcVersionId(input.getSrcVersionId());
+
+                upci.setCopySourceIfMatch(input.getCopySourceIfMatch());
+                upci.setCopySourceIfModifiedSince(input.getCopySourceIfModifiedSince());
+                upci.setCopySourceIfNoneMatch(input.getCopySourceIfNoneMatch());
+                upci.setCopySourceIfUnmodifiedSince(input.getCopySourceIfUnmodifiedSince());
+                upci.setCopySourceSsecKeyMd5(input.getCopySourceSsecKeyMd5());
+                upci.setCopySourceSsecKey(input.getCopySourceSsecKey());
+                upci.setCopySourceSsecAlgorithm(input.getCopySourceSsecAlgorithm());
+                upci.setSsecKeyMd5(input.getSsecKeyMd5());
+                upci.setSsecKey(input.getSsecKey());
+                upci.setSsecAlgorithm(input.getSsecAlgorithm());
+                upci.setServerSideEncryption(input.getServerSideEncryption());
+
+                auto res = this->uploadPartCopy(upci);
+
+                // 下载后检查是否需要中断任务
+                if (cancel != nullptr) {
+                    if (cancel->isCancel()) {
+                        break;
+                    }
+                }
+
+                if (res.isSuccess()) {
+                    // 更新 checkpoint 信息, 把更新后的part放到队列中
+                    part.setIsCompleted(true);
+                    part.setETag(res.result().getETag());
+                    part.setPartNum(part.getPartNum());
+                    checkpoint.setResumableCopyPartInfoByIdx(part, part.getPartNum() - 1);
+                    // 事件通知
+                    auto eTag_ = std::make_shared<std::string>(res.result().getETag());
+                    CopyPartInfo partInfo{part.getPartNum(), part.getCopySourceRangeStart(),
+                                          part.getCopySourceRangeEnd(), eTag_};
+
+                    {
+                        std::lock_guard<std::mutex> lck(lock_);
+                        copyEventUploadPartCopySucceed(event, eventChange, partInfo);
+                        if (input.isEnableCheckpoint()) {
+                            checkpoint.dump(checkpointFilePath);
+                        }
+                    }
+
+                } else {
+                    // 失败
+                    auto statusCode = res.error().getStatusCode();
+                    if (statusCode == 403 || statusCode == 404 || statusCode == 405) {
+                        // 事件通知
+                        auto eTag_ = std::make_shared<std::string>(res.result().getETag());
+                        CopyPartInfo partInfo{part.getPartNum(), part.getCopySourceRangeStart(),
+                                              part.getCopySourceRangeEnd(), eTag_};
+                        {
+                            std::lock_guard<std::mutex> lck(lock_);
+                            copyEventUploadPartCopyAborted(event, eventChange, partInfo);
+                        }
+                        // 出现 403、404、405 错误需要中断整个断点续传任务
+                        isAbort = true;
+                        break;
+                    }
+                    // 事件通知
+                    auto eTag_ = std::make_shared<std::string>(res.result().getETag());
+                    CopyPartInfo partInfo{part.getPartNum(), part.getCopySourceRangeStart(),
+                                          part.getCopySourceRangeEnd(), eTag_};
+                    {
+                        std::lock_guard<std::mutex> lck(lock_);
+                        copyEventUploadPartCopyFailed(event, eventChange, partInfo);
+                    }
+                    isSuccess = false;
+                }
+            }
+        });
+        threadPool.emplace_back(std::move(res));
+    }
+    for (auto& worker : threadPool) {
+        if (worker.joinable()) {
+            worker.join();
+        }
+    }
+    // 需要 abort 掉任务的场景
+    if (isAbort) {
+        AbortMultipartUploadInput abort(checkpoint.getBucket(), checkpoint.getKey(), checkpoint.getUploadId());
+        auto abortRes = this->abortMultipartUpload(abort);
+        if (!abortRes.isSuccess()) {
+            if (logger != nullptr) {
+                logger->info("abort multipart upload failed");
+            }
+        }
+
+        ret.setSuccess(false);
+        error.setIsClientError(true);
+        error.setMessage("the task is canceled");
+        ret.setE(error);
+        return ret;
+    }
+    if (cancel != nullptr) {
+        // 发生错误
+        if (cancel->isCancel()) {
+            // 发生严重错误
+            if (cancel->isAbortFunc()) {
+                AbortMultipartUploadInput abort(checkpoint.getBucket(), checkpoint.getKey(), checkpoint.getUploadId());
+                auto abortRes = this->abortMultipartUpload(abort);
+                if (!abortRes.isSuccess()) {
+                    if (logger != nullptr) {
+                        logger->info("abort multipart upload failed");
+                    }
+                }
+            }
+            ret.setSuccess(false);
+            error.setIsClientError(true);
+            error.setMessage("the task is canceled");
+            ret.setE(error);
+            return ret;
+        }
+    }
+
+    // 有的段下载发生错误，直接返回
+    if (!isSuccess) {
+        error.setMessage("some parts are upload incorrectly, you can try again");
+        error.setIsClientError(true);
+        ret.setE(error);
+        ret.setSuccess(false);
+        return ret;
+    }
+    std::vector<UploadedPartV2> parts = {};
+    for (auto& i : checkpoint.getPartsInfo()) {
+        UploadedPartV2 part(i.getPartNum(), i.getETag());
+        parts.emplace_back(part);
+    }
+    CompleteMultipartUploadV2Input complete(checkpoint.getBucket(), checkpoint.getKey(), checkpoint.getUploadId(),
+                                            parts);
+    auto output = this->completeMultipartUpload(complete);
+    if (!output.isSuccess()) {
+        copyEventCompleteMultipartUploadFailed(event, eventChange);
+        ret.setSuccess(false);
+        error.setMessage("complete multi part failed");
+        ret.setE(error);
+        return ret;
+    }
+    // 合并成功，删除 checkpoint 文件
+    copyEventCompleteMultipartUploadSucceed(event, eventChange);
+    if (input.isEnableCheckpoint()) {
+        deleteCheckpointFile(checkpointFilePath);
+    }
+
+    ResumableCopyObjectOutput rco;
+    rco.setRequestInfo(output.result().getRequestInfo());
+    rco.setBucket(checkpoint.getBucket());
+    rco.setKey(checkpoint.getKey());
+    rco.setUploadId(checkpoint.getUploadId());
+    rco.setETag(output.result().getETag());
+    rco.setLocation(output.result().getLocation());
+    rco.setVersionId(output.result().getVersionId());
+    rco.setHashCrc64Ecma(output.result().getHashCrc64ecma());
+    rco.setSsecAlgorithm(checkpoint.getSsecAlgorithm());
+    rco.setSsecKeyMd5(checkpoint.getSsecKeyMd5());
+    rco.setEncodingType(checkpoint.getEncodingType());
+    ret.setSuccess(true);
+    ret.setR(rco);
+    return ret;
+}
+
+std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
+    std::stringstream ret;
+    std::string originPath;
+    const auto& checkPointFile = input.getCheckpointFile();
+    if (input.getSrcVersionId().empty()) {
+        originPath = input.getSrcBucket() + "." + input.getSrcKey() + "." + input.getBucket() + "." + input.getKey();
+
+    } else {
+        originPath = input.getSrcBucket() + "." + input.getSrcKey() + "." + input.getSrcVersionId() + "." +
+                     input.getBucket() + "." + input.getKey();
+    }
+
+    std::string base64md5Path = CryptoUtils::md5SumURLEncoding(originPath);
+    if (checkPointFile.empty()) {
+        // 创建文件夹，这里没有做 windows 下临时目录的兼容
+        ret << "/tmp/" << base64md5Path << ".copy";
+        return ret.str();
+    } else {
+        struct stat cfs {};
+        if (stat(checkPointFile.c_str(), &cfs) != 0) {
+            bool res = FileUtils::CreateDirectory(checkPointFile, true);
+            if (!res) {
+                // 错误处理，创建文件夹失败的场景
+                return "";
+            }
+        }
+        if (stat(checkPointFile.c_str(), &cfs) == 0) {
+            if (cfs.st_mode & S_IFDIR) {
+                ret << checkPointFile << "/" << base64md5Path << ".copy";
+                return ret.str();
+            } else {
+                ret << checkPointFile;
+                return ret.str();
+            }
+        }
+    }
+    return "";
+}
+
+Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(const ResumableCopyObjectInput& input) {
+    Outcome<TosError, ResumableCopyObjectOutput> res;
+    TosError error;
+    const auto& bucket = input.getBucket();
+    const auto& key = input.getKey();
+    auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum());
+    if (!check.isSuccess()) {
+        error.setMessage(check.error().getMessage());
+        error.setIsClientError(true);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    // 校验源对象是否存在，拿到源对象的大小信息
+    HeadObjectV2Input headInput(input.getSrcBucket(), input.getSrcKey());
+    if (!input.getSrcVersionId().empty()) {
+        headInput.setVersionId(input.getSrcVersionId());
+    }
+    auto checkObjectExists = this->headObject(headInput);
+    if (!checkObjectExists.isSuccess()) {
+        error.setIsClientError(true);
+        error.setMessage(checkObjectExists.error().getMessage());
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    std::string checkpointFilePath;
+    // checkPointFile
+    if (input.isEnableCheckpoint()) {
+        checkpointFilePath = getCheckpointPath(input);
+        if (checkpointFilePath.empty()) {
+            error.setMessage("The folder is created fail in the specific path " + input.getCheckpointFile());
+            error.setIsClientError(true);
+            res.setE(error);
+            res.setSuccess(false);
+            return res;
+        }
+    }
+
+    auto rcpi =
+            getResumableCopyPartInfoFromSrcObject(checkObjectExists.result().getContentLength(), input.getPartSize());
+    if (!rcpi.isSuccess()) {
+        error.setMessage(rcpi.error().getMessage());
+        error.setIsClientError(true);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto event = std::make_shared<CopyEvent>();
+    initCopyEvent(input, checkpointFilePath, "", event);
+    auto cp = getCheckpoint(input, headInput, checkObjectExists.result(), event, checkpointFilePath);
+    if (!cp.isSuccess()) {
+        error.setMessage(cp.error().getMessage());
+        error.setIsClientError(true);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    return resumableCopyConcurrent(input, cp.result(), checkpointFilePath, event);
+}
+
+Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(const PreSignedPolicyURLInput& input) {
+    Outcome<TosError, PreSignedPolicyURLOutput> res;
+    if (input.getExpires() < 0 || input.getExpires() > maxPreSignExpires) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid expires, the expires must be [1, 604800]");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (connectWithS3EndPoint_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint");
+        res.setE(se);
+        return res;
+    }
+    for (auto& c : input.getConditions()) {
+        auto key_ = c.getKey();
+        auto operator_ = c.getOperator();
+        if (key_ != "key") {
+            TosError error;
+            error.setIsClientError(true);
+            error.setMessage("invalid expires, the expires must be [1, 604800]");
+            res.setE(error);
+            res.setSuccess(false);
+            return res;
+        }
+        if (operator_ != nullptr && !(*operator_ == "eq" || *operator_ == "starts-with")) {
+            TosError error;
+            error.setIsClientError(true);
+            error.setMessage("invalid expires, the expires must be [1, 604800]");
+            res.setE(error);
+            res.setSuccess(false);
+            return res;
+        }
+    }
+    auto schemeHostParameter = initSchemeAndHost(input.getAlternativeEndpoint());
+    std::string alternativeEndpoint_ = schemeHostParameter.host_;
+    std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
+    std::string scheme = alternativeEndpoint_.empty() ? scheme_ : schemeHostParameter.scheme_;
+    if (NetUtils::isS3Endpoint(host)) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint");
+        res.setE(se);
+        return res;
+    }
+
+    std::vector<std::pair<std::string, std::string>> query_;
+    auto expires_ = input.getExpires();
+    if (expires_ == 0) {
+        expires_ = defaultSignExpires;
+    }
+    // Expires
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Expires", std::to_string(expires_)});
+    // algorithm
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Algorithm", "TOS4-HMAC-SHA256"});
+    // data
+    std::time_t now = time(nullptr);
+    std::string dateQuery = TimeUtils::transTimeToFormat(now, iso8601Layout);
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Date", dateQuery});
+
+    // credential
+    auto cred_ = credentials_->credential();
+    std::string credential;
+    std::string region_ = config_.getRegion();
+    credential = credential.append(cred_.getAccessKeyId())
+                         .append("/")
+                         .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
+                         .append("/")
+                         .append(region_)
+                         .append("/tos/request");
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Credential", credential});
+
+    // SecurityToken
+    if (!cred_.getSecurityToken().empty()) {
+        query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Security-Token", cred_.getSecurityToken()});
+    }
+
+    // 传入的conditions
+    std::vector<PolicySignatureConditionInner> conditions_;
+    for (auto& condition : input.getConditions()) {
+        if (condition.getOperator() != nullptr) {
+            conditions_.emplace_back(condition.getOperator(), "$" + condition.getKey(), condition.getValue());
+        } else {
+            conditions_.emplace_back(condition.getKey(), condition.getValue());
+        }
+    }
+    conditions_.emplace_back("bucket", input.getBucket());
+    PolicyURLInner policyURL_(conditions_);
+    std::string jsonCondition(policyURL_.toJsonString());
+    if (jsonCondition == "null") {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("unable to do serialization/deserialization");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    // base64 encode policy
+    std::string jsonCondition_ = CryptoUtils::base64Encode(
+            reinterpret_cast<const unsigned char*>(jsonCondition.c_str()), jsonCondition.length());
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Policy", jsonCondition_});
+
+    // 签名部分
+    std::string split = "\n";
+    std::string buf;
+    buf.append(signPrefix).append(split);
+
+    buf.append(TimeUtils::transTimeToFormat(now, iso8601Layout)).append(split);
+
+    std::string date = TimeUtils::transTimeToFormat(now, yyyyMMdd);
+    buf.append(date).append("/").append(region_).append("/tos/request").append(split);
+
+    auto queryEncoded = SignV4::encodeQuery(query_);
+    std::string req;
+    req.append(queryEncoded);
+    req.append("\n");
+    req.append(unsignedPayload);
+    unsigned char sum[32];
+    SHA256((unsigned char*)req.c_str(), req.length(), sum);
+    std::string hexSum(StringUtils::stringToHex(sum, 32));
+    buf.append(hexSum);
+    std::string date_ = TimeUtils::transTimeToFormat(now, yyyyMMdd);
+    std::string signture = SignV4::signingKey(SignKeyInfo(date_, region_, cred_), buf);
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Signature", signture});
+    auto resQueryEncoded = SignV4::encodeQuery(query_);
+
+    PreSignedPolicyURLOutput output(input.getBucket(), resQueryEncoded, host, scheme, input.isCustomDomain());
+    res.setR(output);
+    res.setSuccess(true);
+    return res;
+}
+Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplication(
+        const PutBucketReplicationInput& input) {
+    Outcome<TosError, PutBucketReplicationOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getRole().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid role, the role must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getRules().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid rules, the rules must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("replication", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketReplicationOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplication(
+        const GetBucketReplicationInput& input) {
+    Outcome<TosError, GetBucketReplicationOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("replication", "");
+    rb.withQuery("progress", "");
+
+    rb.withQueryCheckEmpty("rule-id", input.getRuleId());
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketReplicationOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketReplicationOutput> TosClientImpl::deleteBucketReplication(
+        const DeleteBucketReplicationInput& input) {
+    Outcome<TosError, DeleteBucketReplicationOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("replication", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketReplicationOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, PutBucketVersioningOutput> TosClientImpl::putBucketVersioning(const PutBucketVersioningInput& input) {
+    Outcome<TosError, PutBucketVersioningOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("versioning", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketVersioningOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketVersioningOutput> TosClientImpl::getBucketVersioning(const GetBucketVersioningInput& input) {
+    Outcome<TosError, GetBucketVersioningOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("versioning", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketVersioningOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketWebsiteOutput> TosClientImpl::putBucketWebsite(const PutBucketWebsiteInput& input) {
+    Outcome<TosError, PutBucketWebsiteOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("website", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketWebsiteOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketWebsiteOutput> TosClientImpl::getBucketWebsite(const GetBucketWebsiteInput& input) {
+    Outcome<TosError, GetBucketWebsiteOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("website", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketWebsiteOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketWebsiteOutput> TosClientImpl::deleteBucketWebsite(const DeleteBucketWebsiteInput& input) {
+    Outcome<TosError, DeleteBucketWebsiteOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("website", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketWebsiteOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotification(
+        const PutBucketNotificationInput& input) {
+    Outcome<TosError, PutBucketNotificationOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("notification", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketNotificationOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketNotificationOutput> TosClientImpl::getBucketNotification(
+        const GetBucketNotificationInput& input) {
+    Outcome<TosError, GetBucketNotificationOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("notification", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketNotificationOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDomain(
+        const PutBucketCustomDomainInput& input) {
+    Outcome<TosError, PutBucketCustomDomainOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("customdomain", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketCustomDomainOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, ListBucketCustomDomainOutput> TosClientImpl::listBucketCustomDomain(
+        const ListBucketCustomDomainInput& input) {
+    Outcome<TosError, ListBucketCustomDomainOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("customdomain", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    ListBucketCustomDomainOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketCustomDomainOutput> TosClientImpl::deleteBucketCustomDomain(
+        const DeleteBucketCustomDomainInput& input) {
+    Outcome<TosError, DeleteBucketCustomDomainOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("customdomain", input.getDomain());
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketCustomDomainOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLog(
+        const PutBucketRealTimeLogInput& input) {
+    Outcome<TosError, PutBucketRealTimeLogOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("realtimeLog", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketRealTimeLogOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetBucketRealTimeLogOutput> TosClientImpl::getBucketRealTimeLog(
+        const GetBucketRealTimeLogInput& input) {
+    Outcome<TosError, GetBucketRealTimeLogOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("realtimeLog", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketRealTimeLogOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketRealTimeLogOutput> TosClientImpl::deleteBucketRealTimeLog(
+        const DeleteBucketRealTimeLogInput& input) {
+    Outcome<TosError, DeleteBucketRealTimeLogOutput> res;
+    std::string check = isValidBucketName(input.getBucket());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("realtimeLog", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketRealTimeLogOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
 std::set<std::string> CanRetryMethods = {"createBucket",
                                          "deleteBucket",
                                          "createMultipartUpload",
@@ -5225,7 +6524,7 @@ std::set<std::string> CanRetryMethods = {"createBucket",
                                          "deleteObject",
                                          "putObject",
                                          "uploadPart"};
-bool findInCanRetryMethods(std::string method) {
+bool findInCanRetryMethods(const std::string& method) {
     auto pos = CanRetryMethods.find(method);
     if (pos != CanRetryMethods.end()) {
         return true;
@@ -5271,6 +6570,13 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         TosError se;
         se.setIsClientError(true);
         se.setMessage("please do not use ip:port to access");
+        ret.setE(se);
+        return ret;
+    }
+    if (connectWithS3EndPoint_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint to access");
         ret.setE(se);
         return ret;
     }
@@ -5670,4 +6976,63 @@ void TosClientImpl::preSignedURL(RequestBuilder& rb, const std::string& method, 
     auto url = req->toUrl().toString();
     res.setR(url);
     res.setSuccess(true);
+}
+
+// 动态参数
+void TosClientImpl::setMaxRetryCount(int maxretrycount) {
+    config_.setMaxRetryCount(maxretrycount);
+}
+void TosClientImpl::setCredential(const std::string& accessKeyId, const std::string& secretKeyId) {
+    auto cred = StaticCredentials(accessKeyId, secretKeyId);
+    credentials_ = std::make_shared<StaticCredentials>(cred);
+}
+void TosClientImpl::setCredential(const std::string& accessKeyId, const std::string& secretKeyId,
+                                  const std::string& securityToken) {
+    auto cred = StaticCredentials(accessKeyId, secretKeyId, securityToken);
+    credentials_ = std::make_shared<StaticCredentials>(cred);
+}
+const std::string& TosClientImpl::getAK() const {
+    return credentials_->credential().getAccessKeyId();
+}
+const std::string& TosClientImpl::getSK() const {
+    return credentials_->credential().getAccessKeySecret();
+}
+const std::string& TosClientImpl::getSecurityToken() const {
+    return credentials_->credential().getSecurityToken();
+}
+const std::string& TosClientImpl::getRegion() const {
+    return config_.getRegion();
+}
+const std::string& TosClientImpl::getEndpoint() const {
+    return config_.getEndpoint();
+}
+
+void TosClientImpl::setRegion(const std::string& region) {
+    initRegionEndpoint(supportedRegion_[region], region);
+}
+void TosClientImpl::setRegionEndpoint(const std::string& region, const std::string& endpoint) {
+    if (endpoint.empty()) {
+        if (supportedRegion_.count(region) != 0) {
+            initRegionEndpoint(supportedRegion_[region], region);
+        } else {
+            initRegionEndpoint(endpoint, region);
+        }
+    } else {
+        initRegionEndpoint(endpoint, region);
+    }
+}
+
+void TosClientImpl::initRegionEndpoint(const std::string& endpoint, const std::string& region) {
+    config_.setEndpoint(endpoint);
+    config_.setRegion(region);
+    auto schemeHostParameter = initSchemeAndHost(endpoint);
+    scheme_ = schemeHostParameter.scheme_;
+    host_ = schemeHostParameter.host_;
+    urlMode_ = schemeHostParameter.urlMode_;
+    if (!NetUtils::isNotIP(host_)) {
+        connectWithIP_ = true;
+    }
+    if (NetUtils::isS3Endpoint(host_)) {
+        connectWithS3EndPoint_ = true;
+    }
 }

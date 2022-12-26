@@ -32,6 +32,10 @@ public:
     void setLastModified(time_t lastmodified) {
         lastModified_ = lastmodified;
     }
+    const std::string& getStringFormatLastModified() const {
+        auto lastModified = lastModified_;
+        return TimeUtils::transLastModifiedTimeToString(lastModified);
+    }
 
 private:
     int partNumber_ = 0;

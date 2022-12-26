@@ -57,12 +57,12 @@ TEST_F(BucketLocationTest, BucketLocationWithALLParametersTest) {
     EXPECT_EQ(getOutput.result().getExtranetEndpoint() == host_, true);
 }
 
-// TEST_F(BucketLocationTest, BucketLocationWithNonExistentBucketNameTest) {
-//     auto bucketName_ = TestUtils::GetBucketName(TestConfig::TestPrefix) + "111s";
-//     GetBucketLocationInput getBucketLocationInput(bucketName_);
-//     auto getOutput = cliV2->getBucketLocation(getBucketLocationInput);
-//     EXPECT_EQ(getOutput.isSuccess(), false);
-//     EXPECT_EQ(getOutput.error().getCode(), "NoSuchBucket");
-// }
+TEST_F(BucketLocationTest, BucketLocationWithNonExistentBucketNameTest) {
+    auto bucketName_ = TestUtils::GetBucketName(TestConfig::TestPrefix) + "111s";
+    GetBucketLocationInput getBucketLocationInput(bucketName_);
+    auto getOutput = cliV2->getBucketLocation(getBucketLocationInput);
+    EXPECT_EQ(getOutput.isSuccess(), false);
+    EXPECT_EQ(getOutput.error().getCode(), "NoSuchBucket");
+}
 
 }  // namespace VolcengineTos

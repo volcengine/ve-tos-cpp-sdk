@@ -77,12 +77,21 @@ public:
     void setGrants(const std::vector<GrantV2>& grants) {
         grants_ = grants;
     }
+    bool isBucketOwnerEntrusted() const {
+        return bucketOwnerEntrusted_;
+    }
+    void setBucketOwnerEntrusted(bool bucketOwnerEntrusted) {
+        bucketOwnerEntrusted_ = bucketOwnerEntrusted;
+    }
     std::string toJsonString() const {
         nlohmann::json j;
         if (!owner_.getId().empty())
             j["Owner"]["ID"] = owner_.getId();
         if (!owner_.getDisplayName().empty())
             j["Owner"]["DisplayName"] = owner_.getDisplayName();
+        if (bucketOwnerEntrusted_) {
+            j["BucketOwnerEntrusted"] = bucketOwnerEntrusted_;
+        }
         nlohmann::json grantArray = nlohmann::json::array();
         for (auto& g : grants_) {
             nlohmann::json grant;
@@ -118,5 +127,6 @@ private:
     std::string grantWriteAcp_;
     Owner owner_;
     std::vector<GrantV2> grants_;
+    bool bucketOwnerEntrusted_ = false;
 };
 }  // namespace VolcengineTos
