@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.5.1
+        VERSION 2.5.2
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 
