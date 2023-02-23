@@ -716,7 +716,11 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
     }
     // crc64校验
     if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0) {
-        auto hashcrc64 = std::stoull(tosRes.result()->findHeader(HEADER_CRC64));
+        auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+        uint64_t hashcrc64 = 0;
+        if (!hashCrc64String.empty()) {
+            hashcrc64 = std::stoull(hashCrc64String);
+        }
         if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
             TosError error;
             error.setIsClientError(true);
@@ -1128,7 +1132,11 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
         return res;
     }
     if (config_.isEnableCrc()) {
-        auto hashcrc64 = std::stoull(tosRes.result()->findHeader(HEADER_CRC64));
+        auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+        uint64_t hashcrc64 = 0;
+        if (!hashCrc64String.empty()) {
+            hashcrc64 = std::stoull(hashCrc64String);
+        }
         if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
             TosError error;
             error.setIsClientError(true);
@@ -1144,7 +1152,12 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     output.setSsecAlgorithm(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_ALGORITHM));
     output.setSsecKeyMd5(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY_MD5));
     output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
-    output.setHashCrc64ecma(std::stoull(tosRes.result()->findHeader(HEADER_CRC64)));
+    auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+    uint64_t hashCrc64 = 0;
+    if (!hashCrc64String.empty()) {
+        hashCrc64 = std::stoull(hashCrc64String);
+    }
+    output.setHashCrc64ecma(hashCrc64);
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -1927,6 +1940,10 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                     if (logger != nullptr) {
                         logger->info("abort multipart upload failed");
                     }
+                }
+                // 删除 checkPoint 文件
+                if (input.isEnableCheckpoint()) {
+                    deleteCheckpointFile(checkpointFilePath);
                 }
             }
             ret.setSuccess(false);
@@ -2761,7 +2778,11 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
     }
     // crc64 校验
     if (config_.isEnableCrc()) {
-        auto hashcrc64 = std::stoull(tosRes.result()->findHeader(HEADER_CRC64));
+        auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+        uint64_t hashcrc64 = 0;
+        if (!hashCrc64String.empty()) {
+            hashcrc64 = std::stoull(hashCrc64String);
+        }
         if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
             TosError error;
             error.setIsClientError(true);
@@ -2775,7 +2796,12 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     auto nextOffset = tosRes.result()->findHeader(HEADER_NEXT_APPEND_OFFSET);
     output.setNextAppendOffset(std::stoll(nextOffset));
-    output.setHashCrc64ecma(std::stoull(tosRes.result()->findHeader(HEADER_CRC64)));
+    auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+    uint64_t hashCrc64 = 0;
+    if (!hashCrc64String.empty()) {
+        hashCrc64 = std::stoull(hashCrc64String);
+    }
+    output.setHashCrc64ecma(hashCrc64);
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -3839,7 +3865,11 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
         *hashCrc64ecma = tosRes.result()->getHashCrc64Result();
     }
     if (config_.isEnableCrc()) {
-        auto hashcrc64 = std::stoull(tosRes.result()->findHeader(HEADER_CRC64));
+        auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+        uint64_t hashcrc64 = 0;
+        if (!hashCrc64String.empty()) {
+            hashcrc64 = std::stoull(hashCrc64String);
+        }
         if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
             TosError error;
             error.setIsClientError(true);
@@ -3855,7 +3885,12 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     output.setETag(tosRes.result()->findHeader(http::HEADER_ETAG));
     output.setSsecAlgorithm(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_ALGORITHM));
     output.setSsecMd5(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY_MD5));
-    output.setHashCrc64ecma(stoull(tosRes.result()->findHeader(HEADER_CRC64)));
+    auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+    uint64_t hashCrc64 = 0;
+    if (!hashCrc64String.empty()) {
+        hashCrc64 = std::stoull(hashCrc64String);
+    }
+    output.setHashCrc64ecma(hashCrc64);
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -4028,7 +4063,13 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
     CompleteMultipartUploadV2Output output;
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
-    output.setHashCrc64ecma(stoull(tosRes.result()->findHeader(HEADER_CRC64)));
+
+    auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+    uint64_t hashCrc64 = 0;
+    if (!hashCrc64String.empty()) {
+        hashCrc64 = std::stoull(hashCrc64String);
+    }
+    output.setHashCrc64ecma(hashCrc64);
     std::stringstream ss_;
     ss_ << tosRes.result()->getContent()->rdbuf();
     output.fromJsonString(ss_.str());
@@ -4462,6 +4503,7 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
 
     auto rb = newBuilder(input.getBucket(), "");
     rb.withQuery("list-type", "2");
+    rb.withQuery("fetch-owner", "true");
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
     rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
     rb.withQueryCheckEmpty("start-after", input.getStartAfter());
@@ -5693,6 +5735,10 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
                         logger->info("abort multipart upload failed");
                     }
                 }
+                // 删除 checkPoint 文件
+                if (input.isEnableCheckpoint()) {
+                    deleteCheckpointFile(checkpointFilePath);
+                }
             }
             ret.setSuccess(false);
             error.setIsClientError(true);
@@ -6797,7 +6843,9 @@ void TosClientImpl::appendObject(const std::shared_ptr<TosRequest>& req, Outcome
     AppendObjectOutput output;
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     output.setEtag(tosRes.result()->findHeader(http::HEADER_ETAG));
-    output.setNextAppendOffset(stoi(nextOffset));
+    if (!nextOffset.empty()) {
+        output.setNextAppendOffset(stoi(nextOffset));
+    }
     output.setCrc64(tosRes.result()->findHeader(HEADER_CRC64));
     res.setSuccess(true);
     res.setR(output);

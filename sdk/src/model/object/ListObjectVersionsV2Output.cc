@@ -53,8 +53,12 @@ VolcengineTos::ListedObjectVersionV2 parseListedObjectVersion(const json& versio
                 VolcengineTos::StringtoStorageClassType[version.at("StorageClass").get<std::string>()]);
     if (version.contains("VersionId"))
         listedObjectVersion.setVersionId(version.at("VersionId").get<std::string>());
-    if (version.contains("HashCrc64ecma"))
-        listedObjectVersion.setHashCrc64Ecma(stoull(version.at("HashCrc64ecma").get<std::string>()));
+    if (version.contains("HashCrc64ecma")) {
+        auto hashCrc_ = version.at("HashCrc64ecma").get<std::string>();
+        if (!hashCrc_.empty()) {
+            listedObjectVersion.setHashCrc64Ecma(stoull(hashCrc_));
+        }
+    }
 
     return listedObjectVersion;
 }

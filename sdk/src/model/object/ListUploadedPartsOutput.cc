@@ -28,21 +28,23 @@ void VolcengineTos::ListUploadedPartsOutput::fromJsonString(const std::string& i
             owner_.setDisplayName(j.at("Owner").at("DisplayName").get<std::string>());
         }
     }
-    auto ups = j.at("Parts");
-    for (auto& up : ups) {
-        UploadedPart part;
-        if (up.contains("PartNumber")) {
-            part.setPartNumber(up.at("PartNumber").get<int>());
+    if (j.contains("Parts")) {
+        auto ups = j.at("Parts");
+        for (auto& up : ups) {
+            UploadedPart part;
+            if (up.contains("PartNumber")) {
+                part.setPartNumber(up.at("PartNumber").get<int>());
+            }
+            if (up.contains("LastModified")) {
+                part.setLastModified(up.at("LastModified").get<std::string>());
+            }
+            if (up.contains("ETag")) {
+                part.setEtag(up.at("ETag").get<std::string>());
+            }
+            if (up.contains("Size")) {
+                part.setSize(up.at("Size").get<int64_t>());
+            }
+            uploadedParts_.emplace_back(part);
         }
-        if (up.contains("LastModified")) {
-            part.setLastModified(up.at("LastModified").get<std::string>());
-        }
-        if (up.contains("ETag")) {
-            part.setEtag(up.at("ETag").get<std::string>());
-        }
-        if (up.contains("Size")) {
-            part.setSize(up.at("Size").get<int64_t>());
-        }
-        uploadedParts_.emplace_back(part);
     }
 }

@@ -104,36 +104,40 @@ public:
         if (j.contains("NextUploadIDMarker"))
             j.at("NextUploadIDMarker").get_to(nextUploadIdMarker_);
 
-        nlohmann::json commonPrefixes = j.at("CommonPrefixes");
-        for (auto& commonPrefixe : commonPrefixes) {
-            ListedCommonPrefix lc;
-            if (commonPrefixe.contains("Prefix"))
-                lc.setPrefix(commonPrefixe.at("Prefix").get<std::string>());
-            commonPrefixes_.emplace_back(lc);
-        }
-
-        nlohmann::json uploads = j.at("Uploads");
-        for (auto& upload : uploads) {
-            ListedUpload lu;
-            if (upload.contains("Key"))
-                lu.setKey(upload.at("Key").get<std::string>());
-            if (upload.contains("UploadId"))
-                lu.setUploadId(upload.at("UploadId").get<std::string>());
-            if (upload.contains("StorageClass"))
-                lu.setStorageClass(StringtoStorageClassType[upload.at("StorageClass").get<std::string>()]);
-            if (upload.contains("Initiated"))
-                lu.setInitiated(TimeUtils::transLastModifiedStringToTime(upload.at("Initiated").get<std::string>()));
-            if (upload.contains("Owner")) {
-                Owner owner;
-                if (upload.at("Owner").contains("ID")) {
-                    owner.setId(upload.at("Owner").at("ID").get<std::string>());
-                }
-                if (upload.at("Owner").contains("DisplayName")) {
-                    owner.setDisplayName(upload.at("Owner").at("DisplayName").get<std::string>());
-                }
-                lu.setOwner(owner);
+        if (j.contains("CommonPrefixes")) {
+            nlohmann::json commonPrefixes = j.at("CommonPrefixes");
+            for (auto& commonPrefixe : commonPrefixes) {
+                ListedCommonPrefix lc;
+                if (commonPrefixe.contains("Prefix"))
+                    lc.setPrefix(commonPrefixe.at("Prefix").get<std::string>());
+                commonPrefixes_.emplace_back(lc);
             }
-            uploads_.emplace_back(lu);
+        }
+        if (j.contains("Uploads")) {
+            nlohmann::json uploads = j.at("Uploads");
+            for (auto& upload : uploads) {
+                ListedUpload lu;
+                if (upload.contains("Key"))
+                    lu.setKey(upload.at("Key").get<std::string>());
+                if (upload.contains("UploadId"))
+                    lu.setUploadId(upload.at("UploadId").get<std::string>());
+                if (upload.contains("StorageClass"))
+                    lu.setStorageClass(StringtoStorageClassType[upload.at("StorageClass").get<std::string>()]);
+                if (upload.contains("Initiated"))
+                    lu.setInitiated(
+                            TimeUtils::transLastModifiedStringToTime(upload.at("Initiated").get<std::string>()));
+                if (upload.contains("Owner")) {
+                    Owner owner;
+                    if (upload.at("Owner").contains("ID")) {
+                        owner.setId(upload.at("Owner").at("ID").get<std::string>());
+                    }
+                    if (upload.at("Owner").contains("DisplayName")) {
+                        owner.setDisplayName(upload.at("Owner").at("DisplayName").get<std::string>());
+                    }
+                    lu.setOwner(owner);
+                }
+                uploads_.emplace_back(lu);
+            }
         }
     }
 

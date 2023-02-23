@@ -25,7 +25,6 @@ public:
 
     void fromJsonString(const std::string& input) {
         auto j = nlohmann::json::parse(input);
-
         if (j.contains("RealTimeLogConfiguration")) {
             auto config = j.at("RealTimeLogConfiguration");
             if (config.contains("Role")) {

@@ -26,7 +26,10 @@ void VolcengineTos::GetObjectBasicOutput::fromResponse(TosResponse& res) {
     versionID_ = res.findHeader(HEADER_VERSIONID);
     websiteRedirectLocation_ = res.findHeader(HEADER_WEBSITE_REDIRECT_LOCATION);
     objectType_ = res.findHeader(HEADER_OBJECT_TYPE);
-    hashCrc64ecma_ = stoull(res.findHeader(HEADER_CRC64));
+    auto hashCrc64ecmaString_ = res.findHeader(HEADER_CRC64);
+    if (!hashCrc64ecmaString_.empty()) {
+        hashCrc64ecma_ = stoull(res.findHeader(HEADER_CRC64));
+    }
     storageClass_ = StringtoStorageClassType[res.findHeader(HEADER_STORAGE_CLASS)];
 
     meta_ = userMeta(res.getHeaders());

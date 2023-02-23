@@ -80,7 +80,7 @@ private:
     std::string contentEncoding_;
     std::string contentLanguage_;
     std::string contentType_;
-    std::time_t expires_;
+    std::time_t expires_ = 0;
 
     std::map<std::string, std::string> meta_;
 };

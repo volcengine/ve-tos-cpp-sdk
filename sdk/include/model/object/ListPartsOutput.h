@@ -105,22 +105,23 @@ public:
                 owner_.setDisplayName(j.at("Owner").at("DisplayName").get<std::string>());
             }
         }
-
-        nlohmann::json parts = j.at("Parts");
-        for (auto& part : parts) {
-            UploadedPartV2 up;
-            if (part.contains("PartNumber"))
-                up.setPartNumber(part.at("PartNumber").get<int>());
-            if (part.contains("ETag"))
-                up.setETag(part.at("ETag").get<std::string>());
-            if (part.contains("Size"))
-                up.setSize(part.at("Size").get<int>());
-            if (part.contains("LastModified")) {
-                std::time_t lastModified =
-                        TimeUtils::transLastModifiedStringToTime(part.at("LastModified").get<std::string>());
-                up.setLastModified(lastModified);
+        if (j.contains("Parts")) {
+            nlohmann::json parts = j.at("Parts");
+            for (auto& part : parts) {
+                UploadedPartV2 up;
+                if (part.contains("PartNumber"))
+                    up.setPartNumber(part.at("PartNumber").get<int>());
+                if (part.contains("ETag"))
+                    up.setETag(part.at("ETag").get<std::string>());
+                if (part.contains("Size"))
+                    up.setSize(part.at("Size").get<int>());
+                if (part.contains("LastModified")) {
+                    std::time_t lastModified =
+                            TimeUtils::transLastModifiedStringToTime(part.at("LastModified").get<std::string>());
+                    up.setLastModified(lastModified);
+                }
+                parts_.emplace_back(up);
             }
-            parts_.emplace_back(up);
         }
     }
 
