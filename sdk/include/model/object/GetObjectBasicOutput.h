@@ -143,7 +143,7 @@ private:
 
     std::string contentRange_;
     std::string eTag_;
-    std::time_t lastModified_;
+    std::time_t lastModified_ = 0;
     bool deleteMarker_ = 0;
     std::string ssecAlgorithm_;
     std::string ssecKeyMD5_;

@@ -36,7 +36,7 @@ std::string BucketNotificationTest::bucketName = "";
 TEST_F(BucketNotificationTest, BucketNotificationWithALLParametersTest) {
     FilterKey filterKey({{"prefix", "object"}, {"suffix", "object1"}});
     Filter filter(filterKey);
-    CloudFunctionConfiguration configuration("test-id", {"tos:ObjectCreated:Put"}, filter, "p66zhthn");
+    CloudFunctionConfiguration configuration("test-id", {"tos:ObjectCreated:Put"}, filter, "62vy7sa6");
     PutBucketNotificationInput putBucketNotificationInput(bucketName, {configuration});
     auto putOutput = cliV2->putBucketNotification(putBucketNotificationInput);
     EXPECT_EQ(putOutput.isSuccess(), true);

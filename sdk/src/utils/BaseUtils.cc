@@ -26,7 +26,7 @@ std::string TimeUtils::transTimeToFormat(const std::time_t& t, const char* forma
 }
 
 std::string TimeUtils::transTimeToGmtTime(const std::time_t& t) {
-    if (t == 0) {
+    if (t <= 0) {
         return "";
     }
     std::stringstream date;

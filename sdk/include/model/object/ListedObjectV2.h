@@ -77,8 +77,13 @@ public:
         }
         if (object.contains("StorageClass"))
             lo.setStorageClass(VolcengineTos::StringtoStorageClassType[object.at("StorageClass").get<std::string>()]);
-        if (object.contains("HashCrc64ecma"))
-            lo.setHashCrc64Ecma(stoull(object.at("HashCrc64ecma").get<std::string>()));
+        if (object.contains("HashCrc64ecma")) {
+            auto hashCrc_ = object.at("HashCrc64ecma").get<std::string>();
+            if (!hashCrc_.empty()) {
+                lo.setHashCrc64Ecma(stoull(hashCrc_));
+            }
+        }
+
         return lo;
     }
     const std::string& getStringFormatStorageClass() const {
