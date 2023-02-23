@@ -717,17 +717,17 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
     // crc64校验
     if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0) {
         auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
-        uint64_t hashcrc64 = 0;
         if (!hashCrc64String.empty()) {
+            uint64_t hashcrc64 = 0;
             hashcrc64 = std::stoull(hashCrc64String);
-        }
-        if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
-            TosError error;
-            error.setIsClientError(true);
-            error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
-            res.setE(error);
-            res.setSuccess(false);
-            return res;
+            if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
+                TosError error;
+                error.setIsClientError(true);
+                error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
+                res.setE(error);
+                res.setSuccess(false);
+                return res;
+            }
         }
     }
     // 断流校验由 libcurl 支持，对应错误码 18
@@ -1133,17 +1133,17 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     }
     if (config_.isEnableCrc()) {
         auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
-        uint64_t hashcrc64 = 0;
         if (!hashCrc64String.empty()) {
+            uint64_t hashcrc64 = 0;
             hashcrc64 = std::stoull(hashCrc64String);
-        }
-        if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
-            TosError error;
-            error.setIsClientError(true);
-            error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
-            res.setE(error);
-            res.setSuccess(false);
-            return res;
+            if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
+                TosError error;
+                error.setIsClientError(true);
+                error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
+                res.setE(error);
+                res.setSuccess(false);
+                return res;
+            }
         }
     }
     PutObjectV2Output output;
@@ -2779,17 +2779,17 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
     // crc64 校验
     if (config_.isEnableCrc()) {
         auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
-        uint64_t hashcrc64 = 0;
         if (!hashCrc64String.empty()) {
+            uint64_t hashcrc64 = 0;
             hashcrc64 = std::stoull(hashCrc64String);
-        }
-        if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
-            TosError error;
-            error.setIsClientError(true);
-            error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
-            res.setE(error);
-            res.setSuccess(false);
-            return res;
+            if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
+                TosError error;
+                error.setIsClientError(true);
+                error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
+                res.setE(error);
+                res.setSuccess(false);
+                return res;
+            }
         }
     }
     AppendObjectV2Output output;
@@ -3866,17 +3866,17 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     }
     if (config_.isEnableCrc()) {
         auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
-        uint64_t hashcrc64 = 0;
         if (!hashCrc64String.empty()) {
+            uint64_t hashcrc64 = 0;
             hashcrc64 = std::stoull(hashCrc64String);
-        }
-        if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
-            TosError error;
-            error.setIsClientError(true);
-            error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
-            res.setE(error);
-            res.setSuccess(false);
-            return res;
+            if (tosRes.result()->getHashCrc64Result() != hashcrc64) {
+                TosError error;
+                error.setIsClientError(true);
+                error.setMessage("Check CRC failed: CRC checksum of client is mismatch with tos");
+                res.setE(error);
+                res.setSuccess(false);
+                return res;
+            }
         }
     }
     UploadPartV2Output output;

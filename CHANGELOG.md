@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2023.2.23 Version 2.5.2
+
+- 修复：当前对对象本身没有 crc64 的场景，Crc64 会校验不通过
+
 ### 2023.2.23 Version 2.5.1
 
 - 修复：ListObjectsType2 将会默认返回owner信息
