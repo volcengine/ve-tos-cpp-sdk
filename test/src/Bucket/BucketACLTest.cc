@@ -37,6 +37,7 @@ std::string BucketACLTest::bkt_name = "";
 TEST_F(BucketACLTest, PutGetBucketAclWithBodyTest) {
     GetBucketAclInput input_get_acl(bkt_name);
     auto output_obj_get_acl = cliV2->getBucketAcl(input_get_acl);
+    EXPECT_EQ(output_obj_get_acl.isSuccess(), true);
     bool check_id = (output_obj_get_acl.result().getOwner().getId() ==
                      output_obj_get_acl.result().getGrant()[0].getGrantee().getId());
     bool check_Grantee_type =

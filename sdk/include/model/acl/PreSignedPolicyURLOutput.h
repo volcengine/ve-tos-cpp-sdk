@@ -2,8 +2,9 @@
 
 #include <string>
 #include <utility>
+#include <iostream>
 #include "Type.h"
-#include "../src/auth/SignV4.h"
+#include <sstream>
 namespace VolcengineTos {
 class PreSignedPolicyURLOutput {
 public:
@@ -45,22 +46,7 @@ public:
     }
 
 private:
-    static std::string queryToString(const std::map<std::string, std::string>& additioQuery) {
-        if (additioQuery.empty()) {
-            return "";
-        }
-        std::string res;
-        for (const auto& q : additioQuery) {
-            res += SignV4::uriEncode(q.first, true);
-            res += "=";
-            res += SignV4::uriEncode(q.second, true);
-            ;
-            res += "&";
-        }
-        res = res.substr(0, res.size() - 1);
-
-        return res;
-    }
+    static std::string queryToString(const std::map<std::string, std::string>& additioQuery);
 
 private:
     std::string signedQuery_;

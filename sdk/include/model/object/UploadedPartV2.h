@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "utils/BaseUtils.h"
 namespace VolcengineTos {
 class UploadedPartV2 {
 public:

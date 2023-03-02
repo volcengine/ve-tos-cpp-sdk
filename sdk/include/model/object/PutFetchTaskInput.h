@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Type.h"
 namespace VolcengineTos {
 class PutFetchTaskInput {
 public:
@@ -107,17 +107,7 @@ public:
         hexMD5_ = hexMd5;
     }
 
-    std::string toJsonString() const {
-        nlohmann::json j;
-        j["URL"] = url_;
-        j["Object"] = key_;
-        if (ignoreSameKey_) {
-            j["IgnoreSameKey"] = ignoreSameKey_;
-        }
-        if (!hexMD5_.empty())
-            j["ContentMD5"] = hexMD5_;
-        return j.dump();
-    }
+    std::string toJsonString() const;
 
 private:
     std::string bucket_;

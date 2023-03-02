@@ -27,3 +27,4 @@ void VolcengineTos::UploadFilePartInfo::load(const std::string& info) {
     if (j.contains("IsCompleted"))
         j.at("IsCompleted").get_to(isCompleted_);
 }
+

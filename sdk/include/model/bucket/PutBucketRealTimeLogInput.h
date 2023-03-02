@@ -5,7 +5,6 @@
 #include <utility>
 #include <vector>
 
-#include "../src/external/json/json.hpp"
 #include "RealTimeLogConfiguration.h"
 
 namespace VolcengineTos {
@@ -31,32 +30,7 @@ public:
         configuration_ = configuration;
     }
 
-    std::string toJsonString() const {
-        nlohmann::json j;
-        nlohmann::json configuration;
-        if (!configuration_.getRole().empty()) {
-            configuration["Role"] = configuration_.getRole();
-        }
-        nlohmann::json conf;
-        auto conf_ = configuration_.getConfiguration();
-        if (conf_.isUseServiceTopic()) {
-            conf["UseServiceTopic"] = conf_.isUseServiceTopic();
-        }
-        if (!conf_.getTlsProjectId().empty()) {
-            conf["TLSProjectID"] = conf_.getTlsProjectId();
-        }
-        if (!conf_.getTlsTopicId().empty()) {
-            conf["TLSTopicID"] = conf_.getTlsTopicId();
-        }
-        if (!conf.empty()) {
-            configuration["AccessLogConfiguration"] = conf;
-        }
-
-        if (!configuration.empty()) {
-            j["RealTimeLogConfiguration"] = configuration;
-        }
-        return j.dump();
-    }
+    std::string toJsonString() const;
 
 private:
     std::string bucket_;

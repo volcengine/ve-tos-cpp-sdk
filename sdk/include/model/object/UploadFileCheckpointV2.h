@@ -4,6 +4,9 @@
 #include <vector>
 #include "UploadFilePartInfoV2.h"
 #include "UploadFileInfoV2.h"
+#include <sstream>
+#include <fstream>
+#include <iostream>
 namespace VolcengineTos {
 class UploadFileCheckpointV2 {
 public:
@@ -68,68 +71,8 @@ public:
         partsInfo_ = partsinfo;
     }
 
-    void dump(std::string checkpointFilePath) {
-        nlohmann::json j;
-        j["Bucket"] = bucket_;
-        j["Key"] = key_;
-        j["PartSize"] = partSize_;
-        j["UploadID"] = uploadID_;
-        j["SSECustomerAlgorithm"] = sseAlgorithm_;
-        j["SSECustomerMD5"] = sseKeyMd5_;
-        j["EncodingType"] = encodingType_;
-        j["FilePath"] = filePath_;
-        j["FileInfo"] = fileInfo_.dump();
-        nlohmann::json jParts = nlohmann::json::array();
-        for (auto& part : partsInfo_) {
-            jParts.emplace_back(part.dump());
-        }
-        j["PartsInfo"] = jParts;
-        std::ofstream ofs(checkpointFilePath, std::ios::out | std::ios::trunc);
-        ofs << j.dump();
-        ofs.close();
-    }
-
-    void load(std::string checkpointFilePath) {
-        if (checkpointFilePath.empty()) {
-            return;
-        }
-        std::ifstream ifs(checkpointFilePath, std::ios::in);
-        std::stringstream ss;
-        ss << ifs.rdbuf();
-        ifs.close();
-        auto str = ss.str();
-        if (str.empty()) {
-            return;
-        }
-        auto j = nlohmann::json::parse(ss.str());
-        if (j.contains("Bucket"))
-            j.at("Bucket").get_to(bucket_);
-        if (j.contains("Key"))
-            j.at("Key").get_to(key_);
-        if (j.contains("PartSize"))
-            j.at("PartSize").get_to(partSize_);
-        if (j.contains("UploadID"))
-            j.at("UploadID").get_to(uploadID_);
-        if (j.contains("SSECustomerAlgorithm"))
-            j.at("SSECustomerAlgorithm").get_to(sseAlgorithm_);
-        if (j.contains("SSECustomerMD5"))
-            j.at("SSECustomerMD5").get_to(sseKeyMd5_);
-        if (j.contains("EncodingType"))
-            j.at("EncodingType").get_to(encodingType_);
-        if (j.contains("FilePath"))
-            j.at("FilePath").get_to(filePath_);
-        if (j.contains("FileInfo")) {
-            fileInfo_.load(j.at("FileInfo"));
-        }
-        if (j.contains("PartsInfo")) {
-            nlohmann::json parts = j.at("PartsInfo");
-            for (auto& part : parts) {
-                UploadFilePartInfoV2 ufp;
-                ufp.load(part);
-                partsInfo_.emplace_back(ufp);
-            }
-        }
-    }
+    void dump(std::string checkpointFilePath);
+    void load(std::string checkpointFilePath);
     void setUploadFilePartInfoByIdx(const UploadFilePartInfoV2& uploadFilePartInfo, int idx) {
         if (idx < 0 || idx >= partsInfo_.size())
             return;

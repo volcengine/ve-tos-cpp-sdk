@@ -1,7 +1,7 @@
 #pragma once
 
 #include "TosClient.h"
-
+#include <memory>
 #include <string>
 #include "Config.h"
 #include "Outcome.h"

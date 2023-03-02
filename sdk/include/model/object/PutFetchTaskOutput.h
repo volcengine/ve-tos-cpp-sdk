@@ -16,11 +16,7 @@ public:
     void setTaskId(const std::string& taskId) {
         taskID_ = taskId;
     }
-    void fromJsonString(const std::string& input) {
-        auto j = nlohmann::json::parse(input);
-        if (j.contains("TaskId"))
-            j.at("TaskId").get_to(taskID_);
-    }
+    void fromJsonString(const std::string& input);
 
 private:
     RequestInfo requestInfo_;

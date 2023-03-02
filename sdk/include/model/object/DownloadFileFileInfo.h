@@ -22,19 +22,8 @@ public:
     void setKeyEndWithDelimiter(bool keyEndWithDelimiter) {
         DownloadFileFileInfo::keyEndWithDelimiter = keyEndWithDelimiter;
     }
-    std::string dump() {
-        nlohmann::json j;
-        j["FilePath"] = filePath_;
-        j["TempFilePath"] = tempFilePath_;
-        return j.dump();
-    }
-    void load(const std::string& info) {
-        auto j = nlohmann::json::parse(info);
-        if (j.contains("FilePath"))
-            j.at("FilePath").get_to(filePath_);
-        if (j.contains("TempFilePath"))
-            j.at("TempFilePath").get_to(tempFilePath_);
-    }
+    std::string dump();
+    void load(const std::string& info);
 
 private:
     std::string filePath_;
