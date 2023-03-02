@@ -2,6 +2,7 @@
 
 #include <string>
 #include <utility>
+#include <memory>
 namespace VolcengineTos {
 class PolicySignatureCondition {
 public:

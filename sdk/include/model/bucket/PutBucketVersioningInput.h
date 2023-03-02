@@ -28,13 +28,7 @@ public:
         status_ = status;
     }
 
-    std::string toJsonString() const {
-        nlohmann::json j;
-        if (status_ != VersioningStatusType::NotSet) {
-            j["Status"] = VersioningStatusTypetoString[status_];
-        }
-        return j.dump();
-    }
+    std::string toJsonString() const;
 
 private:
     std::string bucket_;

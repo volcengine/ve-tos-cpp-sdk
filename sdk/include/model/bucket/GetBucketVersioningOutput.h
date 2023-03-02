@@ -18,12 +18,7 @@ public:
         status_ = status;
     }
 
-    void fromJsonString(const std::string& input) {
-        auto j = nlohmann::json::parse(input);
-        if (j.contains("Status")) {
-            status_ = StringtoVersioningStatusType[j.at("Status").get<std::string>()];
-        }
-    }
+    void fromJsonString(const std::string& input);
     const std::string& getStringFormatVersioningStatus() const {
         return VersioningStatusTypetoString[status_];
     }

@@ -3,6 +3,7 @@
 #include "Type.h"
 #include "CreateMultipartUploadInput.h"
 #include <string>
+
 namespace VolcengineTos {
 class ResumableCopyObjectInput : public CreateMultipartUploadInput {
 public:

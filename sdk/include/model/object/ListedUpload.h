@@ -3,6 +3,7 @@
 #include <string>
 #include "model/acl/Owner.h"
 #include "Type.h"
+#include "utils/BaseUtils.h"
 namespace VolcengineTos {
 class ListedUpload {
 public:

@@ -1,7 +1,6 @@
 #include "../TestConfig.h"
 #include "../Utils.h"
 #include "TosClientV2.h"
-#include "../../../sdk/src/auth/SignV4.h"
 #include <gtest/gtest.h>
 #include <dirent.h>
 namespace VolcengineTos {

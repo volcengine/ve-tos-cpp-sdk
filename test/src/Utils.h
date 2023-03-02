@@ -1,4 +1,8 @@
 #include "TosClientV2.h"
+#include <string>
+#include <fstream>
+#include <memory>
+#include <cstring>
 //#ifdef _WIN32
 //#define delimiter "\\"
 //#else

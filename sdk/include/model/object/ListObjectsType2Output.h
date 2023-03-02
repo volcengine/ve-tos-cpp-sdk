@@ -80,46 +80,7 @@ public:
         contents_ = contents;
     }
 
-    void fromJsonString(const std::string& input) {
-        auto j = nlohmann::json::parse(input);
-        if (j.is_discarded()) {
-            return;
-        }
-        if (j.contains("Name"))
-            j.at("Name").get_to(name_);
-        if (j.contains("Prefix"))
-            j.at("Prefix").get_to(prefix_);
-        if (j.contains("ContinuationToken"))
-            j.at("ContinuationToken").get_to(continuationToken_);
-        if (j.contains("MaxKeys"))
-            j.at("MaxKeys").get_to(maxKeys_);
-        if (j.contains("Delimiter"))
-            j.at("Delimiter").get_to(delimiter_);
-        if (j.contains("EncodingType"))
-            j.at("EncodingType").get_to(encodingType_);
-        if (j.contains("KeyCount"))
-            j.at("KeyCount").get_to(keyCount_);
-        if (j.contains("IsTruncated"))
-            j.at("IsTruncated").get_to(isTruncated_);
-        if (j.contains("NextContinuationToken"))
-            j.at("NextContinuationToken").get_to(nextContinuationToken_);
-        if (j.contains("CommonPrefixes")) {
-            auto commonPrefixes = j.at("CommonPrefixes");
-            for (auto& cp : commonPrefixes) {
-                ListedCommonPrefix listedCommonPrefix;
-                if (cp.contains("Prefix")) {
-                    listedCommonPrefix.setPrefix(cp.at("Prefix").get<std::string>());
-                }
-                commonPrefixes_.emplace_back(listedCommonPrefix);
-            }
-        }
-        if (j.contains("Contents")) {
-            nlohmann::json contents = j.at("Contents");
-            for (auto& ct : contents) {
-                contents_.push_back(ListedObjectV2::parseListedObjectV2(ct));
-            }
-        }
-    }
+    void fromJsonString(const std::string& input);
 
 private:
     RequestInfo requestInfo_;

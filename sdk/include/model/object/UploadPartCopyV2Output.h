@@ -1,7 +1,6 @@
 #pragma once
 
 #include <utility>
-#include "../src/external/json/json.hpp"
 #include "model/RequestInfo.h"
 
 namespace VolcengineTos {
@@ -38,16 +37,7 @@ public:
         copySourceVersionID_ = copysourceversionid;
     }
 
-    void fromJsonString(const std::string& input) {
-        auto j = nlohmann::json::parse(input);
-        if (j.contains("ETag"))
-            j.at("ETag").get_to(eTag_);
-        if (j.contains("LastModified")) {
-            std::time_t lastModified =
-                    TimeUtils::transLastModifiedStringToTime(j.at("LastModified").get<std::string>());
-            lastModified_ = lastModified;
-        }
-    }
+    void fromJsonString(const std::string& input);
 
 private:
     RequestInfo requestInfo_;

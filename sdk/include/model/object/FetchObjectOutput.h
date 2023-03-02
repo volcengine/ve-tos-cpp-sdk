@@ -37,13 +37,7 @@ public:
         ssecKeyMd5_ = ssecKeyMd5;
     }
 
-    void fromJsonString(const std::string& input) {
-        auto j = nlohmann::json::parse(input);
-        if (j.contains("VersionId"))
-            j.at("VersionId").get_to(versionID_);
-        if (j.contains("ETag"))
-            j.at("ETag").get_to(eTag_);
-    }
+    void fromJsonString(const std::string& input);
 
 private:
     RequestInfo requestInfo_;

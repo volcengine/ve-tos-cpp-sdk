@@ -2,8 +2,6 @@
 #include "../Utils.h"
 #include "TosClientV2.h"
 #include <gtest/gtest.h>
-#include "spdlog/spdlog.h"
-#include "utils/LogUtils.h"
 
 namespace VolcengineTos {
 class RetryTest : public ::testing::Test {

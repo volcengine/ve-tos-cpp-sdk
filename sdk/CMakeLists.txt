@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.5.2
+        VERSION 2.5.3
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -284,6 +284,58 @@ set(SDK_LIB
         src/model/acl/GetObjectAclV2Output.cc
         src/model/object/HeadObjectV2Output.cc
         src/utils/LogUtils.h
+        src/model/object/ResumableCopyCheckpoint.cc
+        src/model/bucket/GetBucketWebsiteOutput.cc
+        src/model/object/ResumableCopyCopySourceObjectInfo.cc
+        src/model/acl/GetBucketAclOutput.cc
+        src/model/acl/PolicyURLInner.cc
+        src/model/acl/PutBucketAclInput.cc
+        src/model/acl/PutObjectAclV2Input.cc
+        src/model/bucket/GetBucketCORSOutput.cc
+        src/model/bucket/GetBucketLocationOutput.cc
+        src/model/bucket/GetBucketNotificationOutput.cc
+        src/model/bucket/GetBucketRealTimeLogOutput.cc
+        src/model/bucket/GetBucketReplicationOutput.cc
+        src/model/bucket/GetBucketWebsiteOutput.cc
+        src/model/bucket/ListBucketCustomDomainOutput.cc
+        src/model/bucket/PutBucketCORSInput.cc
+        src/model/bucket/PutBucketCustomDomainInput.cc
+        src/model/bucket/PutBucketNotificationInput.cc
+        src/model/bucket/PutBucketRealTimeLogInput.cc
+        src/model/bucket/PutBucketMirrorBackInput.cc
+        src/model/bucket/GetBucketMirrorBackOutput.cc
+        src/model/bucket/PutBucketReplicationInput.cc
+        src/model/bucket/PutBucketWebsiteInput.cc
+        src/model/bucket/PutBucketLifecycleInput.cc
+        src/model/bucket/GetBucketLifecycleOutput.cc
+        src/model/object/CompleteMultipartUploadV2Input.cc
+        src/model/object/CompleteMultipartUploadV2Output.cc
+        src/model/object/CopyObjectInner.cc
+        src/model/object/DownloadFileCheckpoint.cc
+        src/model/object/ListedObjectType2Output.cc
+        src/model/object/ListMultipartUploadsV2Output.cc
+        src/model/object/ListPartsOutput.cc
+        src/model/object/PostPolicyInner.cc
+        src/model/object/ResumableCopyCheckpoint.cc
+        src/model/object/ResumableCopyCopySourceObjectInfo.cc
+        src/model/object/ResumableCopyPartInfo.cc
+        src/model/object/UploadPartCopyInner.cc
+        src/model/object/UploadPartCopyV2Output.cc
+        src/model/acl/PreSignedPolicyURLOutput.cc
+        src/model/object/DownloadFileFileInfo.cc
+        src/model/object/PutObjectTaggingInput.cc
+        src/model/object/GetObjectTaggingOutput.cc
+        src/model/object/FetchObjectInput.cc
+        src/model/object/DownloadFileObjectInfo.cc
+        src/model/object/FetchObjectOutput.cc
+        src/model/object/PutFetchTaskInput.cc
+        src/model/object/PutFetchTaskOutput.cc
+        src/model/bucket/PutBucketVersioningInput.cc
+        src/model/object/DownloadFilePartInfo.cc
+        src/model/bucket/GetBucketVersioningOutput.cc
+        src/model/object/UploadFileInfoV2.cc
+        src/model/object/UploadFilePartInfoV2.cc
+        src/model/object/UploadFileCheckpointV2.cc
         )
 
 # add spdlog

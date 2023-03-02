@@ -1,6 +1,7 @@
 #pragma once
 #include "HeadObjectV2Input.h"
 #include <string>
+#include <memory>
 #include <utility>
 namespace VolcengineTos {
 class DownloadFileInput {

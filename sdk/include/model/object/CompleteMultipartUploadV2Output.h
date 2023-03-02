@@ -1,7 +1,6 @@
 #pragma once
 
 #include "model/RequestInfo.h"
-#include "../src/external/json/json.hpp"
 namespace VolcengineTos {
 class CompleteMultipartUploadV2Output {
 public:
@@ -48,17 +47,7 @@ public:
         hashCrc64ecma_ = hashcrc64ecma;
     }
 
-    void fromJsonString(const std::string& input) {
-        auto j = nlohmann::json::parse(input);
-        if (j.contains("Location"))
-            j.at("Location").get_to(location_);
-        if (j.contains("Bucket"))
-            j.at("Bucket").get_to(bucket_);
-        if (j.contains("Key"))
-            j.at("Key").get_to(key_);
-        if (j.contains("ETag"))
-            j.at("ETag").get_to(eTag_);
-    }
+    void fromJsonString(const std::string& input);
 
 private:
     RequestInfo requestInfo_;

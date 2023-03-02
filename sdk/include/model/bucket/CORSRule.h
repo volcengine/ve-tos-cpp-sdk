@@ -3,7 +3,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "../../../src/external/json/json.hpp"
 namespace VolcengineTos {
 class CORSRule {
 public:

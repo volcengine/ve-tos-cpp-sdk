@@ -5,7 +5,6 @@
 #include <vector>
 #include <ostream>
 #include <algorithm>
-#include "../src/external/json/json.hpp"
 #include "UploadedPartV2.h"
 namespace VolcengineTos {
 
@@ -45,22 +44,7 @@ public:
     void setParts(const std::vector<UploadedPartV2>& parts) {
         parts_ = parts;
     }
-    std::string toJsonString() const {
-        nlohmann::json j;
-        nlohmann::json partsArray = nlohmann::json::array();
-        for (auto& p : parts_) {
-            nlohmann::json parts;
-            auto partNumber_ = std::to_string(p.getPartNumber());
-            if (!partNumber_.empty())
-                parts["PartNumber"] = p.getPartNumber();
-            if (!p.getETag().empty())
-                parts["ETag"] = p.getETag();
-            partsArray.push_back(parts);
-        }
-        if (!partsArray.empty())
-            j["Parts"] = partsArray;
-        return j.dump();
-    }
+    std::string toJsonString() const;
 
 private:
     std::string bucket_;

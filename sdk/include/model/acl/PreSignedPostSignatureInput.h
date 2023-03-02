@@ -6,7 +6,6 @@
 #include "Type.h"
 #include "Owner.h"
 #include "GrantV2.h"
-#include "../src/external/json/json.hpp"
 #include "model/object/PostSignatureCondition.h"
 #include "model/object/ContentLengthRange.h"
 namespace VolcengineTos {

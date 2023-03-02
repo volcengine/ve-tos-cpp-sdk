@@ -4,20 +4,8 @@
 namespace VolcengineTos {
 class UploadFileInfoV2 {
 public:
-    std::string dump() {
-        nlohmann::json j;
-        j["LastModified"] = lastModified_;
-        j["FileSize"] = fileSize_;
-        return j.dump();
-    }
-    void load(const std::string& info) {
-        auto j = nlohmann::json::parse(info);
-        if (j.contains("LastModified"))
-            j.at("LastModified").get_to(lastModified_);
-        if (j.contains("FileSize"))
-            j.at("FileSize").get_to(fileSize_);
-    }
-
+    std::string dump();
+    void load(const std::string& info);
     int64_t getLastModified() const {
         return lastModified_;
     }
