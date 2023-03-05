@@ -38,7 +38,7 @@ TEST_F(BucketVersioningTest, BucketVersioningWithALLParametersTest) {
     auto putOutput = cliV2->putBucketVersioning(putBucketVersioningInput);
     EXPECT_EQ(putOutput.isSuccess(), true);
 
-    TimeUtils::sleepSecondTimes(10);
+    TimeUtils::sleepSecondTimes(30);
     GetBucketVersioningInput getBucketVersioningInput(bucketName);
     auto getOutput = cliV2->getBucketVersioning(getBucketVersioningInput);
     EXPECT_EQ(getOutput.isSuccess(), true);
@@ -48,7 +48,7 @@ TEST_F(BucketVersioningTest, BucketVersioningWithALLParametersTest) {
     auto putOutput1 = cliV2->putBucketVersioning(putBucketVersioningInput);
     EXPECT_EQ(putOutput1.isSuccess(), true);
 
-    TimeUtils::sleepSecondTimes(10);
+    TimeUtils::sleepSecondTimes(30);
     auto getOutput1 = cliV2->getBucketVersioning(getBucketVersioningInput);
     EXPECT_EQ(getOutput1.isSuccess(), true);
     EXPECT_EQ(getOutput1.result().getStatus(), VersioningStatusType::Suspended);

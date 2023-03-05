@@ -104,12 +104,13 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     conf.setEnableVerifySsl(config.enableVerifySSL);
     conf.setRequestTimeout(config.requestTimeout);
     conf.setConnectTimeout(config.connectionTimeout);
-    // 以下参数对应功能还没有实际实现，等后续特性支持时添加参数传递
     conf.setProxyHost(config.proxyHost);
     conf.setProxyPort(config.proxyPort);
     conf.setProxyUsername(config.proxyUsername);
     conf.setProxyPassword(config.proxyPassword);
     conf.setDnsCacheTime(config.dnsCacheTime);
+    conf.setMaxConnections(config.maxConnections);
+    conf.setSocketTimeout(config.socketTimeout);
     transport_ = std::make_shared<DefaultTransport>(conf);
 
     // 保存参数到 config_ 里
@@ -6585,7 +6586,7 @@ bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
     if (resCode == 429 || resCode >= 500 || timeout) {
         if (request->getMethod() == http::MethodGet || request->getMethod() == http::MethodHead) {
             if (request->getMethod() == http::MethodGet) {
-                auto content_ = response->getContent();
+                auto content_ = request->getContent();
                 if (content_ != nullptr) {
                     int64_t contentLength_ = calContentLength(content_);
                     if (contentLength_ != 0) {
@@ -6595,13 +6596,15 @@ bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
             }
             return true;
         }
-        if ((resCode == 429 || resCode >= 500) && findInCanRetryMethods(request->getFuncName())) {
+        if ((resCode == 429 || resCode >= 500 || timeout) && findInCanRetryMethods(request->getFuncName())) {
             if (request->getFuncName() == "putObject" || request->getFuncName() == "uploadPart") {
-                auto content = response->getContent();
-                int64_t offset = request->getContentOffset();
-                content->seekg(offset, content->beg);
-                if (content->bad() || content->fail()) {
-                    return false;
+                auto content_ = request->getContent();
+                if (content_ != nullptr) {
+                    int64_t offset = request->getContentOffset();
+                    content_->seekg(offset, content_->beg);
+                    if (content_->bad() || content_->fail()) {
+                        return false;
+                    }
                 }
             }
             return true;
@@ -6628,7 +6631,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
     }
     auto logger = LogUtils::GetLogger();
     auto rateLimiter = request->getRataLimiter();
-    auto maxRetry = config_.getMaxRetryCount() < 1 ? 1 : config_.getMaxRetryCount();
+    auto maxRetry = config_.getMaxRetryCount() < 0 ? 1 : config_.getMaxRetryCount();
     for (int retry = 0;; retry++) {
         if (retry != 0) {
             TimeUtils::sleepMilliSecondTimes(config_.getRetrySleepScale() * (1 << retry));

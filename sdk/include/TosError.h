@@ -69,7 +69,7 @@ public:
 
 private:
     bool isClientError_ = false;
-    int statusCode_ = 400;
+    int statusCode_ = -1;
     std::string code_;
     std::string message_;
     std::string requestID_;
