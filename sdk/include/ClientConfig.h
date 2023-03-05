@@ -10,14 +10,16 @@ public:
               autoRecognizeContentType(true),
               maxRetryCount(3),
               connectionTimeout(10000),
-              requestTimeout(120000),
+              requestTimeout(0),
               proxyHost(http::SchemeHTTP),
               proxyPort(-1),
               proxyPassword(""),
               proxyUsername(""),
               enableCRC(true),
               enableVerifySSL(true),
-              dnsCacheTime(0) {
+              dnsCacheTime(0),
+              socketTimeout(30000),
+              maxConnections(25){
     }
     ~ClientConfig() = default;
 
@@ -35,5 +37,7 @@ public:
     // int IdleConnectionTime;
     bool enableVerifySSL;
     int dnsCacheTime;
+    int socketTimeout;
+    int maxConnections;
 };
 }  // namespace VolcengineTos

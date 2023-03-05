@@ -101,6 +101,18 @@ public:
     void setDnsCacheTime(int dnsCacheTime) {
         dnsCacheTime_ = dnsCacheTime;
     }
+    int getMaxConnections() const {
+        return maxConnections;
+    }
+    void setMaxConnections(int maxConnections) {
+        TransportConfig::maxConnections = maxConnections;
+    }
+    int getSocketTimeout() const {
+        return socketTimeout_;
+    }
+    void setSocketTimeout(int socketTimeout) {
+        socketTimeout_ = socketTimeout;
+    }
 
 private:
     int maxIdleCount_ = 128;
@@ -119,5 +131,7 @@ private:
     std::string proxyUsername_;
     std::string proxyPassword_;
     int dnsCacheTime_ = 0;
+    int maxConnections = 25;
+    int socketTimeout_ = 30000;
 };
 }  // namespace VolcengineTos

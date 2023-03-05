@@ -207,6 +207,7 @@ HttpClient::HttpClient(const HttpConfig& config) {
         initGlobalState();
         hasInitHttpClient = true;
     }
+    curlContainer_ = new CurlContainer(config.maxConnections,config.socketTimeout,config.connectTimeout);
     tcpKeepAlive_ = config.tcpKeepAlive;
     dialTimeout_ = config.dialTimeout;
     requestTimeout_ = config.requestTimeout;
@@ -244,20 +245,12 @@ void HttpClient::removeDNS(void* curl, const std::shared_ptr<HttpRequest>& reque
 
 std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRequest>& request) {
     // init curl for this request
-    CURL* curl = curl_easy_init();
+    CURL * curl = curlContainer_->Acquire();
+    if (requestTimeout_ != 0) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 1L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_);
+    }
 
-    /* enable TCP keep-alive for this request */
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-    /* keep-alive idle time to 120 seconds */
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
-    /* interval time between keep-alive probes: 60 seconds */
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
-    curl_easy_setopt(curl, CURLOPT_NETRC, CURL_NETRC_IGNORED);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, connectTimeout_);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 1L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_);
 
     if (proxyPort_ != -1 && !proxyHost_.empty()) {
         std::string proxy = proxyHost_ + ":" + std::to_string(proxyPort_);
@@ -362,18 +355,18 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         response->setStatus(http::Success);
 
 #ifdef CURL_VERSION_7610
-        long nameLookUp = 0;
-        long connectTime = 0;
-        long tlsConnect = 0;
-        long startTrans = 0;
-        long totalTime = 0;
-        curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME_T, &nameLookUp);
-        curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME_T, &connectTime);
-        curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME_T, &tlsConnect);
-        curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME_T, &startTrans);
-        curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME_T, &totalTime);
         auto logger = LogUtils::GetLogger();
         if (logger != nullptr) {
+            long nameLookUp = 0;
+            long connectTime = 0;
+            long tlsConnect = 0;
+            long startTrans = 0;
+            long totalTime = 0;
+            curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME_T, &nameLookUp);
+            curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME_T, &connectTime);
+            curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME_T, &tlsConnect);
+            curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME_T, &startTrans);
+            curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME_T, &totalTime);
             logger->debug(
                     "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
                     request->method(), request->url().host(), request->url().path(), nameLookUp / 1000,
@@ -381,18 +374,19 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
                     totalTime / 1000);
         }
 #else
-        double nameLookUp = 0;
-        double connectTime = 0;
-        double tlsConnect = 0;
-        double startTrans = 0;
-        double totalTime = 0;
-        curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
-        curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
-        curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
-        curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
-        curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
         auto logger = LogUtils::GetLogger();
         if (logger != nullptr) {
+            double nameLookUp = 0;
+            double connectTime = 0;
+            double tlsConnect = 0;
+            double startTrans = 0;
+            double totalTime = 0;
+            curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
+            curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
+            curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
+            curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
+            curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
+            auto logger = LogUtils::GetLogger();
             logger->debug(
                     "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
                     request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
@@ -420,7 +414,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     }
 
     request->setTransferedBytes(resourceMan.send);
+    curlContainer_->Release(curl, (res != CURLE_OK));
     curl_slist_free_all(list);
-    curl_easy_cleanup(curl);
     return response;
 }

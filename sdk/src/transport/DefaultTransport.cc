@@ -3,6 +3,8 @@ using namespace VolcengineTos;
 
 DefaultTransport::DefaultTransport(const TransportConfig& config) {
     HttpConfig conf{};
+    conf.maxConnections = config.getMaxConnections();
+    conf.socketTimeout = config.getSocketTimeout();
     conf.connectTimeout = config.getConnectTimeout();
     conf.requestTimeout = config.getRequestTimeout();
     conf.dialTimeout = config.getDialTimeout();
