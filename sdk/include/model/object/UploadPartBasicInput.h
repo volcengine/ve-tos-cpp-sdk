@@ -61,10 +61,10 @@ public:
     void setSsecKeyMd5(const std::string& sseckeymd5) {
         ssecKeyMD5_ = sseckeymd5;
     }
-    const std::string& getServerSideEncryption() const {
+    [[gnu::deprecated]] const std::string& getServerSideEncryption() const {
         return serverSideEncryption_;
     }
-    void setServerSideEncryption(const std::string& serversideencryption) {
+    [[gnu::deprecated]] void setServerSideEncryption(const std::string& serversideencryption) {
         serverSideEncryption_ = serversideencryption;
     }
     const DataTransferListener& getDataTransferListener() const {
@@ -93,9 +93,9 @@ private:
     std::string ssecKey;
     std::string ssecKeyMD5_;
 
-    std::string serverSideEncryption_;  // TOS 管理密钥的加密方式，可扩展，当前只支持 AES256
+    [[gnu::deprecated]] std::string serverSideEncryption_;  // TOS 管理密钥的加密方式，可扩展，当前只支持 AES256
 
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};  // 进度条特性
-    std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速，详见 4.4.5 章节
+    std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速
 };
 }  // namespace VolcengineTos

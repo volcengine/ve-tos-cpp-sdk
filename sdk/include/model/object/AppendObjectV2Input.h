@@ -148,7 +148,7 @@ private:
     std::string bucket_;
     std::string key_;
     int64_t offset_ = 0;
-    std::shared_ptr<std::iostream> content_;  // io.Reader
+    std::shared_ptr<std::iostream> content_;
 
     int64_t contentLength_ = 0;
     std::string contentType_;
@@ -168,7 +168,7 @@ private:
     std::string websiteRedirectLocation_;
     StorageClassType storageClass_ = StorageClassType::NotSet;
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};  // 进度条特性
-    std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速，详见 4.4.5 章节
+    std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速
     uint64_t preHashCrc64ecma_ = 0;  // 与初始化参数 EnableCRC 配套使用，代表上一次调用 AppendObjectOutput 返回的
                                      // HashCrc64ecma，第一次请求时为 0
 };
