@@ -58,7 +58,7 @@ private:
     std::string delimiter_;
     std::string marker_;
     int maxKeys_ = 0;
-    bool reverse_ = false;
+    [[gnu::deprecated]] bool reverse_ = false;
     std::string encodingType_;
 };
 }  // namespace VolcengineTos

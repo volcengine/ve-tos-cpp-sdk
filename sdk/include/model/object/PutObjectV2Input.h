@@ -183,6 +183,6 @@ public:
 
 private:
     PutObjectBasicInput putObjectBasicInput_;
-    std::shared_ptr<std::iostream> content_;  // io.Reader
+    std::shared_ptr<std::iostream> content_;
 };
 }  // namespace VolcengineTos

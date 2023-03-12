@@ -2749,6 +2749,14 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
         res.setSuccess(false);
         return res;
     }
+    if (input.getContent() == nullptr) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("empty content");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
     // offset有默认值因此不校验
     auto rb = newBuilder(input.getBucket(), input.getKey());
     rb.withQuery("append", "");
@@ -2825,7 +2833,6 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const std::s
     return res;
 }
 static void setObjectMetaSetOptionHeader(RequestBuilder& rb, const SetObjectMetaInput& input) {
-    rb.withHeader(HEADER_VERSIONID, input.getVersionId());
     rb.withHeader(http::HEADER_CONTENT_TYPE, input.getContentType());
     rb.withHeader(http::HEADER_CACHE_CONTROL, input.getCacheControl());
     rb.withHeader(http::HEADER_EXPIRES, TimeUtils::transTimeToGmtTime(input.getExpires()));
@@ -2852,6 +2859,8 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const SetObj
     }
     auto rb = newBuilder(input.getBucket(), input.getKey());
     rb.withQuery("metadata", "");
+    rb.withQueryCheckEmpty("versionid", input.getVersionId());
+
     setObjectMetaSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodPost, nullptr);
     // 设置funcName
@@ -2889,9 +2898,6 @@ Outcome<TosError, ListObjectsOutput> TosClientImpl::listObjects(const std::strin
     rb.withQueryCheckEmpty("marker", input.getMarker());
     if (input.getMaxKeys() != 0) {
         rb.withQueryCheckEmpty("max-keys", std::to_string(input.getMaxKeys()));
-    }
-    if (input.isReverse() != false) {
-        rb.withQueryCheckEmpty("reverse", std::to_string(input.isReverse()));
     }
     rb.withQueryCheckEmpty("encoding-type", input.getEncodingType());
     auto req = rb.Build(http::MethodGet, nullptr);
@@ -2932,9 +2938,6 @@ Outcome<TosError, ListObjectsV2Output> TosClientImpl::listObjects(const ListObje
     }
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
     rb.withQueryCheckEmpty("marker", input.getMarker());
-    if (input.isReverse() != false) {
-        rb.withQueryCheckEmpty("reverse", std::to_string(input.isReverse()));
-    }
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
@@ -3401,14 +3404,14 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
 
     if (input.getUploadId().empty()) {
         TosError error;
-        error.setMessage("tos: Parameter UploadId is not set");
+        error.setMessage("empty UploadId");
         res.setE(error);
         res.setSuccess(false);
         return res;
     }
     if (input.getPartNumber() == 0) {
         TosError error;
-        error.setMessage("tos: Parameter PartNumber is not set");
+        error.setMessage("empty PartNumber");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -3816,7 +3819,7 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     if (uploadPartBasicInput_.getPartNumber() == 0) {
         TosError error;
         error.setIsClientError(true);
-        error.setMessage("tos: Parameter PartNumber is not set");
+        error.setMessage("empty partnumber");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -3824,12 +3827,19 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     if (uploadPartBasicInput_.getUploadId().empty()) {
         TosError error;
         error.setIsClientError(true);
-        error.setMessage("tos: Parameter UploadId is not set");
+        error.setMessage("empty uploadid");
         res.setE(error);
         res.setSuccess(false);
         return res;
     }
-
+    if (input.getContent() == nullptr) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("empty content");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
     auto rb = newBuilder(uploadPartBasicInput_.getBucket(), uploadPartBasicInput_.getKey());
     rb.setContentLength(input.getContentLength());
     rb.withQuery("uploadId", uploadPartBasicInput_.getUploadId());
@@ -4031,7 +4041,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
     if (input.getUploadId().empty()) {
         TosError error;
         error.setIsClientError(true);
-        error.setMessage("tos: Parameter UploadId is not set");
+        error.setMessage("empty upload id");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -4039,7 +4049,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
     if (input.getParts().empty()) {
         TosError error;
         error.setIsClientError(true);
-        error.setMessage("tos: Parameter Parts is not set");
+        error.setMessage("empty parts");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -4093,7 +4103,7 @@ Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUploa
     if (input.getUploadId().empty()) {
         TosError error;
         error.setIsClientError(true);
-        error.setMessage("tos: Parameter UploadId is not set");
+        error.setMessage("empty upload id");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -4198,7 +4208,7 @@ Outcome<TosError, ListPartsOutput> TosClientImpl::listParts(const ListPartsInput
     if (input.getUploadId().empty()) {
         TosError error;
         error.setIsClientError(true);
-        error.setMessage("tos: Parameter UploadId is not set");
+        error.setMessage("empty UploadId");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -4335,14 +4345,6 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
         TosError error;
         error.setIsClientError(true);
         error.setMessage(check);
-        res.setE(error);
-        res.setSuccess(false);
-        return res;
-    }
-    if (input.getExpires() < 0 || input.getExpires() > maxPreSignExpires) {
-        TosError error;
-        error.setIsClientError(true);
-        error.setMessage("invalid expires, the expires must be [1, 604800]");
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -5271,14 +5273,6 @@ Outcome<TosError, PutFetchTaskOutput> TosClientImpl::putFetchTask(const PutFetch
 Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSignature(
         const PreSignedPostSignatureInput& input) {
     Outcome<TosError, PreSignedPostSignatureOutput> res;
-    if (input.getExpires() < 0 || input.getExpires() > maxPreSignExpires) {
-        TosError error;
-        error.setIsClientError(true);
-        error.setMessage("invalid expires, the expires must be [1, 604800]");
-        res.setE(error);
-        res.setSuccess(false);
-        return res;
-    }
     if (connectWithS3EndPoint_) {
         TosError se;
         se.setIsClientError(true);
@@ -5897,14 +5891,6 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
 
 Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(const PreSignedPolicyURLInput& input) {
     Outcome<TosError, PreSignedPolicyURLOutput> res;
-    if (input.getExpires() < 0 || input.getExpires() > maxPreSignExpires) {
-        TosError error;
-        error.setIsClientError(true);
-        error.setMessage("invalid expires, the expires must be [1, 604800]");
-        res.setE(error);
-        res.setSuccess(false);
-        return res;
-    }
     if (connectWithS3EndPoint_) {
         TosError se;
         se.setIsClientError(true);
@@ -5912,26 +5898,15 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(co
         res.setE(se);
         return res;
     }
-    for (auto& c : input.getConditions()) {
-        auto key_ = c.getKey();
-        auto operator_ = c.getOperator();
-        if (key_ != "key") {
-            TosError error;
-            error.setIsClientError(true);
-            error.setMessage("invalid expires, the expires must be [1, 604800]");
-            res.setE(error);
-            res.setSuccess(false);
-            return res;
-        }
-        if (operator_ != nullptr && !(*operator_ == "eq" || *operator_ == "starts-with")) {
-            TosError error;
-            error.setIsClientError(true);
-            error.setMessage("invalid expires, the expires must be [1, 604800]");
-            res.setE(error);
-            res.setSuccess(false);
-            return res;
-        }
+    if (input.getConditions().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("empty conditions");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
     }
+
     auto schemeHostParameter = initSchemeAndHost(input.getAlternativeEndpoint());
     std::string alternativeEndpoint_ = schemeHostParameter.host_;
     std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
