@@ -652,7 +652,6 @@ void preSignedUrl(const std::shared_ptr<TosClientV2>& client, const std::string&
     PreSignedURLInput inputPreSign(HttpMethodType::Get, bucket, key, 300);
     std::map<std::string, std::string> query{{"response-content-disposition", "ttt"}};
     inputPreSign.setQuery(query);
-    inputPreSign.setAlternativeEndpoint("http://boe-official-test.volces.com");
     auto res = client->preSignedURL(inputPreSign);
     if (!res.isSuccess()) {
         std::cout << "preSignedUrl error: " << output.error().String() << std::endl;

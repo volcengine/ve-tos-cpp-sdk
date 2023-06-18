@@ -64,6 +64,11 @@ Outcome<TosError, DeleteBucketOutput> TosClientV2::deleteBucket(const DeleteBuck
 Outcome<TosError, GetObjectV2Output> TosClientV2::getObject(const GetObjectV2Input& input) const {
     return tosClientImpl_->getObject(input, nullptr, nullptr);
 }
+Outcome<TosError, GetObjectV2Output> TosClientV2::getObject(const GetObjectV2Input& input,
+                                                            std::shared_ptr<std::iostream> resContent,
+                                                            std::shared_ptr<DataConsumeCallBack> callBack) const {
+    return tosClientImpl_->getObject(input, nullptr, std::move(resContent));
+}
 Outcome<TosError, GetObjectToFileOutput> TosClientV2::getObjectToFile(const GetObjectToFileInput& input) const {
     return tosClientImpl_->getObjectToFile(input);
 }

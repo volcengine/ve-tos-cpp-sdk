@@ -1,8 +1,9 @@
-#include "../TestConfig.h"
+﻿#include "../TestConfig.h"
 #include "../Utils.h"
 #include "TosClientV2.h"
 #include <gtest/gtest.h>
-#include <dirent.h>
+
+//#include <dirent.h>
 namespace VolcengineTos {
 class ObjectPutGetTest : public ::testing::Test {
 protected:
@@ -135,7 +136,6 @@ TEST_F(ObjectPutGetTest, PutObjectWithErrorMd5Test) {
               true);
 }
 
-// todo:boe4服务端加密会超时
 TEST_F(ObjectPutGetTest, PutObjectWithSSECTest) {
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     std::string data =
@@ -161,7 +161,16 @@ TEST_F(ObjectPutGetTest, PutObjectWithSSECTest) {
     input_obj_put_basic.setGrantRead("id=123");
     input_obj_put_basic.setGrantReadAcp("id=123");
     input_obj_put_basic.setGrantWriteAcp("id=123");
-    std::map<std::string, std::string> meta_{{"中文key1中文", ""}, {"中文key2中文", "中文value2中文"}};
+
+    std::map<std::string, std::string> meta_{};
+#ifdef _WIN32
+    meta_[u8"中文key1中文"] = "";
+    meta_[u8"中文key2中文"] = u8"中文value2中文";
+#else
+    meta_["中文key1中文"] = "";
+    meta_["中文key2中文"] = "中文value2中文";
+#endif
+
     input_obj_put_basic.setMeta(meta_);
 
     input_obj_put_basic.setSsecAlgorithm("AES256");
@@ -188,7 +197,12 @@ TEST_F(ObjectPutGetTest, PutObjectWithSSECTest) {
 
     bool check_data = (data == tmp_string);
     auto meta = output_obj_get.result().getGetObjectBasicOutput().getMeta();
+
+#ifdef _WIN32
+    bool check_meta = ((meta[u8"中文key1中文"] == "") && (meta[u8"中文key2中文"] == u8"中文value2中文"));
+#else
     bool check_meta = ((meta["中文key1中文"] == "") && (meta["中文key2中文"] == "中文value2中文"));
+#endif
     EXPECT_EQ(check_data & check_meta, true);
     EXPECT_EQ(output_obj_get.isSuccess(), true);
 }
@@ -323,8 +337,8 @@ TEST_F(ObjectPutGetTest, GetObjectWithRange2Test) {
 TEST_F(ObjectPutGetTest, PutGetObjectFromFileTest) {
     auto workPath = FileUtils::getWorkPath();
     std::cout << workPath << std::endl;
-    std::string filePath1 = workPath + "test/testdata/" + "PutObjectTest.txt";
-    std::string filePath2 = workPath + "test/testdata/" + "GetObjectTest.txt";
+    std::string filePath1 = workPath + "test" + TOS_PATH_DELIMITER +"testdata" + TOS_PATH_DELIMITER + "PutObjectTest.txt";
+    std::string filePath2 = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "GetObjectTest.txt";
 
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     PutObjectFromFileInput input_obj_put(bkt_name, obj_key, filePath1);
@@ -338,7 +352,7 @@ TEST_F(ObjectPutGetTest, PutGetObjectFromFileTest) {
 TEST_F(ObjectPutGetTest, PutGetObjectFromEmptyFileTest) {
     auto workPath = FileUtils::getWorkPath();
     std::cout << workPath << std::endl;
-    std::string filePath1 = workPath + "test/testdata/" + "uploadFile2";
+    std::string filePath1 = workPath + "test" + TOS_PATH_DELIMITER +"testdata" + TOS_PATH_DELIMITER +"uploadFile2";
 
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     PutObjectFromFileInput input_obj_put(bkt_name, obj_key, filePath1);
@@ -349,6 +363,32 @@ TEST_F(ObjectPutGetTest, PutGetObjectFromEmptyFileTest) {
     EXPECT_EQ(out_obj_get.isSuccess(), true);
 }
 
+TEST_F(ObjectPutGetTest, GetObjectStramTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+
+    std::string data =
+            "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*"
+            "()_+<>?,./   :'";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put(bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+
+    std::string data2 =
+            "1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*()_+<>?,./   :'1234567890abcdefghijklmnopqrstuvwxyz~!@#$%^&*"
+            "()_+<>?,./   :'";
+    auto ss2 = std::make_shared<std::stringstream>(data2);
+    input_obj_put.setContent(ss2);
+    auto output_obj_put2 = cliV2->putObject(input_obj_put);
+
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    GetObjectV2Input input_obj_get;
+    input_obj_get.setBucket(bkt_name);
+    input_obj_get.setKey(obj_key);
+    std::shared_ptr<std::iostream> resContent;
+    auto res_obj_get = cliV2->getObject(input_obj_get, resContent, nullptr);
+    assert(res_obj_get.isSuccess());
+}
 // TEST_F(ObjectPutGetTest, AppendGetObjectWithPartNumberTest) {
 //     std::string obj_name = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 //     CreateMultipartUploadInput input_part_create(bkt_name, obj_name);

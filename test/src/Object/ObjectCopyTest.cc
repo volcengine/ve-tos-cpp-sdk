@@ -58,7 +58,7 @@ TEST_F(ObjectCopyTest, CopyObjectToOtherBucketTest) {
     CopyObjectV2Input input_object_copy(bkt_name, obj_name, src_bkt_name, src_obj_name);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
     bool check_data = (data == tmp_string);
@@ -115,7 +115,7 @@ TEST_F(ObjectCopyTest, CopyObjectToCurrentBucketTest) {
     CopyObjectV2Input input_object_copy(src_bkt_name, obj_name, src_bkt_name, src_obj_name);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, src_bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, src_bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, src_bkt_name, obj_name);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "yes");
@@ -133,7 +133,7 @@ TEST_F(ObjectCopyTest, CopyObjectToOtherBucketWithUnmodifiedSinceParamTest) {
     input_object_copy.setStorageClass(StorageClassType::IA);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name_, obj_name_);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name_, obj_name_);
     bool check_data = (data == tmp_string);
@@ -154,7 +154,7 @@ TEST_F(ObjectCopyTest, CopyObjectToOtherBucketWithIfMatchParamTest) {
     input_object_copy.setStorageClass(StorageClassType::IA);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name_, obj_name_);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name_, obj_name_);
     bool check_data = (data == tmp_string);
@@ -174,7 +174,7 @@ TEST_F(ObjectCopyTest, CopyObjectToOtherBucketWithIfNoneMatchParamTest) {
     input_object_copy.setStorageClass(StorageClassType::IA);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name_, obj_name_);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name_, obj_name_);
     bool check_data = (data == tmp_string);
@@ -192,7 +192,7 @@ TEST_F(ObjectCopyTest, CopyObjectToCurrentBucketWithUnmodifiedSinceParamTest) {
     input_object_copy.setStorageClass(StorageClassType::IA);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, src_bkt_name, obj_name_);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, src_bkt_name, obj_name_);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, src_bkt_name, obj_name_);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "yes");
@@ -210,7 +210,7 @@ TEST_F(ObjectCopyTest, CopyObjectToOtherBucketWithSinceParamTest) {
     input_object_copy.setStorageClass(StorageClassType::IA);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name_, obj_name_);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name_, obj_name_);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name_, obj_name_);
     bool check_data = (data == tmp_string);
@@ -229,7 +229,7 @@ TEST_F(ObjectCopyTest, CopyObjectToCurrentBucketWithSinceParamTest) {
     input_object_copy.setStorageClass(StorageClassType::IA);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, src_bkt_name, obj_name_);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, src_bkt_name, obj_name_);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, src_bkt_name, obj_name_);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "yes");
@@ -272,7 +272,7 @@ TEST_F(ObjectCopyTest, CopyObjectWithCopyStrategyTest) {
     input_object_copy.setMetadataDirective(COPY);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
     bool check_data = (data == tmp_string);
@@ -287,7 +287,7 @@ TEST_F(ObjectCopyTest, CopyObjectWithReplaceStrategyTest) {
     input_object_copy.setMeta(meta_);
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::string tmp_string_2 = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
 
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);

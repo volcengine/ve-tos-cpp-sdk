@@ -85,7 +85,7 @@ public:
 private:
     void init_logger() {
         // 创建 logFilePath 的父目录文件夹
-        bool ret = FileUtils::CreateDirectory(logFilePath, true);
+        bool ret = FileUtils::CreateDir(logFilePath, true);
         if (!ret) {
             // 错误处理，创建文件夹失败的场景
             std::cout << "invalid file path, mkdir failed" << std::endl;

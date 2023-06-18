@@ -24,6 +24,7 @@ struct ResourceManager {
     uint64_t sendCrc64Value;
     uint64_t recvCrc64Value;
     std::shared_ptr<RateLimiter> rateLimiter;
+    std::shared_ptr<DataConsumeCallBack> callBack;
 };
 
 static void processHandler(const DataTransferStatusChange& handler, int64_t consumedBytes, int64_t totalBytes,
@@ -141,6 +142,10 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
         return -2;
     }
     content->write(ptr, static_cast<std::streamsize>(wanted));
+//    if (resourceMan->callBack != nullptr) {
+//        resourceMan->callBack->Consume(wanted);
+//    }
+
     if (content->bad()) {
         resourceMan->dataTransferType = 4;
         processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,

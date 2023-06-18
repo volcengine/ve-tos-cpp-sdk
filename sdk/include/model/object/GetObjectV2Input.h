@@ -163,6 +163,6 @@ private:
     int64_t rangeEnd_ = 0;
     std::string range_;
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};  // 进度条特性
-    std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速，详见 4.4.5 章节
+    std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速
 };
 }  // namespace VolcengineTos

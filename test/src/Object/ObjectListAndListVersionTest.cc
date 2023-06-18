@@ -81,7 +81,7 @@ TEST_F(ObjectListAndListVersionTest, ListObjectWith100ObjectsTest) {
             std::string idx_string;
             ss >> idx_string;
             std::string obj_name_ = content[p].getKey();
-            std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name_);
+            std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name_);
             auto meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name_);
             bool check_data = (idx_string == tmp_string);
             bool check_meta = (meta["self-test"] == idx_string);

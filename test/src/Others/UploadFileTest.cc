@@ -40,7 +40,7 @@ std::string UploadFileTest::bucketName = "";
 std::string UploadFileTest::workPath = "";
 
 TEST_F(UploadFileTest, UploadFileWithoutCheckpointTest) {
-    std::string filePath = workPath + "test/testdata/" + "uploadFile1";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
 
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     UploadFileV2Input input;
@@ -64,7 +64,7 @@ TEST_F(UploadFileTest, UploadFileWithoutCheckpointTest) {
     EXPECT_EQ(check_data, true);
 }
 TEST_F(UploadFileTest, UploadEmptyFileWithoutCheckpointTest) {
-    std::string filePath = workPath + "test/testdata/" + "uploadFile2";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile2";
 
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     UploadFileV2Input input;
@@ -160,7 +160,7 @@ static void UploadCallBack(std::shared_ptr<UploadEvent> event) {
               << "uploadPartInf:" << uploadPartInfo << std::endl;
 }
 TEST_F(UploadFileTest, UploadFileWithCheckpointWithProcessTest) {
-    std::string filePath = workPath + "test/testdata/" + "uploadFile1";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
 
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     UploadFileV2Input input;

@@ -52,25 +52,6 @@ void TestUtils::PutObjectWithMeta(const std::shared_ptr<TosClientV2>& client, co
     }
 }
 
-std::string TestUtils::GetObjectContent(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
-                                        const std::string& obj_name) {
-    GetObjectV2Input input_obj_get;
-    input_obj_get.setBucket(bkt_name);
-    input_obj_get.setKey(obj_name);
-    auto output_obj_get = client->getObject(input_obj_get);
-    auto basic_output = output_obj_get.result().getGetObjectBasicOutput();
-    auto content_output = output_obj_get.result().getContent();
-    std::string ss_;
-    auto stream = content_output.get();
-    auto content_length = output_obj_get.result().getGetObjectBasicOutput().getContentLength();
-    char streamBuffer[content_length + 1];
-    memset(streamBuffer, 0, content_length + 1);
-    while (stream->good()) {
-        stream->read(streamBuffer, content_length + 1);
-    }
-    std::string tmp_string(streamBuffer);
-    return tmp_string;
-}
 std::string TestUtils::GetObjectContentByStream(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
                                                 const std::string& obj_name) {
     GetObjectV2Input input_obj_get;

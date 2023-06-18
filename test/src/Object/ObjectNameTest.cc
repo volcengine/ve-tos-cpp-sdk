@@ -1,4 +1,4 @@
-#include "../TestConfig.h"
+﻿#include "../TestConfig.h"
 #include "../Utils.h"
 #include "TosClientV2.h"
 #include <gtest/gtest.h>
@@ -102,7 +102,12 @@ TEST_F(ObjectNameTest, NameWithChineseLanguageTest) {
     input_obj_put_basic.setBucket(bkt_name);
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
 
+#ifdef _WIN32
+    obj_key = u8"测试桶";
+#else
     obj_key = "测试桶";
+#endif
+
     input_obj_put_basic.setKey(obj_key);
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
     auto output_obj_put = cliV2->putObject(input_obj_put);
@@ -123,7 +128,12 @@ TEST_F(ObjectNameTest, NameWithNormalLanguageTest) {
     input_obj_put_basic.setBucket(bkt_name);
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
 
+#ifdef _WIN32
+    obj_key = u8"にほんごΨφ";
+#else
     obj_key = "にほんごΨφ";
+#endif
+
     input_obj_put_basic.setKey(obj_key);
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
     auto output_obj_put = cliV2->putObject(input_obj_put);
@@ -144,8 +154,11 @@ TEST_F(ObjectNameTest, NameSpecialSysbolTest) {
     input_obj_put_basic.setBucket(bkt_name);
 
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
-
+#ifdef _WIN32
+    obj_key = u8".（!-_.*()/&$@=;:+ ,?\\{^}%`]>[~<#|'\"）.";
+#else
     obj_key = ".（!-_.*()/&$@=;:+ ,?\\{^}%`]>[~<#|'\"）.";
+#endif
     input_obj_put_basic.setKey(obj_key);
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
     auto output_obj_put = cliV2->putObject(input_obj_put);
