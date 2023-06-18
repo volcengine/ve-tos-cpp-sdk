@@ -6,15 +6,13 @@
 #include <sstream>
 #ifdef _WIN32
 #include <direct.h>
+#include <Windows.h>
+const char TOS_PATH_DELIMITER = '\\';
+const wchar_t TOS_WPATH_DELIMITER = L'\\';
 #else
 #include <unistd.h>
-#endif
-#ifdef _WIN32
-const char PATH_DELIMITER = '\\';
-const wchar_t WPATH_DELIMITER = L'\\';
-#else
-const char PATH_DELIMITER = '/';
-const wchar_t WPATH_DELIMITER = L'/';
+const char TOS_PATH_DELIMITER = '/';
+const wchar_t TOS_WPATH_DELIMITER = L'/';
 #endif
 #include <sys/stat.h>
 #include <set>
@@ -79,11 +77,21 @@ public:
         std::string currentPath = __FILE__;
         auto last_pos = currentPath.rfind("ve-tos-cpp-sdk");
         currentPath = currentPath.substr(0, last_pos);
-        currentPath.append("ve-tos-cpp-sdk/");
+        currentPath.append("ve-tos-cpp-sdk");
+        currentPath += TOS_PATH_DELIMITER;
         return currentPath;
     }
-    // 当文件路径最后部分也想创建为文件夹时，endWithFileName = false
-    static bool CreateDirectory(const std::string& folder, bool endWithFileName);
+    static std::string getTempPath(){
+#ifdef _WIN32
+        char strTmpPath[MAX_PATH];
+        GetTempPath(MAX_PATH, strTmpPath);
+        std::string path(strTmpPath);
+#else
+        std::string path = "/tmp/";
+#endif
+        return path;
+    }
+    static bool CreateDir(const std::string& folder, bool endWithFileName);
 };
 
 static std::set<std::string> s3Endpoint{"tos-s3-cn-beijing.volces.com",    "tos-s3-cn-guangzhou.volces.com",

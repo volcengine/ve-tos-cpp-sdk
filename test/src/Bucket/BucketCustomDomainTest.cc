@@ -37,7 +37,7 @@ std::string BucketCustomDomainTest::bucketName = "";
 
 TEST_F(BucketCustomDomainTest, BucketCustomDomainWithALLParametersTest) {
     PutBucketCustomDomainInput putBucketCustomDomainInput(bucketName);
-    CustomDomainRule rule1("www.baidu.com");
+    CustomDomainRule rule1("www.volcengine.com");
     rule1.setCertStatus(CertStatusType::Bound);
     rule1.setForbidden(true);
     rule1.setForbiddenReason("only test");
@@ -51,7 +51,7 @@ TEST_F(BucketCustomDomainTest, BucketCustomDomainWithALLParametersTest) {
     EXPECT_EQ(getOutput.isSuccess(), true);
     EXPECT_EQ(getOutput.result().getRules().size(), 1);
 
-    DeleteBucketCustomDomainInput deleteBucketCustomDomainInput(bucketName, "www.baidu.com");
+    DeleteBucketCustomDomainInput deleteBucketCustomDomainInput(bucketName, "www.volcengine.com");
     auto deleteOutput = cliV2->deleteBucketCustomDomain(deleteBucketCustomDomainInput);
     EXPECT_EQ(getOutput.isSuccess(), true);
 

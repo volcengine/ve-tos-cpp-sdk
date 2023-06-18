@@ -6,6 +6,7 @@
 #include <memory>
 #include <ctime>
 #include <functional>
+#include <sstream>
 namespace VolcengineTos {
 enum class ACLType {
     NotSet = 0,
@@ -400,4 +401,26 @@ static MyCancelHook* NewCancelHook() {
     return myCancelHook;
 };
 
+class DataConsumeCallBack {
+public:
+    virtual void Consume(size_t bytes) = 0;
+};
+class MyDataConsumeCallBack : public DataConsumeCallBack {
+public:
+    MyDataConsumeCallBack(std::shared_ptr<std::iostream>& content) : content_(content) {
+    }
+    void Consume(size_t bytes) override {
+        std::ostringstream ss;
+        ss << content_->rdbuf();
+        std::string tmp_string = ss.str();
+        std::cout << tmp_string << std::endl;
+    };
+
+private:
+    const std::shared_ptr<std::iostream>& content_;
+};
+static MyDataConsumeCallBack* MyDataConsumeCallBack(std::shared_ptr<std::iostream>& content) {
+    auto* myDataConsumeCallBack = new class MyDataConsumeCallBack(content);
+    return myDataConsumeCallBack;
+};
 }  // namespace VolcengineTos

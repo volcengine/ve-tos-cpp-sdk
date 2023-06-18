@@ -748,7 +748,7 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
         return res;
     }
     // write to file
-    bool ret = FileUtils::CreateDirectory(input.getFilePath(), true);
+    bool ret = FileUtils::CreateDir(input.getFilePath(), true);
     if (!ret) {
         // 错误处理，创建文件夹失败的场景
         TosError error;
@@ -1258,7 +1258,7 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
     } else {
         struct stat cfs {};
         if (stat(checkPointFile.c_str(), &cfs) != 0) {
-            bool res = FileUtils::CreateDirectory(checkPointFile, true);
+            bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 return "";
@@ -1266,7 +1266,7 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
         }
         if (stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << "/" << base64md5Path << ".upload";
+                ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".upload";
                 return ret.str();
             } else {
                 ret << checkPointFile;
@@ -2226,7 +2226,7 @@ std::string getDownloadCheckpointPath(const std::string& bucket, const std::stri
     } else {
         struct stat cfs {};
         if (stat(checkPointFile.c_str(), &cfs) != 0) {
-            bool res = FileUtils::CreateDirectory(checkPointFile, true);
+            bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 return "";
@@ -2234,7 +2234,7 @@ std::string getDownloadCheckpointPath(const std::string& bucket, const std::stri
         }
         if (stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << "/" << base64md5Path << ".download";
+                ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".download";
                 return ret.str();
             } else {
                 ret << checkPointFile;
@@ -2291,6 +2291,10 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
     std::stringstream ret_tempFilePath;
     std::string key = input.getHeadObjectV2Input().getKey();
 
+#ifdef _WIN32
+    key = StringUtils::stringReplace(key, "/", "\\");
+#endif
+
     DownloadFileFileInfo fileinfo;
 
     struct stat dfs {};
@@ -2299,9 +2303,9 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
     // 路径不存在，需要先创建路径
     if (stat(filePath.c_str(), &dfs) != 0) {
         // 判断是路径是文件夹语义还是文件语义，结尾为分隔符
-        if (filePath.back() == PATH_DELIMITER) {
+        if (filePath.back() == TOS_PATH_DELIMITER) {
             // 文件夹语义则循环创建文件夹
-            bool res = FileUtils::CreateDirectory(filePath, false);
+            bool res = FileUtils::CreateDir(filePath, false);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 error.setMessage("invalid file path, mkdir failed");
@@ -2313,7 +2317,7 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
             // 然后需要判断拼接的 key 是文件语义还是文件夹语义
         } else {
             // 如果是文件就创建父目录，然后直接返回就可以
-            bool res = FileUtils::CreateDirectory(filePath, true);
+            bool res = FileUtils::CreateDir(filePath, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 error.setMessage("invalid file path, mkdir failed");
@@ -2334,8 +2338,8 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
     // 重新 stat 一下，但理论上一定存在对应路径了
     if (stat(filePath.c_str(), &dfs) == 0) {
         if (dfs.st_mode & S_IFDIR) {
-            ret_filePath << filePath << "/" << key;
-            bool res = FileUtils::CreateDirectory(ret_filePath.str(), true);
+            ret_filePath << filePath << TOS_PATH_DELIMITER << key;
+            bool res = FileUtils::CreateDir(ret_filePath.str(), true);
             if (!res) {
                 // 错误处理，创建文件夹失败
                 error.setMessage("invalid file path, mkdir failed");
@@ -2345,7 +2349,7 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
                 return ret;
             }
             // key 最后是分隔符，认为是文件夹语义
-            if (key.back() == PATH_DELIMITER) {
+            if (key.back() == TOS_PATH_DELIMITER) {
                 fileinfo.setKeyEndWithDelimiter(true);
                 ret.setR(fileinfo);
                 ret.setSuccess(true);
@@ -2472,7 +2476,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                     {
                         std::lock_guard<std::mutex> lck(lock_);
                         std::fstream tempFile;
-                        tempFile.open(tempFilePath, std::ios_base::out | std::ios_base::in | std::ios_base::binary);
+                        tempFile.open(tempFilePath, std::ios_base::out | std::ios_base::app | std::ios_base::in | std::ios_base::binary);
                         if (tempFile) {
                             auto currentPos = partSize_ * (part.getPartNum() - 1);
                             tempFile.seekp(currentPos, tempFile.beg);
@@ -2601,6 +2605,9 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
     if (input.isEnableCheckpoint()) {
         deleteCheckpointFile(checkpointPath);
     }
+#ifdef _WIN32
+    remove(dfi.getFilePath().c_str());
+#endif
     auto renameRes = rename(dfi.getTempFilePath().c_str(), dfi.getFilePath().c_str());
     if (renameRes == 0) {
         downloadEventRenameTempFileSucceed(event, eventChange);
@@ -5803,13 +5810,13 @@ std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
 
     std::string base64md5Path = CryptoUtils::md5SumURLEncoding(originPath);
     if (checkPointFile.empty()) {
-        // 创建文件夹，这里没有做 windows 下临时目录的兼容
-        ret << "/tmp/" << base64md5Path << ".copy";
+        std::string tmpPath = FileUtils::getTempPath();
+        ret << tmpPath << base64md5Path << ".copy";
         return ret.str();
     } else {
         struct stat cfs {};
         if (stat(checkPointFile.c_str(), &cfs) != 0) {
-            bool res = FileUtils::CreateDirectory(checkPointFile, true);
+            bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 return "";
@@ -5817,7 +5824,7 @@ std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
         }
         if (stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << "/" << base64md5Path << ".copy";
+                ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".copy";
                 return ret.str();
             } else {
                 ret << checkPointFile;
@@ -6676,7 +6683,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     return ret;
                 }
             }
-
+            if (resp->getStatusCode() == -2) {
+                se.setIsClientError(true);
+            }
             se.setStatusCode(resp->getStatusCode());
             se.setCode("UnexpectedStatusCode error");
             se.setMessage(resp->getStatusMsg());

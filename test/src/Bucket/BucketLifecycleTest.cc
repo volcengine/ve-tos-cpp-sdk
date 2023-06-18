@@ -2,7 +2,9 @@
 #include "../Utils.h"
 #include "TosClientV2.h"
 #include <gtest/gtest.h>
-
+#ifdef _WIN32
+#define  timegm(a)  ::_mkgmtime64(a)
+#endif  // _WIN32
 namespace VolcengineTos {
 class BucketLifecycleTest : public ::testing::Test {
 protected:

@@ -1,8 +1,4 @@
 #pragma once
-#ifndef TOS_DEFAULTTRANSPORT_H
-#define TOS_DEFAULTTRANSPORT_H
-
-#endif  // TOS_DEFAULTTRANSPORT_H
 
 #include "transport/Transport.h"
 #include "transport/http/HttpClient.h"

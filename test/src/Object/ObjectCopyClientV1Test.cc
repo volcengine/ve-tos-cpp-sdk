@@ -56,7 +56,7 @@ std::string ObjectCopyClientV1Test::data = "";
 TEST_F(ObjectCopyClientV1Test, CopyObjectToOtherBucketTest) {
     auto output_obj_copy = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "yes");
@@ -66,7 +66,7 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectToOtherBucketTest) {
 TEST_F(ObjectCopyClientV1Test, CopyObjectToCurrentBucketTest) {
     auto output_obj_copy = cliV2->copyObject(src_bkt_name, src_obj_name, obj_name);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, src_bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, src_bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, src_bkt_name, obj_name);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "yes");
@@ -79,7 +79,7 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectWithCopyStrategyTest) {
 
     auto output_obj_copy = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name, rob);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "yes");
@@ -91,7 +91,7 @@ TEST_F(ObjectCopyClientV1Test, CopyObjectWithReplaceStrategyTest) {
     rob.withMeta("self-test", "no");
     auto output_obj_copy = cliV2->copyObjectTo(src_bkt_name, bkt_name, obj_name, src_obj_name, rob);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
-    std::string tmp_string = TestUtils::GetObjectContent(cliV2, bkt_name, obj_name);
+    std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);
     std::map<std::string, std::string> meta = TestUtils::GetObjectMeta(cliV2, bkt_name, obj_name);
     bool check_data = (data == tmp_string);
     bool check_meta = (meta["self-test"] == "no");

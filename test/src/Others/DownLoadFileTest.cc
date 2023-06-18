@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <fstream>
 
+
 namespace VolcengineTos {
 class DownLoadFileTest : public ::testing::Test {
 protected:
@@ -41,12 +42,12 @@ std::string DownLoadFileTest::bucketName = "";
 std::string DownLoadFileTest::workPath = "";
 
 TEST_F(DownLoadFileTest, DownLoadFileWithoutCheckpointTest) {
-    std::string filePath = workPath + "test/testdata/" + "downloadFile1";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER +"downloadFile1";
     remove(filePath.c_str());
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
-    std::fstream file;
-    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
-    file.close();
+//    std::fstream file;
+//    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+//    file.close();
     auto ss = std::make_shared<std::stringstream>();
     for (int i = 0; i < (11 << 20); ++i) {
         *ss << 1;
@@ -73,6 +74,7 @@ TEST_F(DownLoadFileTest, DownLoadFileWithoutCheckpointTest) {
     file_.seekg(0, file_.beg);
     std::ostringstream ssFromFile;
     ssFromFile << file_.rdbuf();
+    file_.close();
     std::string data = std::string((11 << 20), '1');
     bool check_data = (data == ssFromFile.str());
     EXPECT_EQ(check_data, true);
@@ -140,12 +142,12 @@ static void ProgressCallback(std::shared_ptr<DataTransferStatus> datatransfersta
 
 // 源数据发生变化的场景
 TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithObjectChangedTest) {
-    std::string filePath = workPath + "test/testdata/" + "downloadFile2";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "downloadFile2";
     remove(filePath.c_str());
     std::string objectName = "Test-DownloadFile";
-    std::fstream file;
-    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
-    file.close();
+//    std::fstream file;
+//    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+//    file.close();
     auto ss = std::make_shared<std::stringstream>();
     for (int i = 0; i < (11 << 20); ++i) {
         *ss << 1;
@@ -172,6 +174,7 @@ TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithObjectChangedTest) {
     file_.seekg(0, file_.beg);
     std::ostringstream ssFromFile;
     ssFromFile << file_.rdbuf();
+    file_.close();
     std::string data = std::string((11 << 20), '1');
     bool check_data = (data == ssFromFile.str());
     EXPECT_EQ(check_data, true);
@@ -206,11 +209,12 @@ static void DownloadCallBack(std::shared_ptr<DownloadEvent> event) {
               << "downloadPartInfo:" << downloadPartInfo << std::endl;
 }
 TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithProcessTest) {
-    std::string filePath = workPath + "test/testdata/" + "downloadFile3";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "downloadFile3";
     remove(filePath.c_str());
     std::string objectName = "Test-DownloadFile";
-    std::fstream file;
-    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+//    std::fstream file;
+//    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+//    file.close();
     auto ss = std::make_shared<std::stringstream>();
     for (int i = 0; i < (11 << 20); ++i) {
         *ss << 1;
@@ -250,12 +254,25 @@ TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithProcessTest) {
     file_.seekg(0, file_.beg);
     std::ostringstream ssFromFile;
     ssFromFile << file_.rdbuf();
+    file_.close();
     std::string data = std::string((11 << 20), '1');
     bool check_data = (data == ssFromFile.str());
     EXPECT_EQ(check_data, true);
     remove(filePath.c_str());
 }
 TEST_F(DownLoadFileTest, DownLoadFileWithDirPathTest) {
+//
+//
+//    std::string tempFilePath = workPath + "test/testdata/" + "t.temp";
+//    std::fstream tempFile;
+//    tempFile.open(tempFilePath, std::ios::app);
+//    if (tempFile.is_open())
+//    {
+//        tempFile << "Hello, World!";
+//        tempFile.close();
+//    }
+//
+
     DownloadFileInput input;
     // 对象名和桶名
     HeadObjectV2Input headInput(bucketName, "");
@@ -265,15 +282,17 @@ TEST_F(DownLoadFileTest, DownLoadFileWithDirPathTest) {
     input.setEnableCheckpoint(true);
     // 默认分片大小 20MB
     input.setPartSize(5 * 1024 * 1024);
-    input.setCheckpointFile("/tmp/cppsdk/checkpoint/");
+
+    std::string tmpFile = FileUtils::getTempPath() + "cppsdk" + TOS_PATH_DELIMITER;
+    input.setCheckpointFile(tmpFile);
     // 下载后文件的保存路径，不可为空，不可为文件夹，建议设置绝对路径
 
-    auto keyList = {"/a/b.file", "/a/b/c.file", "/a/d/e/f/g.file", "a/b/d.file", "/a/g/", "/a/f"};
+    auto keyList = {"a/b.file","/a/b.file", "/a/b/c.file", "/a/d/e/f/g.file", "a/b/d.file", "/a/g/", "/a/f"};
     for (auto& key : keyList) {
         TestUtils::PutObject(cliV2, bucketName, key, TestUtils::GetRandomString(5 * 1024));
     }
-    std::string baseFilePath = "/tmp/cppsdk/";
-    std::string filePath = baseFilePath + TestUtils::GetRandomString(4) + "/";
+    std::string baseFilePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER;
+    std::string filePath = baseFilePath + TestUtils::GetRandomString(4);
     input.setFilePath(filePath);
     for (auto& key : keyList) {
         headInput.setKey(key);
@@ -284,10 +303,9 @@ TEST_F(DownLoadFileTest, DownLoadFileWithDirPathTest) {
             std::cout << key << "  " << output.error().getMessage() << std::endl;
         }
     }
-
-    filePath = baseFilePath + TestUtils::GetRandomString(4);
+    filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + TestUtils::GetRandomString(4);
     input.setFilePath(filePath);
-    FileUtils::CreateDirectory(filePath, false);
+    FileUtils::CreateDir(filePath, false);
     for (auto& key : keyList) {
         headInput.setKey(key);
         input.setHeadObjectV2Input(headInput);

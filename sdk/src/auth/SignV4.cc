@@ -198,7 +198,8 @@ std::string SignV4::signingKey(const SignKeyInfo& info, const std::string& buf) 
 
 std::string SignV4::uriEncode(const std::string& in, bool encodeSlash) {
     int hexCount = 0;
-    uint8_t uint8Char[in.length()];
+
+    std::vector<uint8_t> uint8Char(in.length());
     for (int i = 0; i < in.length(); i++) {
         uint8Char[i] = (uint8_t)(in[i]);
         if (uint8Char[i] == '/') {
@@ -209,7 +210,8 @@ std::string SignV4::uriEncode(const std::string& in, bool encodeSlash) {
             hexCount++;
         }
     }
-    char encoded[in.length() + 2 * hexCount];
+
+    std::vector<char> encoded(in.length() + 2 * hexCount);
     for (int i = 0, j = 0; i < in.length(); i++) {
         if (uint8Char[i] == '/') {
             if (encodeSlash) {
@@ -231,7 +233,7 @@ std::string SignV4::uriEncode(const std::string& in, bool encodeSlash) {
             j++;
         }
     }
-    std::string ret(encoded, encoded + sizeof(encoded));
+    std::string ret(encoded.begin(), encoded.end());
     return ret;
 }
 

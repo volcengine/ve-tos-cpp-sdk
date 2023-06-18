@@ -91,8 +91,8 @@ TEST_F(ObjectUploadPartAndCompleteTest, CreateMultipartUploadTest) {
 }
 
 TEST_F(ObjectUploadPartAndCompleteTest, CreateMultipartUploadFromFileTest) {
-    std::string filePath = workPath + "test/testdata/" + "AppendTest2.txt";
-    std::string filePath2 = workPath + "test/testdata/" + "AppendDownTest.txt";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER +"testdata" + TOS_PATH_DELIMITER +"AppendTest2.txt";
+    std::string filePath2 = workPath + "test" + TOS_PATH_DELIMITER +"testdata" + TOS_PATH_DELIMITER +"AppendDownTest.txt";
 
     std::string obj_name = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     CreateMultipartUploadInput input_part_create(bkt_name, obj_name);

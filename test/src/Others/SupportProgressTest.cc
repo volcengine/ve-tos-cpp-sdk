@@ -127,6 +127,8 @@ TEST_F(SupportProgressTest, UploadPartWithProgressCallbackTest) {
     // 设置limiter
     std::shared_ptr<RateLimiter> RateLimiter(NewRateLimiter(20 * 1024 * 1024, 5 * 1024 * 1024));
 
+    std::string currentPath = __FILE__;
+
     UploadPartV2Input input_upload_part(bkt_name, obj_name, upload.result().getUploadId(), ss1->tellg(), 1, ss1);
     auto basic_1 = input_upload_part.getUploadPartBasicInput();
     basic_1.setDataTransferListener(dataTransferListener);

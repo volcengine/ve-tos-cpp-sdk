@@ -47,7 +47,7 @@ TEST_F(BucketReplicationTest, BucketReplicationWithALLParametersTest) {
     putBucketReplicationInput.setRole("ServiceRoleforReplicationAccessTOS");
     auto putOutput = cliV2->putBucketReplication(putBucketReplicationInput);
     EXPECT_EQ(putOutput.isSuccess(), true);
-
+    TimeUtils::sleepSecondTimes(92);
     GetBucketReplicationInput getBucketReplicationInput(bucketName, "1");
     auto getOutput = cliV2->getBucketReplication(getBucketReplicationInput);
     EXPECT_EQ(getOutput.isSuccess(), true);

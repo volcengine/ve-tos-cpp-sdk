@@ -6,8 +6,23 @@
 #include <cassert>
 #ifdef _WIN32
 #include <windows.h>
+#include <direct.h>
+#include <io.h>
+#include <sys/stat.h>
+#define  tos_access(a)  ::_access((a), 0)
+#define  tos_mkdir(a)   ::_mkdir(a)
+#define  tos_rmdir(a)   ::_rmdir(a)
+#define  tos_stat       ::_stat64
+#ifdef _MSC_VER
+#define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#endif
 #else
 #include <unistd.h>
+#define  tos_access(a)  ::access(a, 0)
+#define  tos_mkdir(a)   ::mkdir((a), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)
+#define  tos_rmdir(a)   ::rmdir(a)
+#define  tos_stat       stat
 #endif
 
 using namespace VolcengineTos;
@@ -244,6 +259,19 @@ unsigned char CryptoUtils::ToHex(unsigned char x) {
     return x > 9 ? x + 55 : x + 48;
 }
 
+bool canFromHex(unsigned char x) {
+    unsigned char y;
+    if (x >= 'A' && x <= 'Z')
+        y = x - 'A' + 10;
+    else if (x >= 'a' && x <= 'z')
+        y = x - 'a' + 10;
+    else if (x >= '0' && x <= '9')
+        y = x - '0';
+    else
+        return false;
+    return true;
+}
+
 unsigned char CryptoUtils::FromHex(unsigned char x) {
     unsigned char y;
     if (x >= 'A' && x <= 'Z')
@@ -268,30 +296,64 @@ int IncludeChinese(char* str) {
     }
     return 0;
 }
+// std::string CryptoUtils::UrlEncodeChinese(const std::string& str) {
+//     std::string strTemp = "";
+//     size_t length = str.length();
+//
+//     char *arr = new char[str.length() + 1];
+//     strcpy(arr, str.c_str());
+//     char c;
+//     char c_;
+//     for (size_t i = 0; i < length; i++) {
+//         c = arr[i];
+//         c_ = arr[i + 1];
+//         if (c_ == 0) {
+//             strTemp += str[i];
+//             break;
+//         }
+//         if ((c & 0x80) && (c_ & 0x80)) {
+//             strTemp += '%';
+//             strTemp += ToHex((unsigned char)arr[i] >> 4);
+//             strTemp += ToHex((unsigned char)arr[i] % 16);
+//             strTemp += '%';
+//             strTemp += ToHex((unsigned char)arr[i + 1] >> 4);
+//             strTemp += ToHex((unsigned char)arr[i + 1] % 16);
+//             i++;
+//         } else {
+//             strTemp += str[i];
+//         }
+//     }
+//     delete[] arr;
+//     return strTemp;
+// }
+//
+// std::string CryptoUtils::UrlDecodeChinese(const std::string& str) {
+//     std::string strTemp = "";
+//     size_t length = str.length();
+//     for (size_t i = 0; i < length; i++) {
+//         if (str[i] == '%') {
+//             assert(i + 2 < length);
+//             unsigned char high = FromHex((unsigned char)str[++i]);
+//             unsigned char low = FromHex((unsigned char)str[++i]);
+//             strTemp += high * 16 + low;
+//         } else
+//             strTemp += str[i];
+//     }
+//     return strTemp;
+// }
+
 std::string CryptoUtils::UrlEncodeChinese(const std::string& str) {
     std::string strTemp = "";
     size_t length = str.length();
-    char arr[str.length() + 1];
-    strcpy(arr, str.c_str());
-    char c;
-    char c_;
     for (size_t i = 0; i < length; i++) {
-        c = arr[i];
-        c_ = arr[i + 1];
-        if (c_ == 0) {
+        if (isalnum((unsigned char)str[i]) || (str[i] == '-') || (str[i] == '_') || (str[i] == '.') || (str[i] == '~'))
             strTemp += str[i];
-            break;
-        }
-        if ((c & 0x80) && (c_ & 0x80)) {
+        else if (str[i] == ' ')
+            strTemp += "%20";
+        else {
             strTemp += '%';
-            strTemp += ToHex((unsigned char)arr[i] >> 4);
-            strTemp += ToHex((unsigned char)arr[i] % 16);
-            strTemp += '%';
-            strTemp += ToHex((unsigned char)arr[i + 1] >> 4);
-            strTemp += ToHex((unsigned char)arr[i + 1] % 16);
-            i++;
-        } else {
-            strTemp += str[i];
+            strTemp += ToHex((unsigned char)str[i] >> 4);
+            strTemp += ToHex((unsigned char)str[i] % 16);
         }
     }
     return strTemp;
@@ -302,50 +364,24 @@ std::string CryptoUtils::UrlDecodeChinese(const std::string& str) {
     size_t length = str.length();
     for (size_t i = 0; i < length; i++) {
         if (str[i] == '%') {
-            assert(i + 2 < length);
-            unsigned char high = FromHex((unsigned char)str[++i]);
-            unsigned char low = FromHex((unsigned char)str[++i]);
+            if (i + 2 >= length) {
+                return str;
+            }
+            auto highHex = (unsigned char)str[++i];
+            auto lowHex = (unsigned char)str[++i];
+
+            bool check = canFromHex(highHex) && canFromHex(lowHex);
+            if (!check) {
+                return str;
+            }
+            unsigned char high = FromHex(highHex);
+            unsigned char low = FromHex(lowHex);
             strTemp += high * 16 + low;
         } else
             strTemp += str[i];
     }
     return strTemp;
 }
-
-// std::string CryptoUtils::UrlEncode(const std::string& str) {
-//     std::string strTemp = "";
-//     size_t length = str.length();
-//     for (size_t i = 0; i < length; i++) {
-//         if (isalnum((unsigned char)str[i]) || (str[i] == '-') || (str[i] == '_') || (str[i] == '.') || (str[i] ==
-//         '~'))
-//             strTemp += str[i];
-//         else if (str[i] == ' ')
-//             strTemp += "+";
-//         else {
-//             strTemp += '%';
-//             strTemp += ToHex((unsigned char)str[i] >> 4);
-//             strTemp += ToHex((unsigned char)str[i] % 16);
-//         }
-//     }
-//     return strTemp;
-// }
-//
-// std::string CryptoUtils::UrlDecode(const std::string& str) {
-//     std::string strTemp = "";
-//     size_t length = str.length();
-//     for (size_t i = 0; i < length; i++) {
-//         if (str[i] == '+')
-//             strTemp += ' ';
-//         else if (str[i] == '%') {
-//             assert(i + 2 < length);
-//             unsigned char high = FromHex((unsigned char)str[++i]);
-//             unsigned char low = FromHex((unsigned char)str[++i]);
-//             strTemp += high * 16 + low;
-//         } else
-//             strTemp += str[i];
-//     }
-//     return strTemp;
-// }
 
 std::string CryptoUtils::base64Encode(const unsigned char* input, size_t inputLen) {
     std::string ret;
@@ -401,7 +437,7 @@ std::string CryptoUtils::base64EncodeURL(const unsigned char* input, size_t inpu
     return ret;
 }
 
-bool FileUtils::CreateDirectory(const std::string& folder, bool endWithFileName) {
+bool FileUtils::CreateDir(const std::string& folder, bool endWithFileName) {
     std::string folder_builder;
     std::string sub;
     sub.reserve(folder.size());
@@ -409,13 +445,13 @@ bool FileUtils::CreateDirectory(const std::string& folder, bool endWithFileName)
         const char c = *it;
         sub.push_back(c);
         // 当遇到分隔符或者到达文件最后位置时
-        if (c == PATH_DELIMITER || (it == folder.end() - 1 && !endWithFileName)) {
+        if (c == TOS_PATH_DELIMITER || (it == folder.end() - 1 && !endWithFileName)) {
             folder_builder.append(sub);
             // 文件不存在返回-1，文件存在返回0， //的场景会认为是同一个文件
-            if (access(folder_builder.c_str(), 0) != 0) {
+            if (tos_access(folder_builder.c_str()) != 0) {
                 // 该文件所有者、用户组拥有读，写，搜索操作权限；其他用户拥有可读和搜索权限
                 // 和各个后端 SDK 权限对齐
-                if (mkdir(folder_builder.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0) {
+                if (tos_mkdir(folder_builder.c_str()) != 0) {
                     return false;
                 }
             }

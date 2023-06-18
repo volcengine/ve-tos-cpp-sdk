@@ -235,6 +235,9 @@ public:
     Outcome<TosError, DeleteBucketOutput> deleteBucket(const DeleteBucketInput& input) const;
 
     Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input) const;
+    Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input,
+                                                   std::shared_ptr<std::iostream> resContent,
+                                                   std::shared_ptr<DataConsumeCallBack> callBack) const;
 
     Outcome<TosError, GetObjectToFileOutput> getObjectToFile(const GetObjectToFileInput& input) const;
 

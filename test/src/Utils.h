@@ -3,11 +3,6 @@
 #include <fstream>
 #include <memory>
 #include <cstring>
-//#ifdef _WIN32
-//#define delimiter "\\"
-//#else
-//#define delimiter "/"
-//#endif
 namespace VolcengineTos {
 class TestUtils {
 public:
@@ -23,9 +18,6 @@ public:
     static void PutObjectWithMeta(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
                                   const std::string& obj_name, const std::string& data,
                                   const std::map<std::string, std::string>& meta);
-
-    static std::string GetObjectContent(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
-                                        const std::string& obj_name);
 
     static std::string GetObjectContentByStream(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
                                                 const std::string& obj_name);

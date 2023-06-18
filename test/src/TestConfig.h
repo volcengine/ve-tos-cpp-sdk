@@ -11,7 +11,7 @@ static std::string Ak = "";
 static std::string Sk = "";
 static std::string Bucket = "";
 static std::string Key = "";
-static std::string TestPrefix = "";
+static std::string TestPrefix = "sdktest";
 static bool enableVerifySSL = false;
 
 }  // namespace TestConfig

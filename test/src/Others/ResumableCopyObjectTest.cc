@@ -44,7 +44,7 @@ std::string ResumableCopyObjectTest::srcBucketName = "";
 std::string ResumableCopyObjectTest::workPath = "";
 
 TEST_F(ResumableCopyObjectTest, ResumableCopyObjectWithoutCheckpointTest) {
-    std::string filePath = workPath + "test/testdata/" + "uploadFile1";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
     std::string srcObjectName = TestUtils::GetObjectKey(TestConfig::TestPrefix) + "src";
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 
@@ -199,7 +199,7 @@ static void CopyCallBack(std::shared_ptr<CopyEvent> event) {
 //}
 
 TEST_F(ResumableCopyObjectTest, ResumableCopyObjectWithCheckpointWithProcessTest) {
-    std::string filePath = workPath + "test/testdata/" + "uploadFile1";
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
     std::string srcObjectName = TestUtils::GetObjectKey(TestConfig::TestPrefix) + "src";
     std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 

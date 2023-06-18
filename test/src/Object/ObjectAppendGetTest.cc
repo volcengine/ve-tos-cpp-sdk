@@ -61,21 +61,18 @@ TEST_F(ObjectAppendGetTest, AppendWithoutParametersTest) {
     EXPECT_EQ(output1.isSuccess(), true);
 
     GetObjectV2Input input_obj_get(bkt_name, obj_key);
-    auto out_obj_get = cliV2->getObject(input_obj_get);
-    auto basic_output = out_obj_get.result().getGetObjectBasicOutput();
-    auto content_output = out_obj_get.result().getContent();
+    auto output_obj_get = cliV2->getObject(input_obj_get);
+    EXPECT_EQ(output_obj_get.isSuccess(), true);
+    auto basic_output = output_obj_get.result().getGetObjectBasicOutput();
+    auto content_output = output_obj_get.result().getContent();
     std::string ss_;
 
     auto stream = content_output.get();
 
-    long ss = 256 << 11;
-    char streamBuffer[ss];
-    memset(streamBuffer, 0, ss);
-    while (stream->good()) {
-        stream->read(streamBuffer, ss);
-        auto bytesRead = stream->gcount();
-    }
-    std::string tmp_string(streamBuffer);
+    std::ostringstream ss;
+    ss << output_obj_get.result().getContent()->rdbuf();
+    std::string tmp_string = ss.str();
+
     int data_size = (256 << 10) + (128 << 10);
     std::string data = std::string(data_size, '1');
     int tmp_string_size = tmp_string.size();
@@ -132,21 +129,18 @@ TEST_F(ObjectAppendGetTest, AppendWithAllParametersTest) {
     EXPECT_EQ(output1.isSuccess(), true);
 
     GetObjectV2Input input_obj_get(bkt_name, obj_key);
-    auto out_obj_get = cliV2->getObject(input_obj_get);
-    auto basic_output = out_obj_get.result().getGetObjectBasicOutput();
-    auto content_output = out_obj_get.result().getContent();
+    auto output_obj_get = cliV2->getObject(input_obj_get);
+    EXPECT_EQ(output1.isSuccess(), true);
+    auto basic_output = output_obj_get.result().getGetObjectBasicOutput();
+    auto content_output = output_obj_get.result().getContent();
     std::string ss_;
 
     auto stream = content_output.get();
 
-    long ss = 256 << 11;
-    char streamBuffer[ss];
-    memset(streamBuffer, 0, ss);
-    while (stream->good()) {
-        stream->read(streamBuffer, ss);
-        auto bytesRead = stream->gcount();
-    }
-    std::string tmp_string(streamBuffer);
+    std::ostringstream ss;
+    ss << output_obj_get.result().getContent()->rdbuf();
+    std::string tmp_string = ss.str();
+
     int data_size = (256 << 10) + (128 << 10);
     std::string data = std::string(data_size, '1');
     int tmp_string_size = tmp_string.size();
@@ -157,7 +151,7 @@ TEST_F(ObjectAppendGetTest, AppendWithAllParametersTest) {
     EXPECT_EQ(length_compare, true);
     EXPECT_EQ(content_compare, true);
 }
-// todo:没有md5这个选项，如果是头部带md5，则返回true，显然TosApi侧没有做处理
+
 // TEST_F(ObjectAppendGetTest, AppendObjectWithNotMatchMd5Test) {
 //    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 //    auto part0 = std::make_shared<std::stringstream>();

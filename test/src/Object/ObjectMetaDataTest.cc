@@ -140,4 +140,41 @@ TEST_F(ObjectMetaDataTest, DeleteObjectFromNonexistentBucketTest) {
     EXPECT_EQ(output.error().getStatusCode(), 404);
     EXPECT_EQ(output.error().getCode() == "NoSuchBucket", true);
 }
+
+TEST_F(ObjectMetaDataTest, URIEncodeFuncTest) {
+    auto out = CryptoUtils::UrlEncodeChinese("!@#$%^&*()_+-=[]{}|;':\",./<>?中文测试abcd /\\");
+    EXPECT_EQ(
+            "%21%40%23%24%25%5E%26%2A%28%29_%2B-%3D%5B%5D%7B%7D%7C%3B%27%3A%22%2C.%2F%3C%3E%3F%E4%B8%AD%E6%96%87%E6%B5%8B%E8%AF%95abcd%20%2F%5C",
+            out);
+    auto out2 = CryptoUtils::UrlDecodeChinese(out);
+    EXPECT_EQ("!@#$%^&*()_+-=[]{}|;':\",./<>?中文测试abcd /\\", out2);
+
+    out = CryptoUtils::UrlEncodeChinese("23i23+___");
+    EXPECT_EQ("23i23%2B___", out);
+    out2 = CryptoUtils::UrlDecodeChinese(out);
+    EXPECT_EQ("23i23+___", out2);
+
+    out = CryptoUtils::UrlEncodeChinese("23i23 ___");
+    EXPECT_EQ("23i23%20___", out);
+    out2 = CryptoUtils::UrlDecodeChinese(out);
+    EXPECT_EQ("23i23 ___", out2);
+
+    out = CryptoUtils::UrlEncodeChinese("23i23 /___");
+    EXPECT_EQ("23i23%20%2F___", out);
+    out2 = CryptoUtils::UrlDecodeChinese(out);
+    EXPECT_EQ("23i23 /___", out2);
+
+    out = CryptoUtils::UrlEncodeChinese("23i23 /___");
+    EXPECT_EQ("23i23%20%2F___", out);
+    out2 = CryptoUtils::UrlDecodeChinese(out);
+    EXPECT_EQ("23i23 /___", out2);
+
+    out = CryptoUtils::UrlEncodeChinese("/中文测试/");
+    EXPECT_EQ("%2F%E4%B8%AD%E6%96%87%E6%B5%8B%E8%AF%95%2F", out);
+    out2 = CryptoUtils::UrlDecodeChinese(out);
+    EXPECT_EQ("/中文测试/", out2);
+
+    out2 = CryptoUtils::UrlDecodeChinese("23i23%%20%2F___");
+    EXPECT_EQ("23i23%%20%2F___", out2);
+}
 }  // namespace VolcengineTos
