@@ -82,7 +82,7 @@ if (WIN32)
 endif ()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    list(APPEND SDK_COMPILER_FLAGS "/MP")
+    list(APPEND SDK_COMPILER_FLAGS "/MP" "/bigobj")
     if (NOT ENABLE_RTTI)
         list(APPEND SDK_COMPILER_FLAGS "/GR-")
     endif()
@@ -93,6 +93,7 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     endif()
 
     list(APPEND SDK_COMPILER_FLAGS "-Wall" "-Werror" "-pedantic" "-Wextra")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -pthread")
 else()
     list(APPEND SDK_COMPILER_FLAGS "-fno-exceptions" "-fPIC")
     if (NOT ENABLE_RTTI)
@@ -101,11 +102,7 @@ else()
 
     list(APPEND SDK_COMPILER_FLAGS "-Wall" "-Werror" "-pedantic" "-Wextra")
 
-    if (ENABLE_COVERAGE)
-        SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-        SET(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-        SET(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-    endif()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -pthread")
 endif()
 
 
@@ -113,7 +110,7 @@ MESSAGE(${CLIENT_CURL_LIBS})
 MESSAGE(${CLIENT_CURL_INCLUDE_DIRS})
 MESSAGE(${CLIENT_SSL_LIBS})
 MESSAGE(${CLIENT_SSL_INCLUDE_DIRS})
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -pthread")
+
 
 add_subdirectory(sdk)
 
