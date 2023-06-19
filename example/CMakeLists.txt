@@ -17,6 +17,7 @@ target_link_libraries(${PROJECT_NAME} ve-tos-cpp-sdk-lib)
 target_link_libraries(${PROJECT_NAME} ${CLIENT_SSL_LIBS})
 target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
 
+#target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
 
 install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
