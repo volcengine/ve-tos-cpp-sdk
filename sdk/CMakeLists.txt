@@ -383,7 +383,7 @@ if (BUILD_SHARED_LIB)
     target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
 endif ()
 
-target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
+#target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
