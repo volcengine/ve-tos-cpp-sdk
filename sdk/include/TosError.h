@@ -58,7 +58,7 @@ public:
         return isClientError_;
     }
     void setIsClientError(bool isClientError) {
-        isClientError = isClientError;
+        isClientError_ = isClientError;
     }
     const std::string& getResource() const {
         return resource_;
