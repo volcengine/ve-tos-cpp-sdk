@@ -49,8 +49,8 @@ private:
     static std::string queryToString(const std::map<std::string, std::string>& additioQuery);
 
 private:
-    std::string signedQuery_;
     std::string bucket_;
+    std::string signedQuery_;
     std::string host_;
     std::string scheme_;
     std::string path_;

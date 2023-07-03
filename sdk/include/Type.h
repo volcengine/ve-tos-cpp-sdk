@@ -211,6 +211,7 @@ static void UploadDownloadFileProcessCallback(const std::shared_ptr<DataTransfer
 class RateLimiter {
 public:
     virtual std::pair<bool, time_t> Acquire(int64_t want) = 0;
+    virtual ~RateLimiter() = default;
 };
 //  容量最小是80kb
 //  速度最小是1kb
@@ -248,6 +249,7 @@ public:
         std::pair<bool, std::time_t> res(true, 0);
         return res;
     }
+    ~MyRateLimiter() override = default;
 
 private:
     int64_t capacity_ = 0;
@@ -358,6 +360,7 @@ public:
     virtual bool isAbortFunc() = 0;
     virtual bool isNotAbortFunc() = 0;
     virtual bool isCancel() = 0;
+    virtual ~CancelHook() = default;
 };
 class MyCancelHook : public CancelHook {
 public:
@@ -376,7 +379,7 @@ public:
         bool res = isAbortFunc() || isNotAbortFunc();
         return res;
     }
-    virtual ~MyCancelHook() = default;
+    ~MyCancelHook() override = default;
 
     bool isAbortFunc() override {
         if (isCall_ && isAbort_) {
@@ -392,8 +395,8 @@ public:
     };
 
 private:
-    std::atomic<bool> isCall_;
-    std::atomic<bool> isAbort_;
+    std::atomic<bool> isCall_{};
+    std::atomic<bool> isAbort_{};
     std::mutex mutex_;
 };
 static MyCancelHook* NewCancelHook() {
@@ -401,26 +404,29 @@ static MyCancelHook* NewCancelHook() {
     return myCancelHook;
 };
 
-class DataConsumeCallBack {
-public:
-    virtual void Consume(size_t bytes) = 0;
-};
-class MyDataConsumeCallBack : public DataConsumeCallBack {
-public:
-    MyDataConsumeCallBack(std::shared_ptr<std::iostream>& content) : content_(content) {
-    }
-    void Consume(size_t bytes) override {
-        std::ostringstream ss;
-        ss << content_->rdbuf();
-        std::string tmp_string = ss.str();
-        std::cout << tmp_string << std::endl;
-    };
-
-private:
-    const std::shared_ptr<std::iostream>& content_;
-};
-static MyDataConsumeCallBack* MyDataConsumeCallBack(std::shared_ptr<std::iostream>& content) {
-    auto* myDataConsumeCallBack = new class MyDataConsumeCallBack(content);
-    return myDataConsumeCallBack;
-};
+// class DataConsumeCallBack {
+// public:
+//     virtual void Consume(size_t bytes) = 0;
+//     virtual ~DataConsumeCallBack() = default;
+// };
+// class MyDataConsumeCallBack : public DataConsumeCallBack {
+// public:
+//     explicit MyDataConsumeCallBack(std::shared_ptr<std::iostream>& content) : content_(content) {
+//     }
+//     void Consume(size_t bytes) override {
+//         std::ostringstream ss;
+//         ss << content_->rdbuf();
+//         std::string tmp_string = ss.str();
+//         std::cout << tmp_string << std::endl;
+//     }
+//     ~MyDataConsumeCallBack() override = default;
+//     ;
+//
+// private:
+//     const std::shared_ptr<std::iostream>& content_;
+// };
+// static MyDataConsumeCallBack* MyDataConsumeCallBack(std::shared_ptr<std::iostream>& content) {
+//     auto* myDataConsumeCallBack = new class MyDataConsumeCallBack(content);
+//     return myDataConsumeCallBack;
+// }
 }  // namespace VolcengineTos

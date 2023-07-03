@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2023.6.30 Version 2.5.8
+
+- 修复：HTTP 客户端多线程中析构多次调用
+
 ### 2023.6.17 Version 2.5.7
 
 - 新增：Windows 系统兼容性

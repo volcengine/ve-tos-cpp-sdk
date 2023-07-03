@@ -7,5 +7,6 @@ public:
     virtual FederationToken federationToken() {
         return {};
     }
+    virtual ~FederationTokenProvider() = default;
 };
 }  // namespace VolcengineTos

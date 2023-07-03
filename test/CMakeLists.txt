@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-test
-        VERSION 2.5.7
+        VERSION 2.5.8
         LANGUAGES CXX)
 
 include(FetchContent)

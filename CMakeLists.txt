@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.5.7
+        VERSION 2.5.8
         LANGUAGES CXX)
 
 # project settings
@@ -85,26 +85,25 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     list(APPEND SDK_COMPILER_FLAGS "/MP" "/bigobj")
     if (NOT ENABLE_RTTI)
         list(APPEND SDK_COMPILER_FLAGS "/GR-")
-    endif()
+    endif ()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     list(APPEND SDK_COMPILER_FLAGS "-fno-exceptions" "-fPIC" "-fno-rtti")
     if (NOT ENABLE_RTTI)
         list(APPEND SDK_COMPILER_FLAGS "-fno-rtti")
-    endif()
+    endif ()
 
     list(APPEND SDK_COMPILER_FLAGS "-Wall" "-Werror" "-pedantic" "-Wextra")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -pthread")
-else()
+else ()
     list(APPEND SDK_COMPILER_FLAGS "-fno-exceptions" "-fPIC")
     if (NOT ENABLE_RTTI)
         list(APPEND SDK_COMPILER_FLAGS "-fno-rtti")
-    endif()
+    endif ()
 
     list(APPEND SDK_COMPILER_FLAGS "-Wall" "-Werror" "-pedantic" "-Wextra")
 
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -pthread")
-endif()
-
+endif ()
 
 MESSAGE(${CLIENT_CURL_LIBS})
 MESSAGE(${CLIENT_CURL_INCLUDE_DIRS})
