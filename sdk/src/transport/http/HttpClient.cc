@@ -24,7 +24,7 @@ struct ResourceManager {
     uint64_t sendCrc64Value;
     uint64_t recvCrc64Value;
     std::shared_ptr<RateLimiter> rateLimiter;
-    std::shared_ptr<DataConsumeCallBack> callBack;
+    //    std::shared_ptr<DataConsumeCallBack> callBack;
 };
 
 static void processHandler(const DataTransferStatusChange& handler, int64_t consumedBytes, int64_t totalBytes,
@@ -125,7 +125,7 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
     // 第一次receive response body , 初始化state->resposne->body
     // 如果200使用传入的iostream接收数据，反之生成一个stringstream接收错误信息
     if (resourceMan->firstRecv) {
-        int64_t response_code = 0;
+        long response_code = 0;
         curl_easy_getinfo(resourceMan->curl, CURLINFO_RESPONSE_CODE, &response_code);
         if (response_code / 100 == 2) {
             resourceMan->httpResp->setBody(resourceMan->httpReq->responseOutput());
@@ -200,18 +200,12 @@ using namespace VolcengineTos;
 
 void HttpClient::initGlobalState() {
     // init twice here, check why
-    curl_global_init(CURL_GLOBAL_ALL);
 }
 
 void HttpClient::cleanupGlobalState() {
-    curl_global_cleanup();
 }
 
 HttpClient::HttpClient(const HttpConfig& config) {
-    if (!hasInitHttpClient) {
-        initGlobalState();
-        hasInitHttpClient = true;
-    }
     curlContainer_ = new CurlContainer(config.maxConnections,config.socketTimeout,config.connectTimeout);
     tcpKeepAlive_ = config.tcpKeepAlive;
     dialTimeout_ = config.dialTimeout;
@@ -342,20 +336,16 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     CURLcode res = curl_easy_perform(curl);
     if (res == CURLE_COULDNT_CONNECT) {
         response->setStatus(http::Refused);
-        response->setStatusMsg("connection refused");
-        if (dnsCacheTime_ > 0) {
-            removeDNS(curl, request);
-        }
-
-    } else if (res == CURLE_OPERATION_TIMEDOUT) {
-        response->setStatus(http::otherErr);
-        response->setStatusMsg("operation timeout");
-        if (dnsCacheTime_ > 0) {
-            removeDNS(curl, request);
-        }
+        std::stringstream ss;
+        ss << "curlCode: " << res << ", " << curl_easy_strerror(res);
+        response->setStatusMsg(ss.str());
+        response->setCurlErrCode(res);
     } else if (res != CURLE_OK) {
         response->setStatus(http::otherErr);
-        response->setStatusMsg("curl error code is " + std::to_string(res));
+        std::stringstream ss;
+        ss << "curlCode: " << res << ", " << curl_easy_strerror(res);
+        response->setStatusMsg(ss.str());
+        response->setCurlErrCode(res);
     } else {
         response->setStatus(http::Success);
 
@@ -400,7 +390,10 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         }
 #endif
     }
-    int response_code = 0;
+    if (res != CURLE_OK && dnsCacheTime_ > 0) {
+        removeDNS(curl, request);
+    }
+    long response_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
     if (response->status() == http::Refused) {
         response_code = -1;

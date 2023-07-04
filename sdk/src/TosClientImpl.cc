@@ -6561,11 +6561,30 @@ bool findInCanRetryMethods(const std::string& method) {
     return false;
 }
 
+bool findInCanRetryCurlErr(int curlErrCode) {
+    switch (curlErrCode) {
+        case (7):   // CURLE_COULDNT_CONNECT
+        case (18):  // CURLE_PARTIAL_FILE
+        case (23):  // CURLE_WRITE_ERROR
+        case (28):  // CURLE_OPERATION_TIMEDOUT
+        case (52):  // CURLE_GOT_NOTHING
+        case (55):  // CURLE_SEND_ERROR
+        case (56):  // CURLE_RECV_ERROR
+        case (65):  // CURLE_SEND_FAIL_REWIND
+            return true;
+        default:
+            return false;
+    }
+    return false;
+}
+
 bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
                                      const std::shared_ptr<TosResponse>& response) {
     auto resCode = response->getStatusCode();
-    bool timeout = (response->getStatusMsg() == "operation timeout");
-    if (resCode == 429 || resCode >= 500 || timeout) {
+    int curlErrCode = response->getCurlErrCode();
+
+    bool curlErrShouldRetry = (curlErrCode != 0) && findInCanRetryCurlErr(response->getCurlErrCode());
+    if (resCode == 429 || resCode >= 500 || curlErrShouldRetry) {
         if (request->getMethod() == http::MethodGet || request->getMethod() == http::MethodHead) {
             if (request->getMethod() == http::MethodGet) {
                 auto content_ = request->getContent();
@@ -6578,7 +6597,7 @@ bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
             }
             return true;
         }
-        if ((resCode == 429 || resCode >= 500 || timeout) && findInCanRetryMethods(request->getFuncName())) {
+        if ((resCode == 429 || resCode >= 500 || curlErrShouldRetry) && findInCanRetryMethods(request->getFuncName())) {
             if (request->getFuncName() == "putObject" || request->getFuncName() == "uploadPart") {
                 auto content_ = request->getContent();
                 if (content_ != nullptr) {

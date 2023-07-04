@@ -40,7 +40,7 @@ public:
     const std::string& getStringFormatStorageClass() const {
         return StorageClassTypetoString[storageClass_];
     }
-    const std::string& getStringFormatInitiated() const {
+    std::string getStringFormatInitiated() const {
         auto initiated = initiated_;
         return TimeUtils::transLastModifiedTimeToString(initiated);
     }

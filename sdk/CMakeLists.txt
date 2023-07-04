@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.5.7
+        VERSION 2.5.9
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -383,7 +383,9 @@ if (BUILD_SHARED_LIB)
     target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
 endif ()
 
-#target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
+if (${OS_PLATFORM} STREQUAL "WINDOWS")
+    target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
+endif ()
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME}${STATIC_LIB_SUFFIX}

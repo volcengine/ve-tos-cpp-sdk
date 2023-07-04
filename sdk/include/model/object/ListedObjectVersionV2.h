@@ -64,7 +64,7 @@ public:
     const std::string& getStringFormatStorageClass() const {
         return StorageClassTypetoString[storageClass_];
     }
-    const std::string& getStringFormatLastModified() const {
+    std::string getStringFormatLastModified() const {
         auto lastModified = lastModified_;
         return TimeUtils::transLastModifiedTimeToString(lastModified);
     }

@@ -80,6 +80,13 @@ public:
     void setHashCrc64Result(uint64_t hashcrc64result) {
         hashCrc64Result = hashcrc64result;
     }
+    int getCurlErrCode() const {
+        return curlErrCode_;
+    }
+    void setCurlErrCode(int curlErrCode) {
+        curlErrCode_ = curlErrCode;
+    }
+
 private:
     int status_;  // succ, refused, otherErr
     mutable int statusCode_;
@@ -89,5 +96,6 @@ private:
     std::shared_ptr<std::iostream> body_;
     size_t bodySize_;
     uint64_t hashCrc64Result = 0;
+    int curlErrCode_ = 0;
 };
 }  // namespace VolcengineTos

@@ -52,7 +52,7 @@
 #include "ClientConfig.h"
 
 namespace VolcengineTos {
-static const char* TOS_SDK_VERSION = "v2.5.7";
+static const char* TOS_SDK_VERSION = "v2.5.9";
 #ifdef WIN32
 static const char* PLATFORM_NAME = "windows";
 #elif __linux__
