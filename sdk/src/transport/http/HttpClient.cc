@@ -336,20 +336,16 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     CURLcode res = curl_easy_perform(curl);
     if (res == CURLE_COULDNT_CONNECT) {
         response->setStatus(http::Refused);
-        response->setStatusMsg("connection refused");
-        if (dnsCacheTime_ > 0) {
-            removeDNS(curl, request);
-        }
-
-    } else if (res == CURLE_OPERATION_TIMEDOUT) {
-        response->setStatus(http::otherErr);
-        response->setStatusMsg("operation timeout");
-        if (dnsCacheTime_ > 0) {
-            removeDNS(curl, request);
-        }
+        std::stringstream ss;
+        ss << "curlCode: " << res << ", " << curl_easy_strerror(res);
+        response->setStatusMsg(ss.str());
+        response->setCurlErrCode(res);
     } else if (res != CURLE_OK) {
         response->setStatus(http::otherErr);
-        response->setStatusMsg("curl error code is " + std::to_string(res));
+        std::stringstream ss;
+        ss << "curlCode: " << res << ", " << curl_easy_strerror(res);
+        response->setStatusMsg(ss.str());
+        response->setCurlErrCode(res);
     } else {
         response->setStatus(http::Success);
 
@@ -393,6 +389,9 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
                     (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
         }
 #endif
+    }
+    if (res != CURLE_OK && dnsCacheTime_ > 0) {
+        removeDNS(curl, request);
     }
     long response_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);

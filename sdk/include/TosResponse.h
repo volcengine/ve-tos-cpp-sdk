@@ -62,6 +62,12 @@ public:
     void setHashCrc64Result(uint64_t hashcrc64result) {
         hashCrc64Result = hashcrc64result;
     }
+    int getCurlErrCode() const {
+        return curlErrCode;
+    }
+    void setCurlErrCode(int curlErrCode) {
+        TosResponse::curlErrCode = curlErrCode;
+    }
 
 private:
     int statusCode_{};
@@ -71,6 +77,6 @@ private:
     std::shared_ptr<std::iostream> content_;
     std::string Id2_;
     uint64_t hashCrc64Result = 0;
-
+    int curlErrCode = 0;
 };
 }  // namespace VolcengineTos

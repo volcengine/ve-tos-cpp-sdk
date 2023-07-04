@@ -40,6 +40,7 @@ std::shared_ptr<TosResponse> DefaultTransport::roundTrip(const std::shared_ptr<T
     res->setStatusMsg(httpResp->statusMsg());
     res->setHeaders(httpResp->Headers());
     res->setHashCrc64Result(httpResp->getHashCrc64Result());
+    res->setCurlErrCode(httpResp->getCurlErrCode());
     std::string cl(httpResp->getHeaderValueByKey(http::HEADER_CONTENT_LENGTH));
     if (cl.empty()) {
         res->setContentLength(0);
