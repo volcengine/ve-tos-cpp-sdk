@@ -192,16 +192,10 @@ private:
 class HttpClient {
 public:
     HttpClient() {
-        if (!hasInitHttpClient) {
-            initGlobalState();
-            hasInitHttpClient = true;
-        }
         curlContainer_ = new CurlContainer(25,12000,10000);
     }
     explicit HttpClient(const HttpConfig& config);
     virtual ~HttpClient() {
-        cleanupGlobalState();
-        hasInitHttpClient = false;
         if (curlContainer_ != nullptr) {
             delete curlContainer_;
         }

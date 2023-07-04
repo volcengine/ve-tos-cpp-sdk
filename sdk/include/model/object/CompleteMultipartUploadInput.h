@@ -17,7 +17,8 @@ public:
         parts_.resize(length);
     }
     void setPartsByIdx(const InnerUploadedPart& part, int i) {
-        if (i < parts_.size()) {
+        int size = static_cast<int>(parts_.size());
+        if (i < size) {
             parts_[i] = part;
         }
     }
@@ -45,7 +46,7 @@ public:
     }
 
     int getUploadedPartsLength() {
-        return uploadedParts_.size();
+        return static_cast<int>(uploadedParts_.size());
     }
 
     const std::string& getKey() const {
@@ -81,7 +82,7 @@ public:
     }
 
     int getUploadedPartsLength() {
-        return uploadedParts_.size();
+        return static_cast<int>(uploadedParts_.size());
     }
 
     const std::string& getKey() const {

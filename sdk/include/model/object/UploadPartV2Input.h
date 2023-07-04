@@ -11,10 +11,10 @@ public:
     UploadPartV2Input(std::string bucket, std::string key, std::string uploadId, int64_t contentLength, int partNumber,
                       std::shared_ptr<std::iostream> content)
             : uploadPartBasicInput_(std::move(bucket), std::move(key), std::move(uploadId), partNumber),
-              contentLength_(contentLength),
-              content_(std::move(content)) {
+              content_(std::move(content)),
+              contentLength_(contentLength) {
     }
-    UploadPartV2Input(const UploadPartBasicInput& uploadpartbasicinput, std::shared_ptr<std::iostream>  content,
+    UploadPartV2Input(const UploadPartBasicInput& uploadpartbasicinput, std::shared_ptr<std::iostream> content,
                       int64_t contentlength)
             : uploadPartBasicInput_(uploadpartbasicinput), content_(std::move(content)), contentLength_(contentlength) {
     }

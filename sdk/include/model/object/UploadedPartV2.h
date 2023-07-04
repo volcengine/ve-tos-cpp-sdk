@@ -33,7 +33,7 @@ public:
     void setLastModified(time_t lastmodified) {
         lastModified_ = lastmodified;
     }
-    const std::string& getStringFormatLastModified() const {
+    std::string getStringFormatLastModified() const {
         auto lastModified = lastModified_;
         return TimeUtils::transLastModifiedTimeToString(lastModified);
     }
