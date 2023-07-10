@@ -87,6 +87,10 @@ static const char* HEADER_COPY_SOURCE_VERSION_ID = "X-Tos-Copy-Source-Version-Id
 static const char* HEADER_WEBSITE_REDIRECT_LOCATION = "X-Tos-Website-Redirect-Location";
 static const char* HEADER_CS_TYPE = "X-Tos-Cs-Type";
 static const char* HEADER_META_PREFIX = "X-Tos-Meta-";
+static const char* HEADER_TRAFFIC_LIMIT = "X-Tos-Traffic-Limit";
+static const char* HEADER_COMPLETE_ALL = "X-Tos-Complete-All";
+static const char* HEADER_CALLBACK = "X-Tos-Callback";
+static const char* HEADER_CALLBACK_VAR = "X-Tos-Callback-Var";
 
 /**
  * replace source object metadata when calling copyObject

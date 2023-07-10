@@ -34,27 +34,53 @@ std::shared_ptr<TosClientV2> BucketNotificationTest::cliV2 = nullptr;
 std::string BucketNotificationTest::bucketName = "";
 
 TEST_F(BucketNotificationTest, BucketNotificationWithALLParametersTest) {
-//    todo：2.5.6 打开
-//    FilterKey filterKey({{"prefix", "object"}, {"suffix", "object1"}});
-//    Filter filter(filterKey);
-//    CloudFunctionConfiguration configuration("test-id", {"tos:ObjectCreated:Put"}, filter, "62vy7sa6");
-//    PutBucketNotificationInput putBucketNotificationInput(bucketName, {configuration});
-//    auto putOutput = cliV2->putBucketNotification(putBucketNotificationInput);
-//    EXPECT_EQ(putOutput.isSuccess(), true);
-//
-//    GetBucketNotificationInput getBucketNotificationInput(bucketName);
-//    auto getOutput = cliV2->getBucketNotification(getBucketNotificationInput);
-//
-//    EXPECT_EQ(getOutput.isSuccess(), true);
-//    auto res = getOutput.result().getCloudFunctionConfigurations();
-//    bool check = res[0].getId() == configuration.getId() &&
-//                 res[0].getCloudFunction() == configuration.getCloudFunction() &&
-//                 res[0].getEvents() == configuration.getEvents() &&
-//                 res[0].getFilter().getKey().getRules()[0].getName() == filterKey.getRules()[0].getName() &&
-//                 res[0].getFilter().getKey().getRules()[0].getValue() == filterKey.getRules()[0].getValue() &&
-//                 res[0].getFilter().getKey().getRules()[1].getName() == filterKey.getRules()[1].getName() &&
-//                 res[0].getFilter().getKey().getRules()[1].getValue() == filterKey.getRules()[1].getValue();
-//    EXPECT_EQ(check, true);
+    FilterKey filterKey({{"prefix", "object"}, {"suffix", "object1"}});
+    Filter filter(filterKey);
+    CloudFunctionConfiguration configuration("test-id", {"tos:ObjectCreated:Put"}, filter, "62vy7sa6");
+    PutBucketNotificationInput putBucketNotificationInput(bucketName, {configuration});
+    auto putOutput = cliV2->putBucketNotification(putBucketNotificationInput);
+    EXPECT_EQ(putOutput.isSuccess(), true);
+
+    GetBucketNotificationInput getBucketNotificationInput(bucketName);
+    auto getOutput = cliV2->getBucketNotification(getBucketNotificationInput);
+
+    EXPECT_EQ(getOutput.isSuccess(), true);
+    auto res = getOutput.result().getCloudFunctionConfigurations();
+    bool check = res[0].getId() == configuration.getId() &&
+                 res[0].getCloudFunction() == configuration.getCloudFunction() &&
+                 res[0].getEvents() == configuration.getEvents() &&
+                 res[0].getFilter().getKey().getRules()[0].getName() == filterKey.getRules()[0].getName() &&
+                 res[0].getFilter().getKey().getRules()[0].getValue() == filterKey.getRules()[0].getValue() &&
+                 res[0].getFilter().getKey().getRules()[1].getName() == filterKey.getRules()[1].getName() &&
+                 res[0].getFilter().getKey().getRules()[1].getValue() == filterKey.getRules()[1].getValue();
+    EXPECT_EQ(check, true);
 }
+
+// TEST_F(BucketNotificationTest, BucketNotificationWithMQWithALLParametersTest) {
+//     FilterKey filterKey({{"prefix", "object"}, {"suffix", "object1"}});
+//     Filter filter(filterKey);
+//     RocketMQConf rocketMqConf("rocketmq-cnoebb53b7665ec3", "SDK", "VAasLn7EH0jqBrQ1lqpYcfJY");
+//     RocketMQConfiguration configuration("test-id", "trn:iam::2100041994:role/test-for-tos-rmq",
+//                                         {"tos:ObjectCreated:Put"}, filter, rocketMqConf);
+//     PutBucketNotificationInput putBucketNotificationInput(bucketName, {configuration});
+//     auto putOutput = cliV2->putBucketNotification(putBucketNotificationInput);
+//     EXPECT_EQ(putOutput.isSuccess(), true);
+//
+//     GetBucketNotificationInput getBucketNotificationInput(bucketName);
+//     auto getOutput = cliV2->getBucketNotification(getBucketNotificationInput);
+//
+//     EXPECT_EQ(getOutput.isSuccess(), true);
+//     auto res = getOutput.result().getRocketMqConfigurations();
+//     bool check = res[0].getId() == configuration.getId() && res[0].getRole() == configuration.getRole() &&
+//                  res[0].getEvents() == configuration.getEvents() &&
+//                  res[0].getFilter().getKey().getRules()[0].getName() == filterKey.getRules()[0].getName() &&
+//                  res[0].getFilter().getKey().getRules()[0].getValue() == filterKey.getRules()[0].getValue() &&
+//                  res[0].getFilter().getKey().getRules()[1].getName() == filterKey.getRules()[1].getName() &&
+//                  res[0].getFilter().getKey().getRules()[1].getValue() == filterKey.getRules()[1].getValue() &&
+//                  res[0].getRocketMq().getTopic() == rocketMqConf.getTopic() &&
+//                  res[0].getRocketMq().getInstanceId() == rocketMqConf.getInstanceId() &&
+//                  res[0].getRocketMq().getAccessKeyId() == rocketMqConf.getAccessKeyId();
+//     EXPECT_EQ(check, true);
+// }
 
 }  // namespace VolcengineTos

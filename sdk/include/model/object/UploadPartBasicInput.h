@@ -79,6 +79,12 @@ public:
     void setRateLimiter(const std::shared_ptr<RateLimiter>& ratelimiter) {
         rateLimiter_ = ratelimiter;
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
 
 private:
     std::string bucket_;
@@ -97,5 +103,6 @@ private:
 
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};  // 进度条特性
     std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速
+    int64_t trafficLimit_ = 0;
 };
 }  // namespace VolcengineTos

@@ -316,4 +316,32 @@ TEST_F(ObjectCopyTest, CopyObjectWithNonexistentNameTest) {
     EXPECT_EQ(output_obj_copy_2.isSuccess(), false);
     EXPECT_EQ(output_obj_copy_2.error().getStatusCode(), 404);
 }
+TEST_F(ObjectCopyTest, CopyObjectToOtherBucketWithTrafficLimitTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+
+    auto ss = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (13 << 20); ++i) {
+        *ss << 1;
+    }
+    PutObjectV2Input input_obj_put(src_bkt_name, obj_key, ss);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    CopyObjectV2Input input_object_copy(bkt_name, obj_name, src_bkt_name, obj_key);
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output_obj_copy = cliV2->copyObject(input_object_copy);
+    EXPECT_EQ(output_obj_copy.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+
+    input_object_copy.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    output_obj_copy = cliV2->copyObject(input_object_copy);
+    EXPECT_EQ(output_obj_copy.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    EXPECT_EQ(time2 > time1, true);
+}
 }  // namespace VolcengineTos

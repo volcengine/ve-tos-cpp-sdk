@@ -175,6 +175,24 @@ public:
     void setRateLimiter(const std::shared_ptr<RateLimiter>& ratelimiter) {
         putObjectBasicInput_.setRateLimiter(ratelimiter);
     }
+    int64_t getTrafficLimit() const {
+        return putObjectBasicInput_.getTrafficLimit();
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        putObjectBasicInput_.setTrafficLimit(trafficLimit);
+    }
+    const std::string& getCallBack() const {
+        return putObjectBasicInput_.getCallBack();
+    }
+    void setCallBack(const std::string& setCallBack) {
+        putObjectBasicInput_.setCallBack(setCallBack);
+    }
+    const std::string& getCallBackVar() const {
+        return putObjectBasicInput_.getCallBackVar();
+    }
+    void setCallBackVar(const std::string& setCallBackVar) {
+        putObjectBasicInput_.setCallBackVar(setCallBackVar);
+    }
 
 private:
     PutObjectBasicInput putObjectBasicInput_;

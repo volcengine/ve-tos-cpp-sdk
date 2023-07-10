@@ -34,6 +34,7 @@ public:
     int dnsCacheTime;
     int socketTimeout;
     int maxConnections;
+    bool isCustomDomain = false;
     // int MaxConnections;
     // int IdleConnectionTime;
 };

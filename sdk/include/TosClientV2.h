@@ -178,6 +178,17 @@
 #include "model/object/ResumableCopyObjectOutput.h"
 #include "model/acl/PreSignedPolicyURLOutput.h"
 #include "model/acl/PreSignedPolicyURLInput.h"
+#include "model/object/RenameObjectOutput.h"
+#include "model/object/RenameObjectInput.h"
+#include "model/object/RestoreObjectOutput.h"
+#include "model/object/RestoreObjectInput.h"
+#include "model/bucket/PutBucketRenameOutput.h"
+#include "model/bucket/PutBucketRenameInput.h"
+#include "model/bucket/GetBucketRenameOutput.h"
+#include "model/bucket/GetBucketRenameInput.h"
+#include "model/bucket/DeleteBucketRenameInput.h"
+#include "model/bucket/DeleteBucketRenameOutput.h"
+
 namespace VolcengineTos {
 
 void InitializeClient();
@@ -337,6 +348,13 @@ public:
 
     Outcome<TosError, ResumableCopyObjectOutput> resumableCopyObject(const ResumableCopyObjectInput& input) const;
     Outcome<TosError, PreSignedPolicyURLOutput> preSignedPolicyURL(const PreSignedPolicyURLInput& input) const;
+
+    // 2.6.0
+    Outcome<TosError, RenameObjectOutput> renameObject(const RenameObjectInput& input);
+    Outcome<TosError, RestoreObjectOutput> restoreObject(const RestoreObjectInput& input);
+    Outcome<TosError, PutBucketRenameOutput> putBucketRename(const PutBucketRenameInput& input);
+    Outcome<TosError, GetBucketRenameOutput> getBucketRename(const GetBucketRenameInput& input);
+    Outcome<TosError, DeleteBucketRenameOutput> deleteBucketRename(const DeleteBucketRenameInput& input);
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;

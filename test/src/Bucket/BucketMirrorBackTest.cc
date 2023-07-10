@@ -43,9 +43,17 @@ TEST_F(BucketMirrorBackTest, BucketMirrorBackWithoutParametersTest) {
 TEST_F(BucketMirrorBackTest, BucketMirrorBackWithParametersTest) {
     PutBucketMirrorBackInput putBucketMirrorBackInput(bucketName);
     Condition condition{404};
+    condition.setKeyPrefix("prefix-");
+    condition.setKeySuffix("-suffix");
     MirrorHeader mirrorHeader{true, {"aa", "bb"}, {"xxx"}};
     PublicSource publicSource{{{"http://www.volcengine.com/obj/tostest/"}, {"http://www.volcengine.com/obj/tostest/"}}};
     Redirect redirect{RedirectType::RedirectMirror, true, true, true, mirrorHeader, publicSource};
+    Transform transform;
+    ReplaceKeyPrefix replaceKeyPrefix("prefix-", "replace-");
+    transform.setReplaceKeyPrefix(replaceKeyPrefix);
+    transform.setWithKeyPrefix("prefix-");
+    transform.setWithKeySuffix("-suffix");
+    redirect.setTransform(transform);
     MirrorBackRule rule1("1", condition, redirect);
     // 当前仅支持 1 个规则
     putBucketMirrorBackInput.setRules({rule1});
@@ -57,11 +65,16 @@ TEST_F(BucketMirrorBackTest, BucketMirrorBackWithParametersTest) {
     EXPECT_EQ(getOutput.isSuccess(), true);
     auto res = getOutput.result().getRules()[0];
     auto resRedirect = res.getRedirect();
-    bool resCheck = (res.getId() == "1" && res.getCondition().getHttpCode() == 404 && resRedirect.isFollowRedirect() &&
-                     resRedirect.getRedirectType() == RedirectType::RedirectMirror &&
+    bool resCheck = (res.getId() == "1" && res.getCondition().getHttpCode() == 404 &&
+                     res.getCondition().getKeyPrefix() == "prefix-" && res.getCondition().getKeySuffix() == "-suffix" &&
+                     resRedirect.isFollowRedirect() && resRedirect.getRedirectType() == RedirectType::RedirectMirror &&
                      resRedirect.getMirrorHeader().getPass()[0] == "aa" &&
                      resRedirect.getPublicSource().getSourceEndpoint().getPrimary()[0] ==
-                             "http://www.volcengine.com/obj/tostest/");
+                             "http://www.volcengine.com/obj/tostest/" &&
+                     resRedirect.getTransform().getReplaceKeyPrefix().getReplaceWith() == "replace-" &&
+                     resRedirect.getTransform().getReplaceKeyPrefix().getKeyPrefix() == "prefix-" &&
+                     resRedirect.getTransform().getWithKeySuffix() == "-suffix" &&
+                     resRedirect.getTransform().getWithKeyPrefix() == "prefix-");
     EXPECT_EQ(resCheck, true);
     DeleteBucketMirrorBackInput deleteBucketMirrorBackInput(bucketName);
     auto deleteOutput = cliV2->deleteBucketMirrorBack(deleteBucketMirrorBackInput);

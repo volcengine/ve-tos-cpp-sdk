@@ -136,6 +136,18 @@ public:
     void setRange(const std::string& range) {
         range_ = range;
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
+    const std::string& getProcess() const {
+        return process_;
+    }
+    void setProcess(const std::string& process) {
+        process_ = process;
+    }
 
 private:
     std::string bucket_;
@@ -164,5 +176,8 @@ private:
     std::string range_;
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};  // 进度条特性
     std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速
+
+    int64_t trafficLimit_ = 0;
+    std::string process_;
 };
 }  // namespace VolcengineTos

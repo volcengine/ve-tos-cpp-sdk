@@ -200,6 +200,12 @@ public:
     void setSsecKey(const std::string& ssecKey) {
         ssecKey_ = ssecKey;
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
 
 private:
     std::string bucket_;
@@ -240,5 +246,6 @@ private:
     std::map<std::string, std::string> meta_;
     std::string websiteRedirectLocation_;
     StorageClassType storageClass_ = StorageClassType::NotSet;
+    int64_t trafficLimit_ = 0;
 };
 }  // namespace VolcengineTos

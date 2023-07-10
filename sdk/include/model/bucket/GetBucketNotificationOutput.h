@@ -5,6 +5,7 @@
 #include <vector>
 #include "model/RequestInfo.h"
 #include "CloudFunctionConfiguration.h"
+#include "RocketMQConfiguration.h"
 
 namespace VolcengineTos {
 class GetBucketNotificationOutput {
@@ -21,10 +22,17 @@ public:
     void setCloudFunctionConfigurations(const std::vector<CloudFunctionConfiguration>& cloudFunctionConfigurations) {
         CloudFunctionConfigurations_ = cloudFunctionConfigurations;
     }
+    const std::vector<RocketMQConfiguration>& getRocketMqConfigurations() const {
+        return rocketMQConfigurations_;
+    }
+    void setRocketMqConfigurations(const std::vector<RocketMQConfiguration>& rocketMqConfigurations) {
+        rocketMQConfigurations_ = rocketMqConfigurations;
+    }
     void fromJsonString(const std::string& input);
 
 private:
     RequestInfo requestInfo_;
     std::vector<CloudFunctionConfiguration> CloudFunctionConfigurations_;
+    std::vector<RocketMQConfiguration> rocketMQConfigurations_;
 };
 }  // namespace VolcengineTos

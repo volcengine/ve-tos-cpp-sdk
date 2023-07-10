@@ -46,7 +46,12 @@ public:
     void setHashCrc64ecma(uint64_t hashcrc64ecma) {
         hashCrc64ecma_ = hashcrc64ecma;
     }
-
+    const std::string& getCallbackResult() const {
+        return callbackResult_;
+    }
+    void setCallbackResult(const std::string& callbackResult) {
+        callbackResult_ = callbackResult;
+    }
     void fromJsonString(const std::string& input);
 
 private:
@@ -57,5 +62,6 @@ private:
     std::string location_;
     std::string versionID_;
     uint64_t hashCrc64ecma_ = 0;
+    std::string callbackResult_;
 };
 }  // namespace VolcengineTos

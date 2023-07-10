@@ -98,6 +98,12 @@ public:
     void setRateLimiter(const std::shared_ptr<RateLimiter>& ratelimiter) {
         uploadPartBasicInput_.setRateLimiter(ratelimiter);
     }
+    int64_t getTrafficLimit() const {
+        return uploadPartBasicInput_.getTrafficLimit();
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        uploadPartBasicInput_.setTrafficLimit(trafficLimit);
+    }
 
 private:
     UploadPartBasicInput uploadPartBasicInput_;

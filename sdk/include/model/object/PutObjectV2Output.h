@@ -40,6 +40,12 @@ public:
     void setHashCrc64ecma(uint64_t hashCrc64ecma) {
         hashCrc64ecma_ = hashCrc64ecma;
     }
+    const std::string& getCallbackResult() const {
+        return callbackResult_;
+    }
+    void setCallbackResult(const std::string& callbackResult) {
+        callbackResult_ = callbackResult;
+    }
 
 private:
     RequestInfo requestInfo_;
@@ -48,5 +54,6 @@ private:
     std::string ssecKeyMD5_;
     std::string versionID_;
     uint64_t hashCrc64ecma_;
+    std::string callbackResult_;
 };
 }  // namespace VolcengineTos

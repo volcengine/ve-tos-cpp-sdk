@@ -363,6 +363,130 @@ TEST_F(ObjectPutGetTest, PutGetObjectFromEmptyFileTest) {
     EXPECT_EQ(out_obj_get.isSuccess(), true);
 }
 
+TEST_F(ObjectPutGetTest, PutGetObjectFromFileWithTrafficLimitTest) {
+    auto workPath = FileUtils::getWorkPath();
+    std::cout << workPath << std::endl;
+    std::string filePath1 = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
+    std::string filePath2 =
+            workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "GetObjectTest.txt";
+
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    PutObjectFromFileInput input_obj_put(bkt_name, obj_key, filePath1);
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output_obj_put = cliV2->putObjectFromFile(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+
+    startTime = std::chrono::high_resolution_clock::now();
+    input_obj_put.setTrafficLimit(1024 * 1024);
+    output_obj_put = cliV2->putObjectFromFile(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    bool isInTime = time2 > time1;
+    EXPECT_EQ(isInTime, true);
+
+    GetObjectToFileInput input_obj_get(bkt_name, obj_key, filePath2);
+    startTime = std::chrono::high_resolution_clock::now();
+    auto out_obj_get = cliV2->getObjectToFile(input_obj_get);
+    EXPECT_EQ(out_obj_get.isSuccess(), true);
+
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time3 = fp_ms.count() / 1000;
+
+    input_obj_get.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    out_obj_get = cliV2->getObjectToFile(input_obj_get);
+    EXPECT_EQ(out_obj_get.isSuccess(), true);
+
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time4 = fp_ms.count() / 1000;
+
+    bool isInTime2 = time4 > time3;
+    EXPECT_EQ(isInTime2, true);
+}
+
+TEST_F(ObjectPutGetTest, PutObjectWithTrafficLimitTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+
+    auto ss = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (13 << 20); ++i) {
+        *ss << 1;
+    }
+    PutObjectV2Input input_obj_put(bkt_name, obj_key, ss);
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+
+    ss = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (13 << 20); ++i) {
+        *ss << 1;
+    }
+    input_obj_put.setContent(ss);
+    input_obj_put.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    bool isInTime = time2 > time1;
+    EXPECT_EQ(isInTime, true);
+
+    GetObjectV2Input input_obj_get;
+    input_obj_get.setBucket(bkt_name);
+    input_obj_get.setKey(obj_key);
+
+    startTime = std::chrono::high_resolution_clock::now();
+    auto res_obj_get = cliV2->getObject(input_obj_get);
+    EXPECT_EQ(res_obj_get.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time3 = fp_ms.count() / 1000;
+
+    input_obj_get.setTrafficLimit(1024 * 1024);
+
+    startTime = std::chrono::high_resolution_clock::now();
+    res_obj_get = cliV2->getObject(input_obj_get);
+    EXPECT_EQ(res_obj_get.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time4 = fp_ms.count() / 1000;
+    isInTime = time4 > time3;
+    EXPECT_EQ(isInTime, true);
+}
+
+TEST_F(ObjectPutGetTest, PutObjectWithDataProcessTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    auto workPath = FileUtils::getWorkPath();
+    std::cout << workPath << std::endl;
+    std::string filePath1 = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "example.jpg";
+    PutObjectFromFileInput input_obj_put(bkt_name, obj_key, filePath1);
+    auto output_obj_put = cliV2->putObjectFromFile(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    GetObjectV2Input input(bkt_name, obj_key);
+    input.setProcess("image/info");
+    auto res = cliV2->getObject(input);
+    EXPECT_EQ(res.isSuccess(), true);
+    std::ostringstream ss;
+    ss << res.result().getContent()->rdbuf();
+    std::string tmp_string = ss.str();
+    EXPECT_EQ(
+            tmp_string ==
+                    "{\"FileSize\":{\"value\":\"21839\"},\"Format\":{\"value\":\"jpeg\"},\"ImageHeight\":{\"value\":\"267\"},\"ImageWidth\":{\"value\":\"400\"}}",
+            true);
+}
+
 TEST_F(ObjectPutGetTest, GetObjectStramTest) {
     //    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     //

@@ -202,6 +202,12 @@ public:
     void setStorageClass(StorageClassType storageclass) {
         createMultipartUploadInput_.setStorageClass(storageclass);
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
 
 private:
     CreateMultipartUploadInput createMultipartUploadInput_;
@@ -214,5 +220,6 @@ private:
     UploadEventListener uploadEventListener_ = {nullptr};
     std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;
     std::shared_ptr<CancelHook> cancelHook_ = nullptr;
+    int64_t trafficLimit_ = 0;
 };
 }  // namespace VolcengineTos
