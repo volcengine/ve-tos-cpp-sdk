@@ -134,6 +134,12 @@ public:
     void setSsecKeyMd5(const std::string& sseckeymd5) {
         headObjectV2Input_.setSsecKeyMd5(sseckeymd5);
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
 
 private:
     HeadObjectV2Input headObjectV2Input_;
@@ -146,5 +152,6 @@ private:
     DownloadEventListener downloadEventListener_ = {nullptr};
     std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;
     std::shared_ptr<CancelHook> cancelHook_ = nullptr;
+    int64_t trafficLimit_ = 0;
 };
 }  // namespace VolcengineTos

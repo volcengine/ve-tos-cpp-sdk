@@ -20,7 +20,7 @@ std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
 }
 std::shared_ptr<TosRequest> RequestBuilder::buildSignedURL(const std::string& method) {
     std::string host, path;
-    if (bucket_.empty()) {
+    if (bucket_.empty() || isCustomDomain_) {
         host = host_;
         path = "/";
         path += object_;

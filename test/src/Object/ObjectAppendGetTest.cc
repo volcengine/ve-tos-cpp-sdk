@@ -152,6 +152,44 @@ TEST_F(ObjectAppendGetTest, AppendWithAllParametersTest) {
     EXPECT_EQ(content_compare, true);
 }
 
+TEST_F(ObjectAppendGetTest, AppendWithoutParametersWithTrafficLimitTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    auto part0 = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (10 << 20); ++i) {
+        *part0 << "1";
+    }
+    AppendObjectV2Input input_append(bkt_name, obj_key, part0, 0);
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output = cliV2->appendObject(input_append);
+    if (!output.isSuccess()) {
+        std::cout << output.error().String() << std::endl;
+    }
+    EXPECT_EQ(output.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+
+    auto part1 = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (10 << 20); ++i) {
+        *part1 << "1";
+    }
+    input_append.setContent(part1);
+    input_append.setOffset(output.result().getNextAppendOffset());
+    input_append.setPreHashCrc64Ecma(output.result().getHashCrc64ecma());
+    input_append.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    auto output1 = cliV2->appendObject(input_append);
+    if (!output1.isSuccess()) {
+        std::cout << output1.error().String() << std::endl;
+    }
+    EXPECT_EQ(output1.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    EXPECT_EQ(time2 > time1, true);
+}
+
 // TEST_F(ObjectAppendGetTest, AppendObjectWithNotMatchMd5Test) {
 //    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
 //    auto part0 = std::make_shared<std::stringstream>();

@@ -300,3 +300,19 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientV2::preSignedPolicyURL(
         const PreSignedPolicyURLInput& input) const {
     return tosClientImpl_->preSignedPolicyURL(input);
 }
+
+Outcome<TosError, RenameObjectOutput> TosClientV2::renameObject(const RenameObjectInput& input) {
+    return tosClientImpl_->renameObject(input);
+}
+Outcome<TosError, RestoreObjectOutput> TosClientV2::restoreObject(const RestoreObjectInput& input) {
+    return tosClientImpl_->restoreObject(input);
+}
+Outcome<TosError, PutBucketRenameOutput> TosClientV2::putBucketRename(const PutBucketRenameInput& input) {
+    return tosClientImpl_->putBucketRename(input);
+}
+Outcome<TosError, GetBucketRenameOutput> TosClientV2::getBucketRename(const GetBucketRenameInput& input) {
+    return tosClientImpl_->getBucketRename(input);
+}
+Outcome<TosError, DeleteBucketRenameOutput> TosClientV2::deleteBucketRename(const DeleteBucketRenameInput& input) {
+    return tosClientImpl_->deleteBucketRename(input);
+}

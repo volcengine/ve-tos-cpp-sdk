@@ -246,4 +246,55 @@ TEST_F(ResumableCopyObjectTest, ResumableCopyObjectWithCheckpointWithProcessTest
     bool check_data = (data == temp);
     EXPECT_EQ(check_data, true);
 }
+
+TEST_F(ResumableCopyObjectTest, ResumableCopyObjectWithTrafficLimitTest) {
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
+    std::string srcObjectName = TestUtils::GetObjectKey(TestConfig::TestPrefix) + "src";
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+
+    UploadFileV2Input uploadInput;
+    // 对象名和桶名
+    CreateMultipartUploadInput createMultiPartInput(srcBucketName, srcObjectName);
+    uploadInput.setCreateMultipartUploadInput(createMultiPartInput);
+    // 并发下载分片的线程数 1-1000
+    uploadInput.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    uploadInput.setEnableCheckpoint(false);
+    // 默认分片大小 20MB
+    uploadInput.setPartSize(5 * 1024 * 1024);
+    // 待上传文件的路径，不可为空，不可为文件夹，建议设置绝对路径
+    uploadInput.setFilePath(filePath);
+    auto fileOutput = cliV2->uploadFile(uploadInput);
+    EXPECT_EQ(fileOutput.isSuccess(), true);
+
+    std::string dstObjectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    ResumableCopyObjectInput input;
+    // 对象名和桶名
+    input.setBucket(bucketName);
+    input.setKey(objectName);
+    input.setSrcBucket(srcBucketName);
+    input.setSrcKey(srcObjectName);
+
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(false);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output = cliV2->resumableCopyObject(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+
+    input.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    auto output2 = cliV2->resumableCopyObject(input);
+    EXPECT_EQ(output2.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    EXPECT_EQ(time2 > time1, true);
+}
 }  // namespace VolcengineTos

@@ -316,4 +316,44 @@ TEST_F(DownLoadFileTest, DownLoadFileWithDirPathTest) {
         }
     }
 }
+TEST_F(DownLoadFileTest, DownLoadFileWithTrafficLimitTest) {
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "downloadFile1";
+    remove(filePath.c_str());
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    auto ss = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (11 << 20); ++i) {
+        *ss << 1;
+    }
+    PutObjectV2Input input_obj_put(bucketName, objectName, ss);
+    auto putOutput = cliV2->putObject(input_obj_put);
+    DownloadFileInput input;
+    // 对象名和桶名
+    HeadObjectV2Input headInput(bucketName, objectName);
+    input.setHeadObjectV2Input(headInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(false);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 下载后文件的保存路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output = cliV2->downloadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+    remove(filePath.c_str());
+
+    input.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    auto output2 = cliV2->downloadFile(input);
+    EXPECT_EQ(output2.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    EXPECT_EQ(time2 > time1, true);
+    remove(filePath.c_str());
+}
 }  // namespace VolcengineTos

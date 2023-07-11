@@ -18,6 +18,12 @@ void VolcengineTos::GetBucketMirrorBackOutput::fromJsonString(const std::string&
                 if (condition.contains("HttpCode")) {
                     condition_.setHttpCode(condition.at("HttpCode").get<int>());
                 }
+                if (condition.contains("KeyPrefix")) {
+                    condition_.setKeyPrefix(condition.at("KeyPrefix").get<std::string>());
+                }
+                if (condition.contains("KeySuffix")) {
+                    condition_.setKeySuffix(condition.at("KeySuffix").get<std::string>());
+                }
                 rule_.setCondition(condition_);
             }
             if (r.contains("Redirect")) {
@@ -48,6 +54,28 @@ void VolcengineTos::GetBucketMirrorBackOutput::fromJsonString(const std::string&
                         mirrorHeader_.setRemove(mirrorHeader.at("Remove").get<std::vector<std::string>>());
                     }
                     redirect_.setMirrorHeader(mirrorHeader_);
+                }
+                if (redirect.contains("Transform")) {
+                    Transform transform_;
+                    auto transform = redirect.at("Transform");
+                    if (transform.contains("ReplaceKeyPrefix")) {
+                        ReplaceKeyPrefix replaceKeyPrefix_;
+                        auto ReplaceKeyPrefix = transform.at("ReplaceKeyPrefix");
+                        if (ReplaceKeyPrefix.contains("KeyPrefix")) {
+                            replaceKeyPrefix_.setKeyPrefix(ReplaceKeyPrefix.at("KeyPrefix").get<std::string>());
+                        }
+                        if (ReplaceKeyPrefix.contains("ReplaceWith")) {
+                            replaceKeyPrefix_.setReplaceWith(ReplaceKeyPrefix.at("ReplaceWith").get<std::string>());
+                        }
+                        transform_.setReplaceKeyPrefix(replaceKeyPrefix_);
+                    }
+                    if (transform.contains("WithKeyPrefix")) {
+                        transform_.setWithKeyPrefix(transform.at("WithKeyPrefix").get<std::string>());
+                    }
+                    if (transform.contains("WithKeySuffix")) {
+                        transform_.setWithKeySuffix(transform.at("WithKeySuffix").get<std::string>());
+                    }
+                    redirect_.setTransform(transform_);
                 }
                 if (redirect.contains("PublicSource")) {
                     auto publicSource = redirect.at("PublicSource");

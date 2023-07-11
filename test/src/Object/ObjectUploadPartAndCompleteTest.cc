@@ -305,4 +305,48 @@ TEST_F(ObjectUploadPartAndCompleteTest, CreateMultipartUploadEmptyfileTest) {
     EXPECT_EQ(got.isSuccess(), true);
 }
 
+TEST_F(ObjectUploadPartAndCompleteTest, CreateMultipartUploadWithTrafficLimitTest) {
+    std::string filePath = workPath + "test/testdata/" + "AppendTest.txt";
+
+    std::string obj_name = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    CreateMultipartUploadInput input_part_create(bkt_name, obj_name);
+
+    auto upload = cliV2->createMultipartUpload(input_part_create);
+
+    // generate some data..
+    auto ss1 = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (5 << 20); ++i) {
+        *ss1 << 1;
+    }
+    auto startTime = std::chrono::high_resolution_clock::now();
+    UploadPartV2Input input_upload_part(bkt_name, obj_name, upload.result().getUploadId(), ss1->tellg(), 1, ss1);
+    auto part1 = cliV2->uploadPart(input_upload_part);
+    EXPECT_EQ(part1.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+    // generate some data..
+    auto ss2 = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (5 << 20); ++i) {
+        *ss2 << 2;
+    }
+    startTime = std::chrono::high_resolution_clock::now();
+    UploadPartV2Input input_upload_part_2(bkt_name, obj_name, upload.result().getUploadId(), ss2->tellg(), 2, ss2);
+    input_upload_part_2.setTrafficLimit(1024 * 1024);
+    auto part2 = cliV2->uploadPart(input_upload_part_2);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    bool isInTime = time2 > time1;
+    EXPECT_EQ(isInTime, true);
+
+    EXPECT_EQ(part2.isSuccess(), true);
+    auto part_1 = UploadedPartV2(part1.result().getPartNumber(), part1.result().getETag());
+    auto part_2 = UploadedPartV2(part2.result().getPartNumber(), part2.result().getETag());
+    std::vector<UploadedPartV2> vec = {part_1, part_2};
+    CompleteMultipartUploadV2Input input_upload_complete(bkt_name, obj_name, upload.result().getUploadId(), vec);
+    auto com = cliV2->completeMultipartUpload(input_upload_complete);
+    EXPECT_EQ(com.isSuccess(), true);
+}
+
 }  // namespace VolcengineTos

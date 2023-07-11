@@ -36,14 +36,20 @@ static std::map<std::string, ACLType> StringtoACLType{{"private", ACLType::Priva
                                                       {"bucket-owner-full-control", ACLType::BucketOwnerFullControl},
                                                       {"bucket-owner-entrusted", ACLType::BucketOwnerEntrusted}};
 
-enum class StorageClassType { NotSet = 0, STANDARD, IA, ARCHIVE_FR };
-static std::map<StorageClassType, std::string> StorageClassTypetoString{{StorageClassType::NotSet, ""},
-                                                                        {StorageClassType::STANDARD, "STANDARD"},
-                                                                        {StorageClassType::IA, "IA"},
-                                                                        {StorageClassType::ARCHIVE_FR, "ARCHIVE_FR"}};
-static std::map<std::string, StorageClassType> StringtoStorageClassType{{"STANDARD", StorageClassType::STANDARD},
-                                                                        {"IA", StorageClassType::IA},
-                                                                        {"ARCHIVE_FR", StorageClassType::ARCHIVE_FR}};
+enum class StorageClassType { NotSet = 0, STANDARD, IA, ARCHIVE_FR, INTELLIGENT_TIERING, COLD_ARCHIVE };
+static std::map<StorageClassType, std::string> StorageClassTypetoString{
+        {StorageClassType::NotSet, ""},
+        {StorageClassType::STANDARD, "STANDARD"},
+        {StorageClassType::IA, "IA"},
+        {StorageClassType::ARCHIVE_FR, "ARCHIVE_FR"},
+        {StorageClassType::INTELLIGENT_TIERING, "INTELLIGENT_TIERING"},
+        {StorageClassType::COLD_ARCHIVE, "COLD_ARCHIVE"}};
+static std::map<std::string, StorageClassType> StringtoStorageClassType{
+        {"STANDARD", StorageClassType::STANDARD},
+        {"IA", StorageClassType::IA},
+        {"ARCHIVE_FR", StorageClassType::ARCHIVE_FR},
+        {"INTELLIGENT_TIERING", StorageClassType::INTELLIGENT_TIERING},
+        {"COLD_ARCHIVE", StorageClassType::COLD_ARCHIVE}};
 
 enum MetadataDirectiveType { COPY = 0, REPLACE };
 static std::map<MetadataDirectiveType, std::string> MetadataDirectiveTypetoString{{COPY, "COPY"}, {REPLACE, "REPLACE"}};
@@ -139,6 +145,52 @@ static std::map<std::string, CertStatusType> StringtoCertStatusType{{"", CertSta
                                                                     {"CertBound", CertStatusType::Bound},
                                                                     {"CertUnbound", CertStatusType::Unbound},
                                                                     {"CertExpired", CertStatusType::Expired}};
+
+enum class AccessControlDirectiveType { NotSet = 0, Copy, Replace, Add };
+static std::map<AccessControlDirectiveType, std::string> AccessControlDirectiveTypetoString{
+        {AccessControlDirectiveType::NotSet, ""},
+        {AccessControlDirectiveType::Copy, "COPY"},
+        {AccessControlDirectiveType::Replace, "REPLACE"},
+        {AccessControlDirectiveType::Add, "ADD"}};
+static std::map<std::string, AccessControlDirectiveType> StringtoAccessControlDirectiveType{
+        {"", AccessControlDirectiveType::NotSet},
+        {"COPY", AccessControlDirectiveType::Copy},
+        {"REPLACE", AccessControlDirectiveType::Replace},
+        {"ADD", AccessControlDirectiveType::Add}};
+
+enum class CannedAccessControlListType { NotSet = 0, Default, Private, PublicRead };
+static std::map<CannedAccessControlListType, std::string> CannedAccessControlListTypetoString{
+        {CannedAccessControlListType::NotSet, ""},
+        {CannedAccessControlListType::Default, "default"},
+        {CannedAccessControlListType::Private, "private"},
+        {CannedAccessControlListType::PublicRead, "public-read"}};
+static std::map<std::string, CannedAccessControlListType> StringtoCannedAccessControlListType{
+        {"", CannedAccessControlListType::NotSet},
+        {"default", CannedAccessControlListType::Default},
+        {"private", CannedAccessControlListType::Private},
+        {"public-read", CannedAccessControlListType::PublicRead}};
+
+enum class TaggingDirectiveType { NotSet = 0, Copy, Replace, Add };
+static std::map<TaggingDirectiveType, std::string> TaggingDirectiveTypetoString{
+        {TaggingDirectiveType::NotSet, ""},
+        {TaggingDirectiveType::Copy, "Standard"},
+        {TaggingDirectiveType::Replace, "Expedited"},
+        {TaggingDirectiveType::Add, "Bulk"}};
+static std::map<std::string, TaggingDirectiveType> StringtoTaggingDirectiveType{
+        {"", TaggingDirectiveType::NotSet},
+        {"Standard", TaggingDirectiveType::Copy},
+        {"Expedited", TaggingDirectiveType::Replace},
+        {"Bulk", TaggingDirectiveType::Add}};
+
+enum class TierType { NotSet = 0, TierStandard, TierExpedited, TierBulk };
+static std::map<TierType, std::string> TierTypetoString{{TierType::NotSet, ""},
+                                                        {TierType::TierStandard, "Standard"},
+                                                        {TierType::TierExpedited, "Expedited"},
+                                                        {TierType::TierBulk, "Bulk"}};
+static std::map<std::string, TierType> StringtoTierType{{"", TierType::NotSet},
+                                                        {"Standard", TierType::TierStandard},
+                                                        {"Expedited", TierType::TierExpedited},
+                                                        {"Bulk", TierType::TierBulk}};
 
 enum LogLevel {
     LogOff = 0,

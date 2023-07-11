@@ -108,9 +108,14 @@ public:
     void setCopySourceSsecKeyMd5(const std::string& copySourceSsecKeyMd5) {
         copySourceSSECKeyMd5_ = copySourceSsecKeyMd5;
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
 
 private:
-
     std::string srcBucket_;
     std::string srcKey_;
     std::string srcVersionId_;
@@ -131,5 +136,6 @@ private:
 
     CopyEventListener copyEventListener_ = {nullptr};
     std::shared_ptr<CancelHook> cancelHook_ = nullptr;
+    int64_t trafficLimit_ = 0;
 };
 }  // namespace VolcengineTos

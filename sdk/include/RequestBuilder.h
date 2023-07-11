@@ -47,7 +47,7 @@ class RequestBuilder {
 public:
     RequestBuilder(std::shared_ptr<Signer> signer, std::string scheme, std::string host, std::string bucket,
                    std::string object, int urlMode, std::map<std::string, std::string> headers,
-                   std::map<std::string, std::string> query)
+                   std::map<std::string, std::string> query, bool isCustomDomain)
             : signer_(std::move(signer)),
               scheme_(std::move(scheme)),
               host_(std::move(host)),
@@ -55,7 +55,8 @@ public:
               object_(std::move(object)),
               URLMode_(urlMode),
               headers_(std::move(headers)),
-              query_(std::move(query)) {
+              query_(std::move(query)),
+              isCustomDomain_(isCustomDomain) {
     }
 
     long getContentLength() const {
@@ -123,5 +124,6 @@ private:
     std::map<std::string, std::string> headers_;
     std::map<std::string, std::string> query_;
     bool autoRecognizeContentType_ = true;
+    bool isCustomDomain_ = false;
 };
 }  // namespace VolcengineTos

@@ -44,6 +44,24 @@ public:
     void setParts(const std::vector<UploadedPartV2>& parts) {
         parts_ = parts;
     }
+    bool isCompleteAll() const {
+        return completeAll_;
+    }
+    void setCompleteAll(bool completeAll) {
+        completeAll_ = completeAll;
+    }
+    const std::string& getCallBack() const {
+        return callBack_;
+    }
+    void setCallBack(const std::string& callBack) {
+        callBack_ = callBack;
+    }
+    const std::string& getCallBackVar() const {
+        return callBackVar_;
+    }
+    void setCallBackVar(const std::string& callBackVar) {
+        callBackVar_ = callBackVar;
+    }
     std::string toJsonString() const;
 
 private:
@@ -51,6 +69,9 @@ private:
     std::string key_;
     std::string uploadID_;
     std::vector<UploadedPartV2> parts_;
+    bool completeAll_ = false;
+    std::string callBack_;
+    std::string callBackVar_;
 };
 
 }  // namespace VolcengineTos

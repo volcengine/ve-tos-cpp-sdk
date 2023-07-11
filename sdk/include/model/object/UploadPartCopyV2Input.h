@@ -142,6 +142,12 @@ public:
     void setCopySourceRange(const std::string& copySourceRange) {
         copySourceRange_ = copySourceRange;
     }
+    int64_t getTrafficLimit() const {
+        return trafficLimit_;
+    }
+    void setTrafficLimit(int64_t trafficLimit) {
+        trafficLimit_ = trafficLimit;
+    }
 
 private:
     std::string bucket_;
@@ -170,5 +176,6 @@ private:
     std::string ssecKeyMD5_;
     std::string ssecKey_;
     std::string serverSideEncryption_;  // TOS 管理密钥的加密方式，可扩展，当前只支持 AES256
+    int64_t trafficLimit_ = 0;
 };
 }  // namespace VolcengineTos

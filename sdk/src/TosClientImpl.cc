@@ -117,6 +117,7 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
     config_.setRegion(region);
+    config_.setIsCustomDomain(config.isCustomDomain);
     // 涉及到 req/roundTrip 的参数放到这里
     config_.setEnableCrc(config.enableCRC);
     config_.setAutoRecognizeContentType(config.autoRecognizeContentType);
@@ -156,7 +157,10 @@ SchemeHostParameter TosClientImpl::initSchemeAndHost(const std::string& endpoint
 }
 
 // 桶名/对象名校验相关函数
-std::string isValidBucketName(const std::string& name) {
+std::string isValidBucketName(const std::string& name, bool isCustomDomain) {
+    if (isCustomDomain) {
+        return "";
+    }
     if (name.empty() || name.length() < 3 || name.length() > 63) {
         return "invalid bucket name, the length must be [3, 63]";
     }
@@ -187,25 +191,32 @@ std::string isValidKeys(const std::vector<std::string>& keys) {
     }
     return "";
 }
-std::string isValidBuckets(const std::vector<std::string>& bkts) {
+std::string isValidBuckets(const std::vector<std::string>& bkts, bool isCustomDomain) {
+    if (isCustomDomain) {
+        return "";
+    }
     for (auto& bkt : bkts) {
-        std::string ret = isValidBucketName(bkt);
+        std::string ret = isValidBucketName(bkt, isCustomDomain);
         if (!ret.empty()) {
             return ret;
         }
     }
     return "";
 }
-std::string isValidNames(const std::string& bucket, const std::vector<std::string>& keys) {
-    std::string checkBkt = isValidBucketName(bucket);
+std::string isValidNames(const std::string& bucket, const std::vector<std::string>& keys, bool isCustomDomain) {
+    if (isCustomDomain) {
+        return "";
+    }
+    std::string checkBkt = isValidBucketName(bucket, isCustomDomain);
     if (checkBkt.empty()) {
         return isValidKeys(keys);
     } else {
         return checkBkt;
     }
 }
-std::string isValidNames(const std::vector<std::string>& buckets, const std::vector<std::string>& keys) {
-    std::string checkBkt = isValidBuckets(buckets);
+std::string isValidNames(const std::vector<std::string>& buckets, const std::vector<std::string>& keys,
+                         bool isCustomDomain) {
+    std::string checkBkt = isValidBuckets(buckets, isCustomDomain);
     if (checkBkt.empty()) {
         return isValidKeys(keys);
     } else {
@@ -269,7 +280,7 @@ static void createBucketSetOptionHeader(RequestBuilder& rb, const CreateBucketIn
 
 Outcome<TosError, CreateBucketOutput> TosClientImpl::createBucket(const CreateBucketInput& input) {
     Outcome<TosError, CreateBucketOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -304,11 +315,11 @@ static void createBucketSetOptionHeader(RequestBuilder& rb, const CreateBucketV2
     rb.withHeader(HEADER_GRANT_WRITE, input.getGrantWrite());
     rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
-    // rb.withHeader(HEADER_AZ_REDUNDANCY, AzRedundancytoString[input.getAzRedundancy()]);
+    rb.withHeader(HEADER_AZ_REDUNDANCY, AzRedundancyTypetoString[input.getAzRedundancy()]);
 }
 Outcome<TosError, CreateBucketV2Output> TosClientImpl::createBucket(const CreateBucketV2Input& input) {
     Outcome<TosError, CreateBucketV2Output> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -338,7 +349,7 @@ Outcome<TosError, CreateBucketV2Output> TosClientImpl::createBucket(const Create
 }
 Outcome<TosError, HeadBucketOutput> TosClientImpl::headBucket(const std::string& bucket) {
     Outcome<TosError, HeadBucketOutput> res;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -364,7 +375,7 @@ Outcome<TosError, HeadBucketOutput> TosClientImpl::headBucket(const std::string&
 }
 Outcome<TosError, HeadBucketV2Output> TosClientImpl::headBucket(const HeadBucketV2Input& input) {
     Outcome<TosError, HeadBucketV2Output> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -392,7 +403,7 @@ Outcome<TosError, HeadBucketV2Output> TosClientImpl::headBucket(const HeadBucket
 
 Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const std::string& bucket) {
     Outcome<TosError, DeleteBucketOutput> res;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -416,7 +427,7 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const std::str
 }
 Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const DeleteBucketInput& input) {
     Outcome<TosError, DeleteBucketOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -463,7 +474,7 @@ Outcome<TosError, ListBucketsOutput> TosClientImpl::listBuckets(const ListBucket
 Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const std::string& bucket,
                                                                         const std::string& policy) {
     Outcome<TosError, PutBucketPolicyOutput> res;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -492,7 +503,7 @@ Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const st
 
 Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const std::string& bucket) {
     Outcome<TosError, GetBucketPolicyOutput> res;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -523,7 +534,7 @@ Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const st
 
 Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(const std::string& bucket) {
     Outcome<TosError, DeleteBucketPolicyOutput> res;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -551,7 +562,7 @@ Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(co
 
 Outcome<TosError, GetObjectOutput> TosClientImpl::getObject(const std::string& bucket, const std::string& objectKey) {
     Outcome<TosError, GetObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -567,7 +578,7 @@ Outcome<TosError, GetObjectOutput> TosClientImpl::getObject(const std::string& b
 Outcome<TosError, GetObjectOutput> TosClientImpl::getObject(const std::string& bucket, const std::string& objectKey,
                                                             const RequestOptionBuilder& builder) {
     Outcome<TosError, GetObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -643,6 +654,11 @@ static void getObjectSetOptionHeader(RequestBuilder& rb, const GetObjectV2Input&
     rb.withHeader(http::HEADER_IF_UNMODIFIED_SINCE, TimeUtils::transTimeToGmtTime(input.getIfUnmodifiedSince()));
     setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
 
+    if (input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
+    }
+    rb.withQueryCheckEmpty("x-tos-process", input.getProcess());
+
     rb.withQueryCheckEmpty("response-cache-control", input.getResponseCacheControl());
     rb.withQueryCheckEmpty("response-content-disposition", input.getResponseContentDisposition());
     rb.withQueryCheckEmpty("response-content-encoding", input.getResponseContentEncoding());
@@ -655,7 +671,7 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
                                                               std::shared_ptr<uint64_t> hashCrc64ecma,
                                                               std::shared_ptr<std::iostream> fileContent) {
     Outcome<TosError, GetObjectV2Output> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -789,7 +805,7 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
 
 Outcome<TosError, HeadObjectOutput> TosClientImpl::headObject(const std::string& bucket, const std::string& objectKey) {
     Outcome<TosError, HeadObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -805,7 +821,7 @@ Outcome<TosError, HeadObjectOutput> TosClientImpl::headObject(const std::string&
 Outcome<TosError, HeadObjectOutput> TosClientImpl::headObject(const std::string& bucket, const std::string& objectKey,
                                                               const RequestOptionBuilder& builder) {
     Outcome<TosError, HeadObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -828,7 +844,7 @@ static void headObjectSetOptionHeader(RequestBuilder& rb, const HeadObjectV2Inpu
 }
 Outcome<TosError, HeadObjectV2Output> TosClientImpl::headObject(const HeadObjectV2Input& input) {
     Outcome<TosError, HeadObjectV2Output> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -866,7 +882,7 @@ Outcome<TosError, HeadObjectV2Output> TosClientImpl::headObject(const HeadObject
 Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const std::string& bucket,
                                                                   const std::string& objectKey) {
     Outcome<TosError, DeleteObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -883,7 +899,7 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const std::str
                                                                   const std::string& objectKey,
                                                                   const RequestOptionBuilder& builder) {
     Outcome<TosError, DeleteObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -898,7 +914,7 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const std::str
 }
 Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const DeleteObjectInput& input) {
     Outcome<TosError, DeleteObjectOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -939,7 +955,7 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(co
         res.setSuccess(false);
         return res;
     }
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -965,7 +981,7 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(co
         res.setSuccess(false);
         return res;
     }
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -989,7 +1005,7 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(De
         res.setSuccess(false);
         return res;
     }
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -1024,7 +1040,7 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(De
 Outcome<TosError, PutObjectOutput> TosClientImpl::putObject(const std::string& bucket, const std::string& objectKey,
                                                             const std::shared_ptr<std::iostream>& content) {
     Outcome<TosError, PutObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -1043,7 +1059,7 @@ Outcome<TosError, PutObjectOutput> TosClientImpl::putObject(const std::string& b
                                                             const std::shared_ptr<std::iostream>& content,
                                                             const RequestOptionBuilder& builder) {
     Outcome<TosError, PutObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -1070,6 +1086,10 @@ static void putObjectSetOptionHeader(RequestBuilder& rb, const PutObjectBasicInp
     rb.withHeader(http::HEADER_CONTENT_TYPE, basic_input.getContentType());
     rb.withHeader(http::HEADER_CACHE_CONTROL, basic_input.getCacheControl());
 
+    if (basic_input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(basic_input.getTrafficLimit()));
+    }
+
     rb.withHeader(http::HEADER_EXPIRES, TimeUtils::transTimeToGmtTime(basic_input.getExpires()));
     auto UrlEncode_disposition = CryptoUtils::UrlEncodeChinese(basic_input.getContentDisposition());
     rb.withHeader(http::HEADER_CONTENT_DISPOSITION, UrlEncode_disposition);
@@ -1086,11 +1106,18 @@ static void putObjectSetOptionHeader(RequestBuilder& rb, const PutObjectBasicInp
     rb.withHeader(HEADER_WEBSITE_REDIRECT_LOCATION, basic_input.getWebsiteRedirectLocation());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[basic_input.getStorageClass()]);
     rb.withHeader(HEADER_SSE, basic_input.getServerSideEncryption());
+    if (!basic_input.getCallBack().empty()) {
+        rb.withHeader(HEADER_CALLBACK, basic_input.getCallBack());
+    }
+    if (!basic_input.getCallBackVar().empty()) {
+        rb.withHeader(HEADER_CALLBACK_VAR, basic_input.getCallBackVar());
+    }
 }
 Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2Input& input) {
     Outcome<TosError, PutObjectV2Output> res;
     const auto& putObjectBasicInput_ = input.getPutObjectBasicInput();
-    std::string check = isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()});
+    std::string check =
+            isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -1159,6 +1186,13 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
         hashCrc64 = std::stoull(hashCrc64String);
     }
     output.setHashCrc64ecma(hashCrc64);
+    if (!input.getCallBack().empty() && tosRes.result()->getContent() != nullptr) {
+        std::stringstream ss_;
+        ss_ << tosRes.result()->getContent()->rdbuf();
+        if (!input.getCallBack().empty()) {
+            output.setCallbackResult(ss_.str());
+        }
+    }
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -1210,10 +1244,10 @@ Outcome<TosError, PutObjectFromFileOutput> TosClientImpl::putObjectFromFile(cons
 }
 
 Outcome<TosError, int> validateInput(const std::string& bucket, const std::string& key, const int64_t partSize,
-                                     const int taskNum) {
+                                     const int taskNum, bool isCustomDomain) {
     Outcome<TosError, int> ret;
     TosError error;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, isCustomDomain);
     if (!check.empty()) {
         error.setIsClientError(true);
         error.setMessage(check);
@@ -1704,7 +1738,8 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadFile(const std::string&
                                                               const RequestOptionBuilder& builder) {
     Outcome<TosError, UploadFileOutput> res;
     TosError error;
-    auto check = validateInput(bucket, input.getObjectKey(), input.getPartSize(), input.getTaskNum());
+    auto check = validateInput(bucket, input.getObjectKey(), input.getPartSize(), input.getTaskNum(),
+                               config_.isCustomDomain());
     if (!check.isSuccess()) {
         error.setMessage(check.error().getMessage());
         res.setE(error);
@@ -1835,6 +1870,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                 upiBasic.setSsecKey(input.getCreateMultipartUploadInput().getSsecKey());
                 upiBasic.setSsecAlgorithm(input.getCreateMultipartUploadInput().getSsecAlgorithm());
                 upiBasic.setServerSideEncryption(input.getCreateMultipartUploadInput().getServerSideEncryption());
+                upiBasic.setTrafficLimit(input.getTrafficLimit());
                 // 设置限流
                 upiBasic.setRateLimiter(input.getRateLimiter());
                 // 设置回调
@@ -2022,7 +2058,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     const auto& createMultipartInput = input.getCreateMultipartUploadInput();
     const auto& bucket = createMultipartInput.getBucket();
     const auto& key = createMultipartInput.getKey();
-    auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum());
+    auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum(), config_.isCustomDomain());
     if (!check.isSuccess()) {
         error.setMessage(check.error().getMessage());
         error.setIsClientError(true);
@@ -2446,6 +2482,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                 input_obj_get.setKey(input.getHeadObjectV2Input().getKey());
                 input_obj_get.setRangeStart(part.getRangeStart());
                 input_obj_get.setRangeEnd(part.getRangeEnd());
+                input_obj_get.setTrafficLimit(input.getTrafficLimit());
                 // 同步参数到 input_obj_get 中
                 input_obj_get.setVersionId(input.getHeadObjectV2Input().getVersionId());
                 input_obj_get.setIfMatch(input.getHeadObjectV2Input().getIfMatch());
@@ -2630,7 +2667,8 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     Outcome<TosError, DownloadFileOutput> res;
     TosError error;
     const auto& headInput = input.getHeadObjectV2Input();
-    auto check = validateInput(headInput.getBucket(), headInput.getKey(), input.getPartSize(), input.getTaskNum());
+    auto check = validateInput(headInput.getBucket(), headInput.getKey(), input.getPartSize(), input.getTaskNum(),
+                               config_.isCustomDomain());
     if (!check.isSuccess()) {
         error.setIsClientError(true);
         error.setMessage(check.error().getMessage());
@@ -2695,7 +2733,7 @@ Outcome<TosError, AppendObjectOutput> TosClientImpl::appendObject(const std::str
                                                                   const std::shared_ptr<std::iostream>& content,
                                                                   int64_t offset) {
     Outcome<TosError, AppendObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2717,7 +2755,7 @@ Outcome<TosError, AppendObjectOutput> TosClientImpl::appendObject(const std::str
                                                                   const std::shared_ptr<std::iostream>& content,
                                                                   int64_t offset, const RequestOptionBuilder& builder) {
     Outcome<TosError, AppendObjectOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2744,10 +2782,13 @@ static void appendObjectSetOptionHeader(RequestBuilder& rb, const AppendObjectV2
     setMetaHeader(input.getMeta(), rb);
     rb.withHeader(HEADER_WEBSITE_REDIRECT_LOCATION, input.getWebsiteRedirectLocation());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
+    if (input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
+    }
 }
 Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const AppendObjectV2Input& input) {
     Outcome<TosError, AppendObjectV2Output> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2826,7 +2867,7 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const std::s
                                                                     const std::string& objectKey,
                                                                     const RequestOptionBuilder& builder) {
     Outcome<TosError, SetObjectMetaOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2855,7 +2896,7 @@ static void setObjectMetaSetOptionHeader(RequestBuilder& rb, const SetObjectMeta
 
 Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const SetObjectMetaInput& input) {
     Outcome<TosError, SetObjectMetaOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2889,7 +2930,7 @@ Outcome<TosError, ListObjectsOutput> TosClientImpl::listObjects(const std::strin
                                                                 const ListObjectsInput& input) {
     Outcome<TosError, ListObjectsOutput> res;
 
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2926,7 +2967,7 @@ Outcome<TosError, ListObjectsOutput> TosClientImpl::listObjects(const std::strin
 Outcome<TosError, ListObjectsV2Output> TosClientImpl::listObjects(const ListObjectsV2Input& input) {
     Outcome<TosError, ListObjectsV2Output> res;
 
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -2965,7 +3006,7 @@ Outcome<TosError, ListObjectsV2Output> TosClientImpl::listObjects(const ListObje
 Outcome<TosError, ListObjectVersionsOutput> TosClientImpl::listObjectVersions(const std::string& bucket,
                                                                               const ListObjectVersionsInput& input) {
     Outcome<TosError, ListObjectVersionsOutput> res;
-    std::string check = isValidBucketName(bucket);
+    std::string check = isValidBucketName(bucket, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3003,7 +3044,7 @@ Outcome<TosError, ListObjectVersionsOutput> TosClientImpl::listObjectVersions(co
 Outcome<TosError, ListObjectVersionsV2Output> TosClientImpl::listObjectVersions(
         const ListObjectVersionsV2Input& input) {
     Outcome<TosError, ListObjectVersionsV2Output> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3044,7 +3085,7 @@ Outcome<TosError, CopyObjectOutput> TosClientImpl::copyObject(const std::string&
                                                               const std::string& dstObjectKey) {
     Outcome<TosError, CopyObjectOutput> res;
     std::vector<std::string> keys = {dstObjectKey, srcObjectKey};
-    std::string check = isValidNames(bucket, keys);
+    std::string check = isValidNames(bucket, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3062,7 +3103,7 @@ Outcome<TosError, CopyObjectOutput> TosClientImpl::copyObject(const std::string&
                                                               const RequestOptionBuilder& builder) {
     Outcome<TosError, CopyObjectOutput> res;
     std::vector<std::string> keys = {dstObjectKey, srcObjectKey};
-    std::string check = isValidNames(bucket, keys);
+    std::string check = isValidNames(bucket, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3116,13 +3157,15 @@ static void copyObjectSetOptionHeader(RequestBuilder& rb, const CopyObjectV2Inpu
     setMetaHeader(input.getMeta(), rb);
     rb.withHeader(HEADER_WEBSITE_REDIRECT_LOCATION, input.getWebsiteRedirectLocation());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
-    // rb.withHeader(HEADER_AZ_REDUNDANCY, AzRedundancytoString[input.getAzRedundancy()]);
+    if (input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
+    }
 }
 Outcome<TosError, CopyObjectV2Output> TosClientImpl::copyObject(const CopyObjectV2Input& input) {
     Outcome<TosError, CopyObjectV2Output> res;
     std::vector<std::string> keys = {input.getKey(), input.getSrcKey()};
     std::vector<std::string> bkts = {input.getBucket(), input.getSrcBucket()};
-    std::string check = isValidNames(bkts, keys);
+    std::string check = isValidNames(bkts, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3190,7 +3233,7 @@ Outcome<TosError, CopyObjectOutput> TosClientImpl::copyObjectTo(const std::strin
                                                                 const std::string& srcObjectKey) {
     Outcome<TosError, CopyObjectOutput> res;
     std::vector<std::string> keys = {dstObjectKey, srcObjectKey};
-    std::string check = isValidNames(dstBucket, keys);
+    std::string check = isValidNames(dstBucket, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3208,7 +3251,7 @@ Outcome<TosError, CopyObjectOutput> TosClientImpl::copyObjectTo(const std::strin
                                                                 const RequestOptionBuilder& builder) {
     Outcome<TosError, CopyObjectOutput> res;
     std::vector<std::string> keys = {dstObjectKey, srcObjectKey};
-    std::string check = isValidNames(dstBucket, keys);
+    std::string check = isValidNames(dstBucket, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3226,7 +3269,7 @@ Outcome<TosError, CopyObjectOutput> TosClientImpl::copyObjectFrom(const std::str
                                                                   const std::string& dstObjectKey) {
     Outcome<TosError, CopyObjectOutput> res;
     std::vector<std::string> keys = {srcObjectKey, dstObjectKey};
-    std::string check = isValidNames(srcBucket, keys);
+    std::string check = isValidNames(srcBucket, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3245,7 +3288,7 @@ Outcome<TosError, CopyObjectOutput> TosClientImpl::copyObjectFrom(const std::str
                                                                   const RequestOptionBuilder& builder) {
     Outcome<TosError, CopyObjectOutput> res;
     std::vector<std::string> keys = {srcObjectKey, dstObjectKey};
-    std::string check = isValidNames(srcBucket, keys);
+    std::string check = isValidNames(srcBucket, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3281,7 +3324,7 @@ Outcome<TosError, UploadPartCopyOutput> TosClientImpl::uploadPartCopy(const std:
     Outcome<TosError, UploadPartCopyOutput> res;
     std::vector<std::string> keys = {input.getSourceKey(), input.getDestinationKey()};
     std::vector<std::string> bkts = {input.getSourceBucket(), bucket};
-    std::string check = isValidNames(bkts, keys);
+    std::string check = isValidNames(bkts, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3316,7 +3359,7 @@ Outcome<TosError, UploadPartCopyOutput> TosClientImpl::uploadPartCopy(const std:
     Outcome<TosError, UploadPartCopyOutput> res;
     std::vector<std::string> keys = {input.getSourceKey(), input.getDestinationKey()};
     std::vector<std::string> bkts = {input.getSourceBucket(), bucket};
-    std::string check = isValidNames(bkts, keys);
+    std::string check = isValidNames(bkts, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3352,7 +3395,9 @@ static void uploadPartCopySetOptionHeader(RequestBuilder& rb, const UploadPartCo
     rb.withHeader(HEADER_COPY_SOURCE_IF_NONE_MATCH, input.getCopySourceIfNoneMatch());
     rb.withHeader(HEADER_COPY_SOURCE_IF_UNMODIFIED_SINCE,
                   TimeUtils::transTimeToGmtTime(input.getCopySourceIfUnmodifiedSince()));
-
+    if (input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
+    }
     if (!input.getCopySourceRange().empty()) {
         rb.withHeader(HEADER_COPY_SOURCE_RANGE, input.getCopySourceRange());
     } else if (input.getCopySourceRangeStart() != 0 || input.getCopySourceRangeEnd() != 0) {
@@ -3371,7 +3416,7 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
     Outcome<TosError, UploadPartCopyV2Output> res;
     std::vector<std::string> keys = {input.getKey(), input.getSrcKey()};
     std::vector<std::string> bkts = {input.getBucket(), input.getSrcBucket()};
-    std::string check = isValidNames(bkts, keys);
+    std::string check = isValidNames(bkts, keys, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3480,7 +3525,7 @@ void setAclGrant(const PutObjectAclInput& input, RequestBuilder& rb) {
 Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::string& bucket,
                                                                   const PutObjectAclInput& input) {
     Outcome<TosError, PutObjectAclOutput> res;
-    std::string check = isValidNames(bucket, {input.getKey()});
+    std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3526,7 +3571,7 @@ void setAclGrant(const PutObjectAclV2Input& input, RequestBuilder& rb) {
 }
 Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObjectAclV2Input& input) {
     Outcome<TosError, PutObjectAclV2Output> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3562,7 +3607,7 @@ Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObj
 Outcome<TosError, GetObjectAclOutput> TosClientImpl::getObjectAcl(const std::string& bucket,
                                                                   const std::string& objectKey) {
     Outcome<TosError, GetObjectAclOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3579,7 +3624,7 @@ Outcome<TosError, GetObjectAclOutput> TosClientImpl::getObjectAcl(const std::str
                                                                   const std::string& objectKey,
                                                                   const RequestOptionBuilder& builder) {
     Outcome<TosError, GetObjectAclOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3594,7 +3639,7 @@ Outcome<TosError, GetObjectAclOutput> TosClientImpl::getObjectAcl(const std::str
 }
 Outcome<TosError, GetObjectAclV2Output> TosClientImpl::getObjectAcl(const GetObjectAclV2Input& input) {
     Outcome<TosError, GetObjectAclV2Output> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3627,7 +3672,7 @@ Outcome<TosError, GetObjectAclV2Output> TosClientImpl::getObjectAcl(const GetObj
 Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpload(const std::string& bucket,
                                                                                     const std::string& objectKey) {
     Outcome<TosError, CreateMultipartUploadOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3644,7 +3689,7 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
 Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpload(
         const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder) {
     Outcome<TosError, CreateMultipartUploadOutput> res;
-    std::string check = isValidNames(bucket, {objectKey});
+    std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3686,7 +3731,7 @@ static void createMultipartUploadSetOptionHeader(RequestBuilder& rb, const Creat
 Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpload(
         const CreateMultipartUploadInput& input) {
     Outcome<TosError, CreateMultipartUploadOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3739,7 +3784,7 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
 }
 Outcome<TosError, UploadPartOutput> TosClientImpl::uploadPart(const std::string& bucket, const UploadPartInput& input) {
     Outcome<TosError, UploadPartOutput> res;
-    std::string check = isValidNames(bucket, {input.getKey()});
+    std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3771,7 +3816,7 @@ Outcome<TosError, UploadPartOutput> TosClientImpl::uploadPart(const std::string&
 Outcome<TosError, UploadPartOutput> TosClientImpl::uploadPart(const std::string& bucket, const UploadPartInput& input,
                                                               const RequestOptionBuilder& builder) {
     Outcome<TosError, UploadPartOutput> res;
-    std::string check = isValidNames(bucket, {input.getKey()});
+    std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3804,7 +3849,8 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
                                                                 std::shared_ptr<uint64_t> hashCrc64ecma) {
     Outcome<TosError, UploadPartV2Output> res;
     const UploadPartBasicInput& uploadPartBasicInput_ = input.getUploadPartBasicInput();
-    std::string check = isValidNames(uploadPartBasicInput_.getBucket(), {uploadPartBasicInput_.getKey()});
+    std::string check =
+            isValidNames(uploadPartBasicInput_.getBucket(), {uploadPartBasicInput_.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -3855,6 +3901,9 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     const auto& basic_input = input.getUploadPartBasicInput();
     rb.withHeader(http::HEADER_CONTENT_MD5, basic_input.getContentMd5());
     setSSECHeader(basic_input.getSsecAlgorithm(), basic_input.getSsecKey(), basic_input.getSsecKeyMd5(), rb);
+    if (input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
+    }
 
     auto req = rb.Build(http::MethodPut, input.getContent());
     // 设置funcName
@@ -3952,7 +4001,7 @@ Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipar
         const std::string& bucket, CompleteMultipartUploadInput& input) {
     Outcome<TosError, CompleteMultipartUploadOutput> res;
 
-    std::string check = isValidNames(bucket, {input.getKey()});
+    std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4036,7 +4085,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
         const CompleteMultipartUploadV2Input& input) {
     Outcome<TosError, CompleteMultipartUploadV2Output> res;
 
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4053,23 +4102,45 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
         res.setSuccess(false);
         return res;
     }
-    if (input.getParts().empty()) {
-        TosError error;
-        error.setIsClientError(true);
-        error.setMessage("empty parts");
-        res.setE(error);
-        res.setSuccess(false);
-        return res;
-    }
 
     std::shared_ptr<std::stringstream> ss = nullptr;
-    std::string jsonParts(input.toJsonString());
-    if (jsonParts != "null") {
-        ss = std::make_shared<std::stringstream>(jsonParts);
+    if (input.isCompleteAll()) {
+        if (!input.getParts().empty()) {
+            TosError error;
+            error.setIsClientError(true);
+            error.setMessage("tos: Parameter Parts is not empty when use complete all");
+            res.setE(error);
+            res.setSuccess(false);
+            return res;
+        }
+    } else {
+        if (input.getParts().empty()) {
+            TosError error;
+            error.setIsClientError(true);
+            error.setMessage("tos: Parameter Parts is not set");
+            res.setE(error);
+            res.setSuccess(false);
+            return res;
+        }
+        std::string jsonParts(input.toJsonString());
+        if (jsonParts != "null") {
+            ss = std::make_shared<std::stringstream>(jsonParts);
+        }
     }
+
     auto rb = newBuilder(input.getBucket(), input.getKey());
     rb.withQuery("uploadId", input.getUploadId());
+    if (input.isCompleteAll()) {
+        rb.withHeader(HEADER_COMPLETE_ALL, "yes");
+    }
+    if (!input.getCallBack().empty()) {
+        rb.withHeader(HEADER_CALLBACK, input.getCallBack());
+    }
+    if (!input.getCallBackVar().empty()) {
+        rb.withHeader(HEADER_CALLBACK_VAR, input.getCallBackVar());
+    }
     auto req = rb.Build(http::MethodPost, ss);
+
     // 设置funcName
     req->setFuncName(__func__);
     auto tosRes = roundTrip(req, 200);
@@ -4090,7 +4161,13 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
     output.setHashCrc64ecma(hashCrc64);
     std::stringstream ss_;
     ss_ << tosRes.result()->getContent()->rdbuf();
-    output.fromJsonString(ss_.str());
+    if (input.getCallBack().empty()) {
+        output.fromJsonString(ss_.str());
+    } else {
+        output.setCallbackResult(ss_.str());
+        output.setETag(tosRes.result()->findHeader(http::HEADER_ETAG));
+        output.setLocation(tosRes.result()->findHeader(http::HEADER_LOCATION));
+    }
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -4098,7 +4175,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
 Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUpload(
         const std::string& bucket, const AbortMultipartUploadInput& input) {
     Outcome<TosError, AbortMultipartUploadOutput> res;
-    std::string check = isValidNames(bucket, {input.getKey()});
+    std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4133,7 +4210,7 @@ Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUploa
 Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUpload(
         const AbortMultipartUploadInput& input) {
     Outcome<TosError, AbortMultipartUploadOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4203,7 +4280,7 @@ Outcome<TosError, ListUploadedPartsOutput> TosClientImpl::listUploadedParts(cons
 
 Outcome<TosError, ListPartsOutput> TosClientImpl::listParts(const ListPartsInput& input) {
     Outcome<TosError, ListPartsOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4400,7 +4477,7 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
 
 Outcome<TosError, PutBucketCORSOutput> TosClientImpl::putBucketCORS(const PutBucketCORSInput& input) {
     Outcome<TosError, PutBucketCORSOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4444,7 +4521,7 @@ Outcome<TosError, PutBucketCORSOutput> TosClientImpl::putBucketCORS(const PutBuc
 
 Outcome<TosError, GetBucketCORSOutput> TosClientImpl::getBucketCORS(const GetBucketCORSInput& input) {
     Outcome<TosError, GetBucketCORSOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4473,7 +4550,7 @@ Outcome<TosError, GetBucketCORSOutput> TosClientImpl::getBucketCORS(const GetBuc
 }
 Outcome<TosError, DeleteBucketCORSOutput> TosClientImpl::deleteBucketCORS(const DeleteBucketCORSInput& input) {
     Outcome<TosError, DeleteBucketCORSOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4501,7 +4578,7 @@ Outcome<TosError, DeleteBucketCORSOutput> TosClientImpl::deleteBucketCORS(const 
 
 Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const ListObjectsType2Input& input) {
     Outcome<TosError, ListObjectsType2Output> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4597,7 +4674,7 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
 Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageClass(
         const PutBucketStorageClassInput& input) {
     Outcome<TosError, PutBucketStorageClassOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4626,7 +4703,7 @@ Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageCl
 // todo: boe4 该接口有问题
 Outcome<TosError, GetBucketLocationOutput> TosClientImpl::getBucketLocation(const GetBucketLocationInput& input) {
     Outcome<TosError, GetBucketLocationOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4656,7 +4733,7 @@ Outcome<TosError, GetBucketLocationOutput> TosClientImpl::getBucketLocation(cons
 
 Outcome<TosError, PutBucketLifecycleOutput> TosClientImpl::putBucketLifecycle(const PutBucketLifecycleInput& input) {
     Outcome<TosError, PutBucketLifecycleOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4700,7 +4777,7 @@ Outcome<TosError, PutBucketLifecycleOutput> TosClientImpl::putBucketLifecycle(co
 
 Outcome<TosError, GetBucketLifecycleOutput> TosClientImpl::getBucketLifecycle(const GetBucketLifecycleInput& input) {
     Outcome<TosError, GetBucketLifecycleOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4730,7 +4807,7 @@ Outcome<TosError, GetBucketLifecycleOutput> TosClientImpl::getBucketLifecycle(co
 Outcome<TosError, DeleteBucketLifecycleOutput> TosClientImpl::deleteBucketLifecycle(
         const DeleteBucketLifecycleInput& input) {
     Outcome<TosError, DeleteBucketLifecycleOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4758,7 +4835,7 @@ Outcome<TosError, DeleteBucketLifecycleOutput> TosClientImpl::deleteBucketLifecy
 
 Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const PutBucketPolicyInput& input) {
     Outcome<TosError, PutBucketPolicyOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4794,7 +4871,7 @@ Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const Pu
 
 Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const GetBucketPolicyInput& input) {
     Outcome<TosError, GetBucketPolicyOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4824,7 +4901,7 @@ Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const Ge
 }
 Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(const DeleteBucketPolicyInput& input) {
     Outcome<TosError, DeleteBucketPolicyOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4852,7 +4929,7 @@ Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(co
 
 Outcome<TosError, PutBucketMirrorBackOutput> TosClientImpl::putBucketMirrorBack(const PutBucketMirrorBackInput& input) {
     Outcome<TosError, PutBucketMirrorBackOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4896,7 +4973,7 @@ Outcome<TosError, PutBucketMirrorBackOutput> TosClientImpl::putBucketMirrorBack(
 
 Outcome<TosError, GetBucketMirrorBackOutput> TosClientImpl::getBucketMirrorBack(const GetBucketMirrorBackInput& input) {
     Outcome<TosError, GetBucketMirrorBackOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4926,7 +5003,7 @@ Outcome<TosError, GetBucketMirrorBackOutput> TosClientImpl::getBucketMirrorBack(
 Outcome<TosError, DeleteBucketMirrorBackOutput> TosClientImpl::deleteBucketMirrorBack(
         const DeleteBucketMirrorBackInput& input) {
     Outcome<TosError, DeleteBucketMirrorBackOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4954,7 +5031,7 @@ Outcome<TosError, DeleteBucketMirrorBackOutput> TosClientImpl::deleteBucketMirro
 
 Outcome<TosError, PutObjectTaggingOutput> TosClientImpl::putObjectTagging(const PutObjectTaggingInput& input) {
     Outcome<TosError, PutObjectTaggingOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4999,7 +5076,7 @@ Outcome<TosError, PutObjectTaggingOutput> TosClientImpl::putObjectTagging(const 
 
 Outcome<TosError, GetObjectTaggingOutput> TosClientImpl::getObjectTagging(const GetObjectTaggingInput& input) {
     Outcome<TosError, GetObjectTaggingOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -5029,7 +5106,7 @@ Outcome<TosError, GetObjectTaggingOutput> TosClientImpl::getObjectTagging(const 
 }
 Outcome<TosError, DeleteObjectTaggingOutput> TosClientImpl::deleteObjectTagging(const DeleteObjectTaggingInput& input) {
     Outcome<TosError, DeleteObjectTaggingOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -5073,7 +5150,7 @@ void setAclGrant(const PutBucketAclInput& input, RequestBuilder& rb) {
 
 Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucketAclInput& input) {
     Outcome<TosError, PutBucketAclOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -5111,7 +5188,7 @@ Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucke
 
 Outcome<TosError, GetBucketAclOutput> TosClientImpl::getBucketAcl(const GetBucketAclInput& input) {
     Outcome<TosError, GetBucketAclOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -5152,7 +5229,7 @@ static void fetchObjectSetOptionHeader(RequestBuilder& rb, const FetchObjectInpu
 
 Outcome<TosError, FetchObjectOutput> TosClientImpl::fetchObject(const FetchObjectInput& input) {
     Outcome<TosError, FetchObjectOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -5221,7 +5298,7 @@ static void putFetchTaskSetOptionHeader(RequestBuilder& rb, const PutFetchTaskIn
 }
 Outcome<TosError, PutFetchTaskOutput> TosClientImpl::putFetchTask(const PutFetchTaskInput& input) {
     Outcome<TosError, PutFetchTaskOutput> res;
-    std::string check = isValidNames(input.getBucket(), {input.getKey()});
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -5645,6 +5722,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
                 upci.setSsecKey(input.getSsecKey());
                 upci.setSsecAlgorithm(input.getSsecAlgorithm());
                 upci.setServerSideEncryption(input.getServerSideEncryption());
+                upci.setTrafficLimit(input.getTrafficLimit());
 
                 auto res = this->uploadPartCopy(upci);
 
@@ -5840,7 +5918,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
     TosError error;
     const auto& bucket = input.getBucket();
     const auto& key = input.getKey();
-    auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum());
+    auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum(), config_.isCustomDomain());
     if (!check.isSuccess()) {
         error.setMessage(check.error().getMessage());
         error.setIsClientError(true);
@@ -6002,11 +6080,14 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(co
     std::string hexSum(StringUtils::stringToHex(sum, 32));
     buf.append(hexSum);
     std::string date_ = TimeUtils::transTimeToFormat(now, yyyyMMdd);
-    std::string signture = SignV4::signingKey(SignKeyInfo(date_, region_, cred_), buf);
-    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Signature", signture});
+    std::string signature = SignV4::signingKey(SignKeyInfo(date_, region_, cred_), buf);
+    query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Signature", signature});
+
     auto resQueryEncoded = SignV4::encodeQuery(query_);
 
-    PreSignedPolicyURLOutput output(input.getBucket(), resQueryEncoded, host, scheme, input.isCustomDomain());
+    bool isCustomDomain = input.isCustomDomain() || config_.isCustomDomain();
+    PreSignedPolicyURLOutput output(input.getBucket(), resQueryEncoded, host, scheme, isCustomDomain);
+
     res.setR(output);
     res.setSuccess(true);
     return res;
@@ -6014,7 +6095,7 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(co
 Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplication(
         const PutBucketReplicationInput& input) {
     Outcome<TosError, PutBucketReplicationOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6066,7 +6147,7 @@ Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplicatio
 Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplication(
         const GetBucketReplicationInput& input) {
     Outcome<TosError, GetBucketReplicationOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6099,7 +6180,7 @@ Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplicatio
 Outcome<TosError, DeleteBucketReplicationOutput> TosClientImpl::deleteBucketReplication(
         const DeleteBucketReplicationInput& input) {
     Outcome<TosError, DeleteBucketReplicationOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6126,7 +6207,7 @@ Outcome<TosError, DeleteBucketReplicationOutput> TosClientImpl::deleteBucketRepl
 }
 Outcome<TosError, PutBucketVersioningOutput> TosClientImpl::putBucketVersioning(const PutBucketVersioningInput& input) {
     Outcome<TosError, PutBucketVersioningOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6163,7 +6244,7 @@ Outcome<TosError, PutBucketVersioningOutput> TosClientImpl::putBucketVersioning(
 
 Outcome<TosError, GetBucketVersioningOutput> TosClientImpl::getBucketVersioning(const GetBucketVersioningInput& input) {
     Outcome<TosError, GetBucketVersioningOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6193,7 +6274,7 @@ Outcome<TosError, GetBucketVersioningOutput> TosClientImpl::getBucketVersioning(
 
 Outcome<TosError, PutBucketWebsiteOutput> TosClientImpl::putBucketWebsite(const PutBucketWebsiteInput& input) {
     Outcome<TosError, PutBucketWebsiteOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6229,7 +6310,7 @@ Outcome<TosError, PutBucketWebsiteOutput> TosClientImpl::putBucketWebsite(const 
 
 Outcome<TosError, GetBucketWebsiteOutput> TosClientImpl::getBucketWebsite(const GetBucketWebsiteInput& input) {
     Outcome<TosError, GetBucketWebsiteOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6258,7 +6339,7 @@ Outcome<TosError, GetBucketWebsiteOutput> TosClientImpl::getBucketWebsite(const 
 }
 Outcome<TosError, DeleteBucketWebsiteOutput> TosClientImpl::deleteBucketWebsite(const DeleteBucketWebsiteInput& input) {
     Outcome<TosError, DeleteBucketWebsiteOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6287,7 +6368,7 @@ Outcome<TosError, DeleteBucketWebsiteOutput> TosClientImpl::deleteBucketWebsite(
 Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotification(
         const PutBucketNotificationInput& input) {
     Outcome<TosError, PutBucketNotificationOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6324,7 +6405,7 @@ Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotificat
 Outcome<TosError, GetBucketNotificationOutput> TosClientImpl::getBucketNotification(
         const GetBucketNotificationInput& input) {
     Outcome<TosError, GetBucketNotificationOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6355,7 +6436,7 @@ Outcome<TosError, GetBucketNotificationOutput> TosClientImpl::getBucketNotificat
 Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDomain(
         const PutBucketCustomDomainInput& input) {
     Outcome<TosError, PutBucketCustomDomainOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6392,7 +6473,7 @@ Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDom
 Outcome<TosError, ListBucketCustomDomainOutput> TosClientImpl::listBucketCustomDomain(
         const ListBucketCustomDomainInput& input) {
     Outcome<TosError, ListBucketCustomDomainOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6422,7 +6503,7 @@ Outcome<TosError, ListBucketCustomDomainOutput> TosClientImpl::listBucketCustomD
 Outcome<TosError, DeleteBucketCustomDomainOutput> TosClientImpl::deleteBucketCustomDomain(
         const DeleteBucketCustomDomainInput& input) {
     Outcome<TosError, DeleteBucketCustomDomainOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6451,7 +6532,7 @@ Outcome<TosError, DeleteBucketCustomDomainOutput> TosClientImpl::deleteBucketCus
 Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLog(
         const PutBucketRealTimeLogInput& input) {
     Outcome<TosError, PutBucketRealTimeLogOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6487,7 +6568,7 @@ Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLo
 Outcome<TosError, GetBucketRealTimeLogOutput> TosClientImpl::getBucketRealTimeLog(
         const GetBucketRealTimeLogInput& input) {
     Outcome<TosError, GetBucketRealTimeLogOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6517,7 +6598,7 @@ Outcome<TosError, GetBucketRealTimeLogOutput> TosClientImpl::getBucketRealTimeLo
 Outcome<TosError, DeleteBucketRealTimeLogOutput> TosClientImpl::deleteBucketRealTimeLog(
         const DeleteBucketRealTimeLogInput& input) {
     Outcome<TosError, DeleteBucketRealTimeLogOutput> res;
-    std::string check = isValidBucketName(input.getBucket());
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -6536,6 +6617,169 @@ Outcome<TosError, DeleteBucketRealTimeLogOutput> TosClientImpl::deleteBucketReal
         return res;
     }
     DeleteBucketRealTimeLogOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, RestoreObjectOutput> TosClientImpl::restoreObject(const RestoreObjectInput& input) {
+    Outcome<TosError, RestoreObjectOutput> res;
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    rb.withQuery("restore", "");
+    rb.withQueryCheckEmpty("versionId", input.getVersionId());
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    auto req = rb.Build(http::MethodPost, ss);
+    auto tosRes = roundTrip(req, {200, 202});
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    RestoreObjectOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, RenameObjectOutput> TosClientImpl::renameObject(const RenameObjectInput& input) {
+    Outcome<TosError, RenameObjectOutput> res;
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getNewKey().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid object new name, the length must be [1, 696]");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    rb.withQuery("rename", "");
+    rb.withQuery("name", input.getNewKey());
+
+    auto req = rb.Build(http::MethodPut, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    RenameObjectOutput output;
+    std::stringstream ss;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, PutBucketRenameOutput> TosClientImpl::putBucketRename(const PutBucketRenameInput& input) {
+    Outcome<TosError, PutBucketRenameOutput> res;
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    std::shared_ptr<std::stringstream> ss = nullptr;
+    std::string jsonRules(input.toJsonString());
+    auto rb = newBuilder(input.getBucket(), "");
+    if (jsonRules != "null") {
+        ss = std::make_shared<std::stringstream>(jsonRules);
+        std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
+        rb.withHeader(http::HEADER_CONTENT_MD5, jsonRulesMd5);
+    }
+    rb.withQuery("rename", "");
+    auto req = rb.Build(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    PutBucketRenameOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, GetBucketRenameOutput> TosClientImpl::getBucketRename(const GetBucketRenameInput& input) {
+    Outcome<TosError, GetBucketRenameOutput> res;
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("rename", "");
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    GetBucketRenameOutput output;
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+Outcome<TosError, DeleteBucketRenameOutput> TosClientImpl::deleteBucketRename(const DeleteBucketRenameInput& input) {
+    Outcome<TosError, DeleteBucketRenameOutput> res;
+    std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), "");
+    rb.withQuery("rename", "");
+    auto req = rb.Build(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    DeleteBucketRenameOutput output;
     std::stringstream ss;
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     res.setSuccess(true);
@@ -6670,7 +6914,116 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                 }
                 return ret;
             }
-            if (resp->getStatusCode() >= 300) {
+            if (resp->getStatusCode() >= 300 ||
+                (resp->getStatusCode() == 203 &&
+                 request->getHeaders().find(HEADER_CALLBACK) != request->getHeaders().end())) {
+                if (resp->getContent()) {
+                    std::stringstream ss;
+                    ss << resp->getContent()->rdbuf();
+                    std::string error = ss.str();
+                    se.fromJsonString(error);
+                    if (se.getRequestId().empty() && se.getMessage().empty() && se.getCode().empty() &&
+                        se.getHostId().empty()) {
+                        // json parse error
+                        se.setMessage(error);
+                        se.setCode("unable to do serialization");
+                        se.setIsClientError(true);
+                    }
+                    se.setStatusCode(resp->getStatusCode());
+                    ret.setE(se);
+                    if (logger != nullptr) {
+                        logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
+                    }
+                    return ret;
+                }
+                // 特别处理 404
+                if (resp->getStatusCode() == 404) {
+                    se.setCode("not found");
+                    se.setStatusCode(resp->getStatusCode());
+                    se.setRequestId(resp->getRequestID());
+                    ret.setE(se);
+                    if (logger != nullptr) {
+                        logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
+                    }
+                    return ret;
+                }
+            }
+            if (resp->getStatusCode() == -2) {
+                se.setIsClientError(true);
+            }
+            se.setStatusCode(resp->getStatusCode());
+            se.setCode("UnexpectedStatusCode error");
+            se.setMessage(resp->getStatusMsg());
+            se.setRequestId(resp->getRequestID());
+            ret.setE(se);
+            if (logger != nullptr) {
+                logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
+            }
+            return ret;
+        }
+    }
+}
+
+Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const std::shared_ptr<TosRequest>& request,
+                                                                         std::vector<int> expectedCode) {
+    Outcome<TosError, std::shared_ptr<TosResponse>> ret;
+    if (connectWithIP_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use ip:port to access");
+        ret.setE(se);
+        return ret;
+    }
+    if (connectWithS3EndPoint_) {
+        TosError se;
+        se.setIsClientError(true);
+        se.setMessage("please do not use s3 endpoint to access");
+        ret.setE(se);
+        return ret;
+    }
+    auto logger = LogUtils::GetLogger();
+    auto rateLimiter = request->getRataLimiter();
+    auto maxRetry = config_.getMaxRetryCount() < 0 ? 1 : config_.getMaxRetryCount();
+    for (int retry = 0;; retry++) {
+        if (retry != 0) {
+            TimeUtils::sleepMilliSecondTimes(config_.getRetrySleepScale() * (1 << retry));
+        }
+        auto startTime = std::chrono::high_resolution_clock::now();
+        // 实际进行一次请求
+        auto resp = transport_->roundTrip(request);
+        auto endTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
+        if (std::find(expectedCode.begin(), expectedCode.end(), resp->getStatusCode()) != expectedCode.end()) {
+            if (logger != nullptr) {
+                logger->info("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
+                             resp->getRequestID(), fp_ms.count());
+            }
+            ret.setR(resp);
+            ret.setSuccess(true);
+            return ret;
+        } else if (checkShouldRetry(request, resp) && retry < maxRetry) {
+            if (logger != nullptr) {
+                logger->info("http status code:{}, http error:{}, func name:{}, will retry once", resp->getStatusCode(),
+                             resp->getStatusMsg(), request->getFuncName());
+            }
+            continue;
+        } else {
+            // check error
+            ret.setSuccess(false);
+            TosError se;
+            if (resp->getStatusMsg() == "operation timeout") {
+                se.setIsClientError(true);
+                se.setMessage("http request timeout");
+                se.setCode("operation timeout");
+                ret.setE(se);
+                if (logger != nullptr) {
+                    logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
+                }
+                return ret;
+            }
+            if (resp->getStatusCode() >= 300 ||
+                (resp->getStatusCode() == 203 &&
+                 request->getHeaders().find(HEADER_CALLBACK) != request->getHeaders().end())) {
                 if (resp->getContent()) {
                     std::stringstream ss;
                     ss << resp->getContent()->rdbuf();
@@ -6721,7 +7074,8 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
 RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object) {
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> queries;
-    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries);
+    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries,
+                             config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     return rb;
 }
@@ -6732,7 +7086,8 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
     auto schemeHostParameter = initSchemeAndHost(alternativeEndpoint);
     std::string alternativeEndpoint_ = schemeHostParameter.host_;
     std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
-    auto rb = RequestBuilder(signer_, scheme_, host, bucket, object, urlMode_, headers, queries);
+    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries,
+                             config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     return rb;
 }
@@ -6740,7 +7095,8 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
                                          const RequestOptionBuilder& builder) {
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> queries;
-    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries);
+    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries,
+                             config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     auto headerIter = builder.getHeaders().begin();
     for (; headerIter != builder.getHeaders().end(); ++headerIter) {

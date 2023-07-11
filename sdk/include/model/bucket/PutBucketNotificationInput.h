@@ -6,14 +6,17 @@
 #include <vector>
 
 #include "CloudFunctionConfiguration.h"
-
+#include "RocketMQConfiguration.h"
 namespace VolcengineTos {
 class PutBucketNotificationInput {
 public:
     explicit PutBucketNotificationInput(std::string bucket) : bucket_(std::move(bucket)) {
     }
-    PutBucketNotificationInput(std::string bucket, std::vector<CloudFunctionConfiguration> CloudFunctionConfigurations)
-            : bucket_(std::move(bucket)), CloudFunctionConfigurations_(std::move(CloudFunctionConfigurations)) {
+    PutBucketNotificationInput(std::string bucket, std::vector<CloudFunctionConfiguration> cloudFunctionConfigurations)
+            : bucket_(std::move(bucket)), cloudFunctionConfigurations_(std::move(cloudFunctionConfigurations)) {
+    }
+    PutBucketNotificationInput(std::string bucket, std::vector<RocketMQConfiguration> rocketMQConfigurations)
+            : bucket_(std::move(bucket)), rocketMQConfigurations_(std::move(rocketMQConfigurations)) {
     }
     PutBucketNotificationInput() = default;
     virtual ~PutBucketNotificationInput() = default;
@@ -24,15 +27,16 @@ public:
         bucket_ = bucket;
     }
     const std::vector<CloudFunctionConfiguration>& getCloudFunctionConfigurations() const {
-        return CloudFunctionConfigurations_;
+        return cloudFunctionConfigurations_;
     }
-    void setCloudFunctionConfigurations(const std::vector<CloudFunctionConfiguration>& CloudFunctionConfigurations) {
-        CloudFunctionConfigurations_ = CloudFunctionConfigurations;
+    void setCloudFunctionConfigurations(const std::vector<CloudFunctionConfiguration>& cloudFunctionConfigurations) {
+        cloudFunctionConfigurations_ = cloudFunctionConfigurations;
     }
     std::string toJsonString() const;
 
 private:
     std::string bucket_;
-    std::vector<CloudFunctionConfiguration> CloudFunctionConfigurations_;
+    std::vector<CloudFunctionConfiguration> cloudFunctionConfigurations_;
+    std::vector<RocketMQConfiguration> rocketMQConfigurations_;
 };
 }  // namespace VolcengineTos

@@ -340,4 +340,71 @@ TEST_F(ObjectUploadPartCopyTest, UploadpartToNonExistentNameTest) {
     EXPECT_EQ(check_data, true);
 }
 
+TEST_F(ObjectUploadPartCopyTest, CreateUploadAndGetMultipartObjectWithTrafficLimitTest) {
+    std::string obj_name = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    auto ss = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (11 << 20); ++i) {
+        *ss << 1;
+    }
+    PutObjectV2Input input_obj_put(bkt_name, obj_name, ss);
+    auto srcPut = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(srcPut.isSuccess(), true);
+
+    std::string dstKey = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    CreateMultipartUploadInput input_part_create(bkt_name, dstKey);
+    auto upload = cliV2->createMultipartUpload(input_part_create);
+    EXPECT_EQ(upload.isSuccess(), true);
+    // 获取要copy的对象大小
+    HeadObjectV2Input input_head(bkt_name, obj_name);
+    auto head = cliV2->headObject(input_head);
+    EXPECT_EQ(head.isSuccess(), true);
+    int64_t size = head.result().getContentLength();
+
+    int partSize = 5 * 1024 * 1024;  // 10MB
+    int partCount = (int)(size / partSize);
+    std::vector<UploadedPartV2> copyParts(partCount);
+    int64_t copySourceRangeEnd_ = 0;
+    double time = 0;
+    for (int i = 0; i < partCount; ++i) {
+        int64_t partLen = partSize;
+        if (partCount == i + 1 && (size % partLen) > 0) {
+            partLen += size % (int64_t)partSize;
+        }
+        int64_t copySourceRangeStart_ = copySourceRangeEnd_;
+        copySourceRangeEnd_ = copySourceRangeStart_ + partLen;
+        auto startTime = std::chrono::high_resolution_clock::now();
+        UploadPartCopyV2Input input(bkt_name, dstKey, bkt_name, obj_name, i + 1, upload.result().getUploadId());
+        input.setCopySourceRangeStart(copySourceRangeStart_);
+        input.setCopySourceRangeEnd(copySourceRangeEnd_);
+        if (i == 1) {
+            input.setTrafficLimit(1024 * 1024);
+        }
+        auto res = cliV2->uploadPartCopy(input);
+        auto endTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
+        auto time1 = fp_ms.count() / 1000;
+        if (i == 0) {
+            time = time1;
+        }
+        if (i == 1) {
+            EXPECT_EQ(time1 > time, true);
+        }
+        UploadedPartV2 temp(res.result().getPartNumber(), res.result().getETag());
+        copyParts[i] = temp;
+        copySourceRangeEnd_ = copySourceRangeEnd_ + 1;
+    }
+
+    CompleteMultipartUploadV2Input input(bkt_name, dstKey, upload.result().getUploadId(), copyParts);
+    auto complete = cliV2->completeMultipartUpload(input);
+    EXPECT_EQ(complete.isSuccess(), true);
+
+    std::string content = TestUtils::GetObjectContentByStream(cliV2, bkt_name, dstKey);
+
+    std::string data = std::string((11 << 20), '1');
+    std::string res1Md5 = CryptoUtils::md5Sum(content);
+    std::string res2Md5 = CryptoUtils::md5Sum(data);
+    bool check_data = (data == content);
+    EXPECT_EQ(check_data, true);
+}
+
 }  // namespace VolcengineTos

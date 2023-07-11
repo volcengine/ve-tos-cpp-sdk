@@ -52,6 +52,12 @@ public:
     void setRetrySleepScale(long retrysleepscale) {
         retrySleepScale = retrysleepscale;
     }
+    bool isCustomDomain() const {
+        return isCustomDomain_;
+    }
+    void setIsCustomDomain(bool isCustomDomain) {
+        isCustomDomain_ = isCustomDomain;
+    }
 
 private:
     std::string endpoint_;
@@ -61,6 +67,7 @@ private:
     int maxRetryCount_ = 3;
     TransportConfig transportConfig_;
     long retrySleepScale = 100;
+    bool isCustomDomain_ = false;
 };
 }  // namespace VolcengineTos
 

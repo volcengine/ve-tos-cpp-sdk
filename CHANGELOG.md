@@ -1,5 +1,18 @@
 ## Release Note
 
+### 2023.7.10 Version 2.6.0
+
+- 新增：支持单连接限速
+- 新增：StorageClass 支持智能分层类型、冷归档
+- 新增：CompleteMultipartUpload 接口支持 completeAll
+- 新增：GetObject 支持设置图片转码参数
+- 新增：支持使用自定义域名，初始化参数新增 isCustomDomain
+- 新增：支持上传回调参数
+- 新增：支持镜像回源参数增强
+- 新增：支持重命名单个对象
+- 新增：支持取回冷归档对象
+- 新增：事件通知增加 MQ 类型
+
 ### 2023.7.4 Version 2.5.9
 
 - 修复：增加针对 LibCurl 几种错误码的重试

@@ -197,4 +197,36 @@ TEST_F(UploadFileTest, UploadFileWithCheckpointWithProcessTest) {
     bool check_data = (data == temp);
     EXPECT_EQ(check_data, true);
 }
+TEST_F(UploadFileTest, UploadFileWithTrafficLimitTest) {
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "uploadFile1";
+
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    UploadFileV2Input input;
+    // 对象名和桶名
+    CreateMultipartUploadInput createMultiPartInput(bucketName, objectName);
+    input.setCreateMultipartUploadInput(createMultiPartInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(false);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 待上传文件的路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto output = cliV2->uploadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto fp_ms = endTime - startTime;
+    auto time1 = fp_ms.count() / 1000;
+
+    input.setTrafficLimit(1024 * 1024);
+    startTime = std::chrono::high_resolution_clock::now();
+    auto output2 = cliV2->uploadFile(input);
+    EXPECT_EQ(output2.isSuccess(), true);
+    endTime = std::chrono::high_resolution_clock::now();
+    fp_ms = endTime - startTime;
+    auto time2 = fp_ms.count() / 1000;
+    EXPECT_EQ(time2 > time1, true);
+}
 }  // namespace VolcengineTos

@@ -5,6 +5,7 @@
 #include "Type.h"
 #include "MirrorHeader.h"
 #include "PublicSource.h"
+#include "Transform.h"
 namespace VolcengineTos {
 class Redirect {
 public:
@@ -58,6 +59,12 @@ public:
     const std::string& getStringFormatRedirectType() const {
         return RedirectTypetoString[redirectType_];
     }
+    const Transform& getTransform() const {
+        return transform_;
+    }
+    void setTransform(const Transform& transform) {
+        transform_ = transform;
+    }
 
 private:
     RedirectType redirectType_ = RedirectType::NotSet;
@@ -66,5 +73,6 @@ private:
     bool followRedirect_ = false;
     MirrorHeader mirrorHeader_;
     PublicSource publicSource_;
+    Transform transform_;
 };
 }  // namespace VolcengineTos

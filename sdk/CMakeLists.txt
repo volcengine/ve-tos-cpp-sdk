@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.5.9
+        VERSION 2.6.0
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -233,6 +233,16 @@ set(SDK_HEADER
         include/model/acl/PreSignedPolicyURLOutput.h
         include/model/object/ResumableCopyObjectInput.h
         include/model/object/ResumableCopyObjectOutput.h
+        include/model/object/RenameObjectInput.h
+        include/model/object/RenameObjectOutput.h
+        include/model/object/RestoreObjectInput.h
+        include/model/object/RestoreObjectOutput.h
+        include/model/bucket/PutBucketRenameInput.h
+        include/model/bucket/PutBucketRenameOutput.h
+        include/model/bucket/GetBucketRenameInput.h
+        include/model/bucket/GetBucketRenameOutput.h
+        include/model/bucket/DeleteBucketRenameInput.h
+        include/model/bucket/DeleteBucketRenameOutput.h
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc
@@ -336,6 +346,9 @@ set(SDK_LIB
         src/model/object/UploadFileInfoV2.cc
         src/model/object/UploadFilePartInfoV2.cc
         src/model/object/UploadFileCheckpointV2.cc
+        src/model/object/RestoreObjectInput.cc
+        src/model/bucket/PutBucketRenameInput.cc
+        src/model/bucket/GetBucketRenameOutput.cc
         )
 
 # add spdlog
