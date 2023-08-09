@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.6.0
+        VERSION 2.6.1
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 11)
 
@@ -10,7 +10,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/inclu
 #target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src/external)
 
 # 链接静态编译的 libve-tos-cpp-sdk-lib.a 静态库
-target_link_libraries(${PROJECT_NAME} ve-tos-cpp-sdk-lib)
+target_link_libraries(${PROJECT_NAME}${STATIC_LIB_SUFFIX} ve-tos-cpp-sdk-lib)
 # 如果想要使用动态库，linux 用以下语句替换上面链接静态库的语句:
 # target_link_libraries(${PROJECT_NAME} ve-tos-cpp-sdk-lib.so)
 

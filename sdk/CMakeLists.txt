@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.0
+        VERSION 2.6.1
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -379,6 +379,10 @@ set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include)
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
 
+if (${OS_PLATFORM} STREQUAL "WINDOWS")
+    target_compile_options(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE "${SDK_COMPILER_FLAGS}")
+endif ()
+
 if (BUILD_SHARED_LIB)
     add_library(${PROJECT_NAME} SHARED ${SDK_LIB} ${SDK_HEADER} ${spdlog})
     set_target_properties(${PROJECT_NAME} PROPERTIES
@@ -394,11 +398,11 @@ if (BUILD_SHARED_LIB)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
     target_link_libraries(${PROJECT_NAME} ${CLIENT_SSL_LIBS})
     target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
+    if (${OS_PLATFORM} STREQUAL "WINDOWS")
+        target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
+    endif ()
 endif ()
 
-if (${OS_PLATFORM} STREQUAL "WINDOWS")
-    target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
-endif ()
 
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
