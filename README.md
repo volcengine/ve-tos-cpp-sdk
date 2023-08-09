@@ -68,6 +68,17 @@ make
 make install
 ```
 
+#### Windows
+
+Please run the VS developer command prompt as an administrator and run the following command in the build directory file
+to compile and install.
+
+```bash
+cmake ../
+msbuild ALL_BUILD.vcxproj
+msbuild INSTALL.vcxproj
+```
+
 ### CMake Build Options
 
 #### BUILD_SHARED_LIB

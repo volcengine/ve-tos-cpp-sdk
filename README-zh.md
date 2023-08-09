@@ -65,6 +65,16 @@ make
 make install
 ```
 
+#### Windows
+
+请以管理员身份运行 VS 开发人员命令提示符，在 build 目录文件下运行以下命令进行编译安装。
+
+```bash
+cmake ../
+msbuild ALL_BUILD.vcxproj
+msbuild INSTALL.vcxproj
+```
+
 ### CMake编译选项
 
 #### BUILD_SHARED_LIB
