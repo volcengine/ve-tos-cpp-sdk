@@ -246,6 +246,7 @@ set(SDK_HEADER
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc
+        src/transport/http/PhotonHttpClient.cc
         src/transport/http/HttpRequest.cc
         src/transport/http/HttpResponse.cc
         src/transport/http/Url.cc
@@ -368,7 +369,7 @@ endif ()
 
 add_library(${PROJECT_NAME}${STATIC_LIB_SUFFIX} STATIC ${SDK_LIB} ${SDK_HEADER} ${spdlog})
 set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
-        CXX_STANDARD 11
+#        CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES
         CXX_EXTENSIONS NO
         ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
@@ -376,7 +377,8 @@ set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
         OUTPUT_NAME ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         )
-target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include)
+target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include ${PHOTON_INCLUDE_DIR})
+target_link_libraries(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE photon_static)
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
 
 if (${OS_PLATFORM} STREQUAL "WINDOWS")

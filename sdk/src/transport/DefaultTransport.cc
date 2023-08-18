@@ -15,7 +15,7 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.proxyUsername = config.getProxyUsername();
     conf.proxyPassword = config.getProxyPassword();
     conf.dnsCacheTime = config.getDnsCacheTime();
-    client_ = std::make_shared<HttpClient>(conf);
+    client_ = std::make_shared<PhotonHttpClient>(conf);
 }
 
 std::shared_ptr<TosResponse> DefaultTransport::roundTrip(const std::shared_ptr<TosRequest>& request) {

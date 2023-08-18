@@ -5,7 +5,7 @@ project(ve-tos-cpp-sdk
         LANGUAGES CXX)
 
 # project settings
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 
 # options
 option(BUILD_UNITTEST "Build unittest" OFF)
@@ -75,7 +75,7 @@ else ()
     set(CLIENT_CURL_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
 endif ()
 
-list(APPEND SDK_COMPILER_FLAGS "-std=c++11")
+#list(APPEND SDK_COMPILER_FLAGS "-std=c++11")
 if (WIN32)
     set(CMAKE_CXX_FLAGS_RELEASE  "${CMAKE_CXX_FLAGS_RELEASE}/MT")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")

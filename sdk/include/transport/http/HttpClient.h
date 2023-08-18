@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cassert>
 #include <sstream>
+#include <photon/net/http/client.h>
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "curl/curl.h"
@@ -204,14 +205,14 @@ public:
     static void initGlobalState();
     static void cleanupGlobalState();
 
-    std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request);
+    virtual std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request);
 
-private:
+protected:
     void setShareHandle(void* curl_handle, int cacheTime);
     void removeDNS(void* curl_handle, const std::shared_ptr<HttpRequest>& request);
     CURLSH* share_handle = nullptr;
 
-private:
+protected:
     int requestTimeout_ = 0;
     int socketTimeout_ = 30000;
     int dialTimeout_;
@@ -226,4 +227,21 @@ private:
     std::mutex mu_;
     VolcengineTos::CurlContainer *curlContainer_;
 };
+
+class PhotonHttpClient : public HttpClient {
+public:
+    explicit PhotonHttpClient(const HttpConfig& config) : HttpClient(config) {
+        client_ = photon::net::http::new_http_client();
+    }
+
+    ~PhotonHttpClient() override {
+        delete client_;
+    }
+
+    std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request) override;
+
+private:
+    photon::net::http::Client* client_;
+};
+
 }  // namespace VolcengineTos
