@@ -48,6 +48,7 @@ public:
         return scheme_.empty() && host_.empty() && path_.empty() && (port_.empty()) && query_.empty();
     }
     std::string queryToString() const;
+    std::string queryToStringWithEncode() const;
     std::map<std::string, std::string> query() const {
         return query_;
     }

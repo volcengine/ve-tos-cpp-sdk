@@ -217,6 +217,8 @@ HttpClient::HttpClient(const HttpConfig& config) {
     proxyUsername_ = config.proxyUsername;
     proxyPassword_ = config.proxyPassword;
     dnsCacheTime_ = config.dnsCacheTime;
+   caPath_ = config.caPath;
+   caFile_ = config.caFile;
 }
 void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
     std::lock_guard<std::mutex> lock(mu_);
@@ -266,6 +268,12 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     } else {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    }
+    if(!caPath_.empty()) {
+        curl_easy_setopt(curl, CURLOPT_CAPATH, caPath_.c_str());
+    }
+    if(!caFile_.empty()){
+        curl_easy_setopt(curl, CURLOPT_CAINFO, caFile_.c_str());
     }
     // set req specific params
     auto response = std::make_shared<HttpResponse>();

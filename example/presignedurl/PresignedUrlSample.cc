@@ -117,6 +117,8 @@ void PresignedUrlSample::GenPutPreSignedUrl() {
     int64_t expires = 86400;
     // 生成预签名 URL
     PreSignedURLInput input(HttpMethodType::Put, bucketName, objectName, expires);
+    // 设置自定义endpoint
+    // input.setAlternativeEndpoint("Your Alternative Endpoint");
     auto output = client.preSignedURL(input);
     if (!output.isSuccess()) {
         std::cout << "GeneratePreSignedUrl Success, Gen Url:" << output.result().getSignUrl() << std::endl;

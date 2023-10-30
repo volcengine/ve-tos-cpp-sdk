@@ -66,6 +66,12 @@ public:
     void setResource(const std::string& resource) {
         resource_ = resource;
     }
+    int getCurlErrCode() const {
+        return curlErrCode_;
+    }
+    void setCurlErrCode(int curlErrCode) {
+        curlErrCode_ = curlErrCode;
+    }
 
 private:
     bool isClientError_ = false;
@@ -76,6 +82,7 @@ private:
     std::string hostID_;
     std::string resource_;
     RequestInfo requestInfo_;
+    int curlErrCode_ = 0;
 };
 
 }  // namespace VolcengineTos

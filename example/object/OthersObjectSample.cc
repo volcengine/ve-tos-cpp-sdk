@@ -1027,3 +1027,35 @@ int OthersObjectSample::PutObjectWithErrorProcess() {
     CloseClient();
     return 0;
 }
+
+int OthersObjectSample::RestoreObject() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+    // 填写Object完整路径，完整路径中不能包含Bucket名称，例如exampledir/exampleobject.txt。
+    std::string objectName = "exampledir/exampleobject.txt";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    RestoreObjectInput input(bucketName, objectName, 10, RestoreJobParameters(TierType::TierExpedited));
+    auto output = client.restoreObject(input);
+    if (!output.isSuccess()) {
+        // 异常处理
+        std::cout << "RestoreObject failed." << output.error().String() << std::endl;
+        // 释放网络等资源
+        CloseClient();
+        return -1;
+    }
+    std::cout << "RestoreObject success." << std::endl;
+
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}

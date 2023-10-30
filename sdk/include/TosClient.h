@@ -63,11 +63,11 @@ static const char* PLATFORM_NAME = "macOS";
 static const char* PLATFORM_NAME = "unknown";
 #endif
 
-#ifdef __aarch64__
+#if defined(__aarch64__)
 static const char* CPU_ARCH = "arm64";
-#elif __x86_64__
+#elif defined(__x86_64__)
 static const char* CPU_ARCH = "amd64";
-#elif __i386__
+#elif defined(__i386__)
 static const char* CPU_ARCH = "i386";
 #else
 static const char* CPU_ARCH = "others";

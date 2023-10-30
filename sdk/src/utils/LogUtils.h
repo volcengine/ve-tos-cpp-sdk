@@ -9,7 +9,7 @@
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/daily_file_sink.h"
 #include "spdlog/sinks/basic_file_sink.h"
-
+#include "utils/BaseUtils.h"
 namespace VolcengineTos {
 
 static LogLevel tosSDKLogLevel = LogLevel::LogOff;

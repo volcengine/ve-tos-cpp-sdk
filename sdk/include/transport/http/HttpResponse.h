@@ -75,10 +75,10 @@ public:
     size_t getBodySize();
 
     uint64_t getHashCrc64Result() const {
-        return hashCrc64Result;
+        return hashCrc64Result_;
     }
-    void setHashCrc64Result(uint64_t hashcrc64result) {
-        hashCrc64Result = hashcrc64result;
+    void setHashCrc64Result(uint64_t hashCrc64Result) {
+        hashCrc64Result_ = hashCrc64Result;
     }
     int getCurlErrCode() const {
         return curlErrCode_;
@@ -95,7 +95,7 @@ private:
     std::map<std::string, std::string> headers_;
     std::shared_ptr<std::iostream> body_;
     size_t bodySize_;
-    uint64_t hashCrc64Result = 0;
+    uint64_t hashCrc64Result_ = 0;
     int curlErrCode_ = 0;
 };
 }  // namespace VolcengineTos

@@ -83,8 +83,19 @@ public:
     }
     static std::string getTempPath(){
 #ifdef _WIN32
+#ifdef UNICODE
+        wchar_t pWCSStrKey[MAX_PATH];
+#else
         char strTmpPath[MAX_PATH];
+#endif
         GetTempPath(MAX_PATH, strTmpPath);
+
+#ifdef UNICODE
+        int pSize = WideCharToMultiByte(CP_OEMCP, 0, pWCSStrKey, wcslen(pWCStrKey), NULL, 0, NULL, NULL);
+        char* strTmpPath = new char[pSize + 1];
+        WideCharToMultiByte(CP_OEMCP, 0, pWCStrKey, wcsleen(pWCStrKey), strTmpPath, pSize, NULL, NULL);
+        strTmpPath[pSize] = '\\';
+#endif
         std::string path(strTmpPath);
 #else
         std::string path = "/tmp/";

@@ -53,6 +53,12 @@ public:
     // 多版本配置
     // 网站配置
     // 事件通知配置
+    int PutBucketNotification();
+    int GetBucketNotification();
     // 自定义域名配置
     // 实时日志配置
+    // 重命名对象配置
+    int PutBucketRename();
+    int GetBucketRename();
+    int DeleteBucketRename();
 };

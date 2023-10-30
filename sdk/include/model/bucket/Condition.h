@@ -15,21 +15,21 @@ public:
         httpCode_ = httpCode;
     }
     const std::string& getKeyPrefix() const {
-        return keyPrefix;
+        return keyPrefix_;
     }
     void setKeyPrefix(const std::string& keyPrefix) {
-        Condition::keyPrefix = keyPrefix;
+        keyPrefix_ = keyPrefix;
     }
     const std::string& getKeySuffix() const {
-        return keySuffix;
+        return keySuffix_;
     }
     void setKeySuffix(const std::string& keySuffix) {
-        Condition::keySuffix = keySuffix;
+        keySuffix_ = keySuffix;
     }
 
 private:
     int httpCode_ = 0;
-    std::string keyPrefix;
-    std::string keySuffix;
+    std::string keyPrefix_;
+    std::string keySuffix_;
 };
 }  // namespace VolcengineTos

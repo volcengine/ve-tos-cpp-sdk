@@ -15,6 +15,9 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.proxyUsername = config.getProxyUsername();
     conf.proxyPassword = config.getProxyPassword();
     conf.dnsCacheTime = config.getDnsCacheTime();
+    conf.caPath = config.getCaPath();
+    conf.caFile = config.getCaFile();
+
     client_ = std::make_shared<HttpClient>(conf);
 }
 

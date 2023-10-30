@@ -102,16 +102,28 @@ public:
         dnsCacheTime_ = dnsCacheTime;
     }
     int getMaxConnections() const {
-        return maxConnections;
+        return maxConnections_;
     }
     void setMaxConnections(int maxConnections) {
-        TransportConfig::maxConnections = maxConnections;
+        maxConnections_ = maxConnections;
     }
     int getSocketTimeout() const {
         return socketTimeout_;
     }
     void setSocketTimeout(int socketTimeout) {
         socketTimeout_ = socketTimeout;
+    }
+    const std::string& getCaPath() const {
+        return caPath_;
+    }
+    void setCaPath(const std::string& caPath) {
+        caPath_ = caPath;
+    }
+    const std::string& getCaFile() const {
+        return caFile_;
+    }
+    void setCaFile(const std::string& caFile) {
+        caFile_ = caFile;
     }
 
 private:
@@ -131,7 +143,9 @@ private:
     std::string proxyUsername_;
     std::string proxyPassword_;
     int dnsCacheTime_ = 0;
-    int maxConnections = 25;
+    int maxConnections_ = 25;
     int socketTimeout_ = 30000;
+    std::string caPath_;
+    std::string caFile_;
 };
 }  // namespace VolcengineTos

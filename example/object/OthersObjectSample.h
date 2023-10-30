@@ -42,4 +42,7 @@ public:
     int DeleteObjectTagging();
 
     int PutObjectWithErrorProcess();
+
+    // 解冻对象
+    int RestoreObject();
 };
