@@ -35,6 +35,9 @@ public:
     int socketTimeout;
     int maxConnections;
     bool isCustomDomain = false;
+    std::string caPath;
+    std::string caFile;
+
     // int MaxConnections;
     // int IdleConnectionTime;
 };

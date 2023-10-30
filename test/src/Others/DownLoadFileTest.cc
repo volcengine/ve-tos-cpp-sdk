@@ -335,7 +335,7 @@ TEST_F(DownLoadFileTest, DownLoadFileWithTrafficLimitTest) {
     // 开启 checkpoint 会在本地生成断点续传记录文件
     input.setEnableCheckpoint(false);
     // 默认分片大小 20MB
-    input.setPartSize(5 * 1024 * 1024);
+    input.setPartSize(20 * 1024 * 1024);
     // 下载后文件的保存路径，不可为空，不可为文件夹，建议设置绝对路径
     input.setFilePath(filePath);
     auto startTime = std::chrono::high_resolution_clock::now();

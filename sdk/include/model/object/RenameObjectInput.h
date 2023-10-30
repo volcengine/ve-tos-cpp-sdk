@@ -6,8 +6,6 @@
 namespace VolcengineTos {
 class RenameObjectInput {
 public:
-    RenameObjectInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
-    }
     RenameObjectInput(std::string bucket, std::string key, std::string newKey)
             : bucket_(std::move(bucket)), key_(std::move(key)), newKey_(std::move(newKey)) {
     }

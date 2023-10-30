@@ -6,18 +6,18 @@
 namespace VolcengineTos {
 class AbortInCompleteMultipartUpload {
 public:
-    explicit AbortInCompleteMultipartUpload(int daysAfterInitiation) : daysAfterInitiation(daysAfterInitiation) {
+    explicit AbortInCompleteMultipartUpload(int daysAfterInitiation) : daysAfterInitiation_(daysAfterInitiation) {
     }
     AbortInCompleteMultipartUpload() = default;
     virtual ~AbortInCompleteMultipartUpload() = default;
     int getDaysAfterInitiation() const {
-        return daysAfterInitiation;
+        return daysAfterInitiation_;
     }
     void setDaysAfterInitiation(int daysAfterInitiation) {
-        AbortInCompleteMultipartUpload::daysAfterInitiation = daysAfterInitiation;
+        daysAfterInitiation_ = daysAfterInitiation;
     }
 
 private:
-    int daysAfterInitiation = 0;
+    int daysAfterInitiation_ = 0;
 };
 }  // namespace VolcengineTos

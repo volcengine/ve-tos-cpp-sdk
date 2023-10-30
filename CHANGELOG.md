@@ -1,5 +1,15 @@
 ## Release Note
 
+### 2023.10.30 Version 2.6.3
+
+- 修复：query 未进行 uri 编码的问题
+
+### 2023.9.19 Version 2.6.2
+
+- 新增：配置中新增 caPath 和 caFile 用于传递证书路径，方便 Windows 系统通过路径传递证书
+- 新增：错误处理中新增 CurlErrCode 透传 libcurl 错误码
+- 修复：少量 Windows 下编译报错
+
 ### 2023.8.9 Version 2.6.1
 
 - 修复：Windows 编译动态库时的编译脚本错误

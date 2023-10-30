@@ -525,8 +525,8 @@ int BucketSample::PutBucketLifecycle() {
     // Date: 指定对象在哪一天过期，需要传入参数为 time_t 类型
     rule1.setExpiratioon(std::make_shared<Expiration>(60));
     // 设置对象标签
-    rule1.addTags(Tag("key1", "value1"));
-    rule1.addTags(Tag("key2", "value2"));
+    rule1.addTag(Tag("key1", "value1"));
+    rule1.addTag(Tag("key2", "value2"));
 
     // 指定生命周期规则 rule2，该规则设置创建 365 天后过期
     auto rule2 = LifecycleRule();
@@ -559,7 +559,7 @@ int BucketSample::PutBucketLifecycle() {
     auto transition = Transition();
     transition.setDays(365);
     transition.setStorageClass(StorageClassType::ARCHIVE_FR);
-    rule3.addTransitions(transition);
+    rule3.addTransition(transition);
 
     // 设置非当前版本的Object距最后修改时间10天之后转为低频访问类型。
     auto transition1 = NoncurrentVersionTransition(10, StorageClassType::IA);
@@ -1013,7 +1013,7 @@ int BucketSample::OpenBucketVersioning() {
     InitializeClient();
     // 创建交互的 client
     TosClientV2 client(region, accessKey, secretKey);
-    PutBucketVersioningInput input(bucketName, VersioningStatusType::VersioningStatusEnabled);
+    PutBucketVersioningInput input(bucketName, VersioningStatusType::Enabled);
 
     auto output = client.putBucketVersioning(input);
     if (!output.isSuccess()) {
@@ -1042,7 +1042,7 @@ int BucketSample::SuspendBucketVersioning() {
     InitializeClient();
     // 创建交互的 client
     TosClientV2 client(region, accessKey, secretKey);
-    PutBucketVersioningInput input(bucketName, VersioningStatusType::VersioningStatusSuspended);
+    PutBucketVersioningInput input(bucketName, VersioningStatusType::Suspended);
 
     auto output = client.putBucketVersioning(input);
     if (!output.isSuccess()) {
@@ -1084,6 +1084,213 @@ int BucketSample::GetBucketVersioning() {
     }
     std::cout << "GetBucketVersioning success." << std::endl;
     std::cout << "versioning statue" << output.result().getStringFormatVersioningStatus() << std::endl;
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}
+
+int BucketSample::PutBucketNotification() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+    // 填写目标函数服务 cloudFunction
+    std::string cloudFunction = "your cloud function";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    PutBucketNotificationInput input(bucketName);
+
+    // 设置事件通知的过滤规则
+    // 如果前后缀均未设置，则会匹配存储桶内所有对象。
+    FilterKey filterKey;
+    // 设置匹配对象的前缀的信息为 test/，会筛选 test 目录下的对象。
+    FilterRule rule1({"prefix", "test/"});
+    // 设置匹配对象的后缀的信息为 .png，会筛选所有格式为 png 的对象。
+    FilterRule rule2({"suffix", ".png"});
+    filterKey.setRules({rule1, rule2});
+    Filter filter(filterKey);
+
+    CloudFunctionConfiguration configuration;
+    // 设置 id
+    configuration.setId("1");
+    // 设置事件类型
+    configuration.setEvents({"tos:ObjectCreated:Put"});
+    // 设置目标函数服务
+    configuration.setCloudFunction(cloudFunction);
+    // 设置过滤规则
+    configuration.setFilter(filter);
+    input.setCloudFunctionConfigurations({configuration});
+
+    RocketMQConfiguration rocketMqConfiguration;
+    rocketMqConfiguration.setId("2");
+    rocketMqConfiguration.setEvents({"tos:ObjectCreated:Post"});
+    rocketMqConfiguration.setFilter(filter);
+    rocketMqConfiguration.setRocketMq(RocketMQConf("your mq instance id", "your mq topic", "your mq access key id"));
+    input.setRocketMqConfigurations({rocketMqConfiguration});
+
+    auto output = client.putBucketNotification(input);
+    if (!output.isSuccess()) {
+        // 异常处理
+        std::cout << "PutBucketNotification failed." << output.error().String() << std::endl;
+        // 释放网络等资源
+        CloseClient();
+        return -1;
+    }
+    std::cout << "PutBucketNotification success." << std::endl;
+
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}
+int BucketSample::GetBucketNotification() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+    GetBucketNotificationInput input(bucketName);
+
+    auto output = client.getBucketNotification(input);
+    if (!output.isSuccess()) {
+        // 异常处理
+        std::cout << "GetBucketNotification failed." << output.error().String() << std::endl;
+        // 释放网络等资源
+        CloseClient();
+        return -1;
+    }
+    std::cout << "GetBucketNotification success." << std::endl;
+    for (const auto& config : output.result().getCloudFunctionConfigurations()) {
+        std::cout << "id:" << config.getId() << std::endl;
+        std::cout << "cloud function:" << config.getCloudFunction() << std::endl;
+        auto rules = config.getFilter().getKey().getRules();
+        for (const auto& rule : rules) {
+            std::cout << "filter name:" << rule.getName() << std::endl;
+            std::cout << "filter value:" << rule.getValue() << std::endl;
+        }
+        for (const auto& event : config.getEvents()) {
+            std::cout << "event:" << event << std::endl;
+        }
+    }
+    for (const auto& config : output.result().getRocketMqConfigurations()) {
+        std::cout << "id:" << config.getId() << std::endl;
+        const auto& mqConf = config.getRocketMq();
+        std::cout << "rocket mq instance id:" << mqConf.getInstanceId() << std::endl;
+        std::cout << "rocket mq topic:" << mqConf.getTopic() << std::endl;
+        std::cout << "rocket mq accessKey id:" << mqConf.getAccessKeyId() << std::endl;
+
+        auto rules = config.getFilter().getKey().getRules();
+        for (const auto& rule : rules) {
+            std::cout << "filter name:" << rule.getName() << std::endl;
+            std::cout << "filter value:" << rule.getValue() << std::endl;
+        }
+        for (const auto& event : config.getEvents()) {
+            std::cout << "event:" << event << std::endl;
+        }
+    }
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}
+
+int BucketSample::PutBucketRename() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    // 设置桶的策略配置
+    PutBucketRenameInput input(bucketName, true);
+    auto output = client.putBucketRename(input);
+    if (!output.isSuccess()) {
+        // 异常处理
+        std::cout << "PutBucketRename failed." << output.error().String() << std::endl;
+        // 释放网络等资源
+        CloseClient();
+        return -1;
+    }
+    std::cout << "PutBucketRename success." << std::endl;
+
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}
+
+int BucketSample::GetBucketRename() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    GetBucketRenameInput input(bucketName);
+    auto output = client.getBucketRename(input);
+    if (!output.isSuccess()) {
+        // 异常处理
+        std::cout << "GetBucketRename failed." << output.error().String() << std::endl;
+        // 释放网络等资源
+        CloseClient();
+        return -1;
+    }
+    std::cout << "GetBucketRename success" << std::endl;
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}
+
+int BucketSample::DeleteBucketRename() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    DeleteBucketRenameInput input(bucketName);
+    auto output = client.deleteBucketRename(input);
+    if (!output.isSuccess()) {
+        // 异常处理
+        std::cout << "DeleteBucketRename failed." << output.error().String() << std::endl;
+        // 释放网络等资源
+        CloseClient();
+        return -1;
+    }
+    std::cout << "DeleteBucketRename success." << std::endl;
+
     // 释放网络等资源
     CloseClient();
     return 0;

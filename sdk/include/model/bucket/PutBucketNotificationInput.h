@@ -32,6 +32,12 @@ public:
     void setCloudFunctionConfigurations(const std::vector<CloudFunctionConfiguration>& cloudFunctionConfigurations) {
         cloudFunctionConfigurations_ = cloudFunctionConfigurations;
     }
+    const std::vector<RocketMQConfiguration>& getRocketMqConfigurations() const {
+        return rocketMQConfigurations_;
+    }
+    void setRocketMqConfigurations(const std::vector<RocketMQConfiguration>& rocketMqConfigurations) {
+        rocketMQConfigurations_ = rocketMqConfigurations;
+    }
     std::string toJsonString() const;
 
 private:

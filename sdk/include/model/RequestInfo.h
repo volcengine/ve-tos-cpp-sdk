@@ -38,6 +38,6 @@ private:
     std::string requestId_;
     std::string Id2_;
     int statusCode_;
-    std::map<std::string, std::string> headers_;
+    std::map<std::string, std::string> headers_ = {};
 };
 }  // namespace VolcengineTos

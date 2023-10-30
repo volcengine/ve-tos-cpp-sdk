@@ -70,6 +70,18 @@ TEST_F(ObjectListType2Test, ListObjectsType2WithTokenTest) {
     EXPECT_EQ(output3.result().getContents().size() == 1, true);
 }
 
+TEST_F(ObjectListType2Test, ListObjectsType2WithInvalidTokenTest) {
+    ListObjectsType2Input listInput(bkt_name, "0/1", "0/1", 2);
+    auto output = cliV2->listObjectsType2(listInput);
+    EXPECT_EQ(output.isSuccess(), true);
+
+    listInput.setContinuationToken(output.result().getNextContinuationToken() + " ");
+    auto output2 = cliV2->listObjectsType2(listInput);
+    EXPECT_EQ(output2.isSuccess(), false);
+    EXPECT_EQ(output2.error().getStatusCode(), 400);
+    EXPECT_EQ(output2.error().getMessage(), "The continuation token provided is incorrect");
+}
+
 TEST_F(ObjectListType2Test, ListObjectsType2WithDelimiterTest) {
     ListObjectsType2Input listInput(bkt_name, "0/", 3);
     listInput.setDelimiter("/");

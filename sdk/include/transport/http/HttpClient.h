@@ -27,6 +27,8 @@ struct HttpConfig {
     std::string proxyUsername;
     std::string proxyPassword;
     int dnsCacheTime;
+    std::string caPath;
+    std::string caFile;
 };
 
 template< typename RESOURCE_TYPE>
@@ -223,6 +225,8 @@ private:
     std::string proxyUsername_;
     std::string proxyPassword_;
     int dnsCacheTime_ = 0;
+    std::string caPath_;
+    std::string caFile_;
     std::mutex mu_;
     VolcengineTos::CurlContainer *curlContainer_;
 };

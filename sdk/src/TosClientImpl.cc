@@ -111,6 +111,9 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     conf.setDnsCacheTime(config.dnsCacheTime);
     conf.setMaxConnections(config.maxConnections);
     conf.setSocketTimeout(config.socketTimeout);
+    conf.setCaFile(config.caFile);
+    conf.setCaPath(config.caPath);
+
     transport_ = std::make_shared<DefaultTransport>(conf);
 
     // 保存参数到 config_ 里
@@ -6908,6 +6911,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                 se.setIsClientError(true);
                 se.setMessage("http request timeout");
                 se.setCode("operation timeout");
+                se.setCurlErrCode(resp->getCurlErrCode());
                 ret.setE(se);
                 if (logger != nullptr) {
                     logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
@@ -6950,6 +6954,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             }
             if (resp->getStatusCode() == -2) {
                 se.setIsClientError(true);
+                se.setCurlErrCode(resp->getCurlErrCode());
             }
             se.setStatusCode(resp->getStatusCode());
             se.setCode("UnexpectedStatusCode error");
@@ -7015,6 +7020,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                 se.setIsClientError(true);
                 se.setMessage("http request timeout");
                 se.setCode("operation timeout");
+                se.setCurlErrCode(resp->getCurlErrCode());
                 ret.setE(se);
                 if (logger != nullptr) {
                     logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
@@ -7057,6 +7063,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             }
             if (resp->getStatusCode() == -2) {
                 se.setIsClientError(true);
+                se.setCurlErrCode(resp->getCurlErrCode());
             }
             se.setStatusCode(resp->getStatusCode());
             se.setCode("UnexpectedStatusCode error");

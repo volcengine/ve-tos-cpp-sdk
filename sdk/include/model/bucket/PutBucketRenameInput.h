@@ -6,7 +6,8 @@ class PutBucketRenameInput {
 public:
     explicit PutBucketRenameInput(std::string bucket) : bucket_(std::move(bucket)) {
     }
-    PutBucketRenameInput(const std::string& bucket, bool renameEnable) : bucket_(bucket), renameEnable_(renameEnable) {
+    PutBucketRenameInput(std::string bucket, bool renameEnable)
+            : bucket_(std::move(bucket)), renameEnable_(renameEnable) {
     }
     PutBucketRenameInput() = default;
     virtual ~PutBucketRenameInput() = default;

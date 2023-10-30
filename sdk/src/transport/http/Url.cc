@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <sstream>
 #include <vector>
-
+#include "../src/auth/SignV4.h"
 #include "transport/http/Url.h"
 
 using namespace VolcengineTos;
@@ -115,7 +115,7 @@ std::string Url::toString() const {
     if (!path_.empty() && path_ != "/")
         out << path_;
     if (hasQuery())
-        out << "?" << queryToString();
+        out << "?" << queryToStringWithEncode();
     return out.str();
 }
 
@@ -148,6 +148,21 @@ std::string Url::queryToString() const {
         res += q.first;
         res += "=";
         res += q.second;
+        res += "&";
+    }
+    res = res.substr(0, res.size() - 1);
+    return res;
+}
+
+std::string Url::queryToStringWithEncode() const {
+    if (query_.empty()) {
+        return "";
+    }
+    std::string res;
+    for (const auto& q : query_) {
+        res += SignV4::uriEncode(q.first, true);
+        res += "=";
+        res += SignV4::uriEncode(q.second, true);
         res += "&";
     }
     res = res.substr(0, res.size() - 1);
