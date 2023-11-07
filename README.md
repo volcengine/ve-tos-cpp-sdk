@@ -122,8 +122,10 @@ The accesskey and secretkey of your account, endpoint and region are required as
 #include "TosClientV2.h"
 using namespace VolcengineTos;
 std::string region("Your Region");
-std::string accessKey("Your Access Key");
-std::string secretKey("Your Secret Key");
+
+// Retrieve access credentials from environment variables. Before running the code, please make sure that the environment variables TOS_ACCESS_KEY and TOS_SECRET_KEY have been set.
+std::string accessKey = std::getenv("TOS_ACCESS_KEY");
+std::string secretKey = std::getenv("TOS_SECRET_KEY");
 
 // init your client
 InitializeClient();
