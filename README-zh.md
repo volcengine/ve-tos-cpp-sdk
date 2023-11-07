@@ -114,8 +114,10 @@ cmake .. -DBUILD_UNITTEST=ON
 #include "TosClientV2.h"
 using namespace VolcengineTos;
 std::string region("Your Region");
-std::string accessKey("Your Access Key");
-std::string secretKey("Your Secret Key");
+
+// 从环境变量中获取访问凭证。运行示例代码之前，请确保已设置环境变量 TOS_ACCESS_KEY 和 TOS_SECRET_KEY
+std::string accessKey = std::getenv("TOS_ACCESS_KEY");
+std::string secretKey = std::getenv("TOS_SECRET_KEY");
 
 // 初始化 SDK
 InitializeClient();
