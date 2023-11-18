@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cassert>
 #include <sstream>
+#include <photon/net/curl.h>
+
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "curl/curl.h"
@@ -131,7 +133,7 @@ public:
                     handle = newhandle;
                 }
             }
-            setDefaultOptions(handle);
+            SetDefaultOptions(handle, connectTimeout_, socketTimeout_);
             handleContainer_.Release(handle);
         }
     }
@@ -153,7 +155,7 @@ private:
             for (unsigned i = 0; i < amountToAdd; ++i) {
                 CURL* curlHandle = curl_easy_init();
                 if (curlHandle) {
-                    setDefaultOptions(curlHandle);
+                    SetDefaultOptions(curlHandle, connectTimeout_, socketTimeout_);
                     handleContainer_.Release(curlHandle);
                     ++actuallyAdded;
                 } else {
@@ -166,16 +168,17 @@ private:
         return false;
     }
 
-    void setDefaultOptions(CURL* curl) const
+public:
+    static void SetDefaultOptions(CURL* curl, unsigned long connectTimeout, unsigned long socketTimeout)
     {
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
         curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
         curl_easy_setopt(curl, CURLOPT_NETRC, CURL_NETRC_IGNORED);
 
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 0L);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, connectTimeout_);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, connectTimeout);
         curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, socketTimeout_ / 1000);
+        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, socketTimeout / 1000);
 
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
@@ -206,14 +209,23 @@ public:
     static void initGlobalState();
     static void cleanupGlobalState();
 
-    std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request);
+    virtual std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request);
 
-private:
+protected:
+    virtual CURLcode perform(CURL* curl) {
+        return curl_easy_perform(curl);
+    }
+    virtual CURL* acquireCurl() {
+        return curlContainer_->Acquire();
+    }
+    virtual void releaseCurl(CURL* curl, bool force) {
+        curlContainer_->Release(curl, force);
+    }
     void setShareHandle(void* curl_handle, int cacheTime);
     void removeDNS(void* curl_handle, const std::shared_ptr<HttpRequest>& request);
     CURLSH* share_handle = nullptr;
 
-private:
+protected:
     int requestTimeout_ = 0;
     int socketTimeout_ = 30000;
     int dialTimeout_;
@@ -229,5 +241,40 @@ private:
     std::string caFile_;
     std::mutex mu_;
     VolcengineTos::CurlContainer *curlContainer_;
+
 };
+
+class HttpCoroutineClient : public HttpClient {
+public:
+    explicit HttpCoroutineClient(const HttpConfig& config) : HttpClient(config) {
+        curl_ = curl_easy_init();
+        if (unlikely(!curl_)) {
+            std::cerr << "curl_easy_init failed" << std::endl;
+            return;
+        }
+        CurlContainer::SetDefaultOptions(curl_, connectTimeout_, socketTimeout_);
+        curl_easy_setopt(curl_, CURLOPT_DNS_USE_GLOBAL_CACHE, 0L);
+    }
+
+    ~HttpCoroutineClient() override {
+        if (likely(curl_)) {
+            curl_easy_cleanup(curl_);
+        }
+    }
+
+private:
+    CURLcode perform(CURL* curl) override {
+        uint64_t timeout = requestTimeout_ * 1000;
+        if (timeout == 0)
+            timeout = -1UL;
+        return (CURLcode) photon::net::curl_perform(curl, timeout);
+    }
+
+    CURL* acquireCurl() override { return curl_; }
+
+    void releaseCurl(CURL* curl, bool force) override {}
+
+    CURL* curl_ = nullptr;
+};
+
 }  // namespace VolcengineTos

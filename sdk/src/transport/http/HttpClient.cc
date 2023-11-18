@@ -245,13 +245,10 @@ void HttpClient::removeDNS(void* curl, const std::shared_ptr<HttpRequest>& reque
 }
 
 std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRequest>& request) {
-    // init curl for this request
-    CURL * curl = curlContainer_->Acquire();
+    CURL* curl = acquireCurl();
     if (requestTimeout_ != 0) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 1L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_);
     }
-
 
     if (proxyPort_ != -1 && !proxyHost_.empty()) {
         std::string proxy = proxyHost_ + ":" + std::to_string(proxyPort_);
@@ -294,9 +291,13 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     curl_easy_setopt(curl, CURLOPT_URL, request->url().toString().c_str());
 
     // set opt for different http methods
-    if (request->method() == http::MethodHead) {
+    if (request->method() == http::MethodGet) {
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+    } else if (request->method() == http::MethodHead) {
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "HEAD");
     } else if (request->method() == http::MethodPut) {
+        curl_easy_setopt(curl, CURLOPT_PUT, 1L);
         curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
         // make sure httpRequest content length has been set
         curl_off_t bodySize = request->getContentLength();
@@ -341,7 +342,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     if (dnsCacheTime_ > 0) {
         setShareHandle(curl, dnsCacheTime_);
     }
-    CURLcode res = curl_easy_perform(curl);
+    CURLcode res = perform(curl);
     if (res == CURLE_COULDNT_CONNECT) {
         response->setStatus(http::Refused);
         std::stringstream ss;
@@ -420,7 +421,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     }
 
     request->setTransferedBytes(resourceMan.send);
-    curlContainer_->Release(curl, (res != CURLE_OK));
+    releaseCurl(curl, (res != CURLE_OK));
     curl_slist_free_all(list);
     return response;
 }

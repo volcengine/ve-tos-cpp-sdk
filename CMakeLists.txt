@@ -1,11 +1,13 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.14 FATAL_ERROR)
 
 project(ve-tos-cpp-sdk
         VERSION 2.6.3
         LANGUAGES CXX)
 
 # project settings
-set(CMAKE_CXX_STANDARD 11)
+if (NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 11)
+endif ()
 
 # options
 option(BUILD_UNITTEST "Build unittest" OFF)
@@ -110,6 +112,13 @@ MESSAGE(${CLIENT_CURL_INCLUDE_DIRS})
 MESSAGE(${CLIENT_SSL_LIBS})
 MESSAGE(${CLIENT_SSL_INCLUDE_DIRS})
 
+include(FetchContent)
+FetchContent_Declare(
+        photon
+        GIT_REPOSITORY https://github.com/alibaba/PhotonLibOS.git
+        GIT_TAG main
+)
+FetchContent_MakeAvailable(photon)
 
 add_subdirectory(sdk)
 
