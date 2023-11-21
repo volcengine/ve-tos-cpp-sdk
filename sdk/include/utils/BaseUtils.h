@@ -85,16 +85,16 @@ public:
 #ifdef _WIN32
 #ifdef UNICODE
         wchar_t pWCSStrKey[MAX_PATH];
+
+        GetTempPath(MAX_PATH, pWCSStrKey);
+
+        int pSize = WideCharToMultiByte(CP_OEMCP, 0, pWCSStrKey, wcslen(pWCSStrKey), NULL, 0, NULL, NULL);
+        char* strTmpPath = new char[pSize + 1];
+        WideCharToMultiByte(CP_OEMCP, 0, pWCSStrKey, wcslen(pWCSStrKey), strTmpPath, pSize, NULL, NULL);
+        strTmpPath[pSize] = '\0';
 #else
         char strTmpPath[MAX_PATH];
-#endif
         GetTempPath(MAX_PATH, strTmpPath);
-
-#ifdef UNICODE
-        int pSize = WideCharToMultiByte(CP_OEMCP, 0, pWCSStrKey, wcslen(pWCStrKey), NULL, 0, NULL, NULL);
-        char* strTmpPath = new char[pSize + 1];
-        WideCharToMultiByte(CP_OEMCP, 0, pWCStrKey, wcsleen(pWCStrKey), strTmpPath, pSize, NULL, NULL);
-        strTmpPath[pSize] = '\\';
 #endif
         std::string path(strTmpPath);
 #else
