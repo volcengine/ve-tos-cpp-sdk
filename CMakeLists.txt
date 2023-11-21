@@ -5,7 +5,11 @@ project(ve-tos-cpp-sdk
         LANGUAGES CXX)
 
 # project settings
-set(CMAKE_CXX_STANDARD 11)
+if (NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 11)
+endif ()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # options
 option(BUILD_UNITTEST "Build unittest" OFF)

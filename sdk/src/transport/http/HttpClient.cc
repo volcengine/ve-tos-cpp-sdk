@@ -248,7 +248,6 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     // init curl for this request
     CURL * curl = curlContainer_->Acquire();
     if (requestTimeout_ != 0) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 1L);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_);
     }
 
@@ -294,9 +293,13 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     curl_easy_setopt(curl, CURLOPT_URL, request->url().toString().c_str());
 
     // set opt for different http methods
-    if (request->method() == http::MethodHead) {
+    if (request->method() == http::MethodGet) {
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+    } else if (request->method() == http::MethodHead) {
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "HEAD");
     } else if (request->method() == http::MethodPut) {
+        curl_easy_setopt(curl, CURLOPT_PUT, 1L);
         curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
         // make sure httpRequest content length has been set
         curl_off_t bodySize = request->getContentLength();
