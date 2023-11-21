@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
         VERSION 2.6.3
         LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 11)
 
 add_executable(${PROJECT_NAME} example.cc)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include)

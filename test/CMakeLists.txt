@@ -23,7 +23,6 @@ file(GLOB test_others_src "src/Others/*")
 file(GLOB test_valueadded_src "src/ValueAdded/*")
 add_executable(${PROJECT_NAME} src/Utils.cc ${test_bucket_src} ${test_others_src} ${test_object_src} ${test_valueadded_src})
 
-set_target_properties(${PROJECT_NAME} PROPERTIES CXX_STANDARD 11)
 #target_include_directories(${PROJECT_NAME} PRIVATE gtest/include)
 target_include_directories(${PROJECT_NAME}
         PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include
