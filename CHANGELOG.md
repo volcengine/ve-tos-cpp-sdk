@@ -1,5 +1,10 @@
 ## Release Note
 
+### 2023.11.21 Version 2.6.4
+
+- 修复：windows 指定 unicode 时编码问题
+-
+
 ### 2023.10.30 Version 2.6.3
 
 - 修复：query 未进行 uri 编码的问题
