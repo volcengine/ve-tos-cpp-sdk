@@ -217,8 +217,9 @@ HttpClient::HttpClient(const HttpConfig& config) {
     proxyUsername_ = config.proxyUsername;
     proxyPassword_ = config.proxyPassword;
     dnsCacheTime_ = config.dnsCacheTime;
-   caPath_ = config.caPath;
-   caFile_ = config.caFile;
+    caPath_ = config.caPath;
+    caFile_ = config.caFile;
+    highLatencyLogThreshold_ = config.highLatencyLogThreshold;
 }
 void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
     std::lock_guard<std::mutex> lock(mu_);
@@ -359,48 +360,61 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         response->setCurlErrCode(res);
     } else {
         response->setStatus(http::Success);
+    }
 
-#ifdef CURL_VERSION_7610
+    double nameLookUp = 0;
+    double connectTime = 0;
+    double tlsConnect = 0;
+    double startTrans = 0;
+    double totalTime = 0;
+    double speed = 0;
+    bool isHighLatencyReq = false;
+    curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
+    curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
+    curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
+    curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
+    curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
+    if (request->method() == http::MethodPut || request->method() == http::MethodPost) {
+        curl_easy_getinfo(curl, CURLINFO_SPEED_UPLOAD, &speed);
+    } else if (request->method() == http::MethodGet) {
+        curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD, &speed);
+    }
+
+    if (request->isCheckHighLatency() && speed * 1024 < highLatencyLogThreshold_ && totalTime * 1000 > 500) {
+        isHighLatencyReq = true;
+        response->setIsHighLatencyReq(isHighLatencyReq);
+    }
+    auto logger = LogUtils::GetLogger();
+
+    if (logger != nullptr) {
         auto logger = LogUtils::GetLogger();
-        if (logger != nullptr) {
-            long nameLookUp = 0;
-            long connectTime = 0;
-            long tlsConnect = 0;
-            long startTrans = 0;
-            long totalTime = 0;
-            curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME_T, &nameLookUp);
-            curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME_T, &connectTime);
-            curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME_T, &tlsConnect);
-            curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME_T, &startTrans);
-            curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME_T, &totalTime);
-            logger->debug(
+        if (isHighLatencyReq) {
+            logger->warn(
                     "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
-                    request->method(), request->url().host(), request->url().path(), nameLookUp / 1000,
-                    connectTime / 1000, tlsConnect / 1000, startTrans / 1000, (totalTime - startTrans) / 1000,
-                    totalTime / 1000);
-        }
-#else
-        auto logger = LogUtils::GetLogger();
-        if (logger != nullptr) {
-            double nameLookUp = 0;
-            double connectTime = 0;
-            double tlsConnect = 0;
-            double startTrans = 0;
-            double totalTime = 0;
-            curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
-            curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
-            curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
-            curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
-            curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
-            auto logger = LogUtils::GetLogger();
+                    request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
+                    (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
+                    (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
+        } else {
             logger->debug(
                     "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
                     request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
                     (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
                     (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
         }
-#endif
+    } else if (isHighLatencyReq) {
+        std::ostringstream ss;
+        ss << "Method:" << request->method() << ", ";
+        ss << "Host:" << request->url().host() << ", ";
+        ss << "request uri:" << request->url().path() << ", ";
+        ss << "DNS resolution time:" << (long)(nameLookUp * 1000) << " ms, ";
+        ss << "TCP establish connection time:" << (long)(connectTime * 1000) << " ms, ";
+        ss << "TLS handshake time:" << (long)(tlsConnect * 1000) << " ms, ";
+        ss << "start transfer time:" << (long)(startTrans * 1000) << " ms, ";
+        ss << "Data sending time:" << (long)((totalTime - startTrans) * 1000) << " ms, ";
+        ss << "Total HTTP request time:" << (long)(totalTime * 1000) << " ms";
+        std::cout << ss.str() << std::endl;
     }
+
     if (res != CURLE_OK && dnsCacheTime_ > 0) {
         removeDNS(curl, request);
     }

@@ -20,6 +20,8 @@ public:
             ss << "message=" << message_ << ", ";
             ss << "requestID=" << requestID_ << ", ";
             ss << "hostID=" << hostID_ << "}";
+            ss << "EC=" << EC_ << "}";
+            ss << "requestUrl=" << requestUrl_ << "}";
         }
         return ss.str();
     }
@@ -72,6 +74,18 @@ public:
     void setCurlErrCode(int curlErrCode) {
         curlErrCode_ = curlErrCode;
     }
+    const std::string& getRequestUrl() const {
+        return requestUrl_;
+    }
+    void setRequestUrl(const std::string& requestUrl) {
+        requestUrl_ = requestUrl;
+    }
+    const std::string& getEc() const {
+        return EC_;
+    }
+    void setEc(const std::string& ec) {
+        EC_ = ec;
+    }
 
 private:
     bool isClientError_ = false;
@@ -83,6 +97,8 @@ private:
     std::string resource_;
     RequestInfo requestInfo_;
     int curlErrCode_ = 0;
+    std::string requestUrl_;
+    std::string EC_;
 };
 
 }  // namespace VolcengineTos

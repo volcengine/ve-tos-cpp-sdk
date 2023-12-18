@@ -103,6 +103,12 @@ public:
     void setPreHashCrc64Ecma(uint64_t prehashcrc64ecma) {
         preHashCrc64ecma_ = prehashcrc64ecma;
     }
+    bool isCheckHighLatency() const {
+        return checkHighLatency_;
+    }
+    void setCheckHighLatency(bool checkHighLatency) {
+        checkHighLatency_ = checkHighLatency;
+    }
 
 private:
     std::string method_;
@@ -116,5 +122,6 @@ private:
     std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;
     bool checkCrc64 = false;
     uint64_t preHashCrc64ecma_ = 0;
+    bool checkHighLatency_ = false;
 };
 }  // namespace VolcengineTos

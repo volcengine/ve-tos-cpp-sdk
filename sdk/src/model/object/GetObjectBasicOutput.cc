@@ -28,7 +28,7 @@ void VolcengineTos::GetObjectBasicOutput::fromResponse(TosResponse& res) {
     objectType_ = res.findHeader(HEADER_OBJECT_TYPE);
     auto hashCrc64ecmaString_ = res.findHeader(HEADER_CRC64);
     if (!hashCrc64ecmaString_.empty()) {
-        hashCrc64ecma_ = stoull(res.findHeader(HEADER_CRC64));
+        hashCrc64ecma_ = stoull(hashCrc64ecmaString_);
     }
     storageClass_ = StringtoStorageClassType[res.findHeader(HEADER_STORAGE_CLASS)];
 

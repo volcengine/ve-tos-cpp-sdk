@@ -113,6 +113,7 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     conf.setSocketTimeout(config.socketTimeout);
     conf.setCaFile(config.caFile);
     conf.setCaPath(config.caPath);
+    conf.setHighLatencyLogThreshold(config.highLatencyLogThreshold);
 
     transport_ = std::make_shared<DefaultTransport>(conf);
 
@@ -6808,6 +6809,15 @@ bool findInCanRetryMethods(const std::string& method) {
     return false;
 }
 
+std::set<std::string> HighLatencyLogMethods = {"putObject", "getObject", "appendObject", "uploadPart"};
+bool findInHighLatencyLogMethods(const std::string& method) {
+    auto pos = HighLatencyLogMethods.find(method);
+    if (pos != HighLatencyLogMethods.end()) {
+        return true;
+    }
+    return false;
+}
+
 bool findInCanRetryCurlErr(int curlErrCode) {
     switch (curlErrCode) {
         case (7):   // CURLE_COULDNT_CONNECT
@@ -6860,6 +6870,31 @@ bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
     }
     return false;
 }
+
+bool TosClientImpl::checkExpectedCode(int statusCode, std::vector<int> expectedCode) {
+    return std::find(expectedCode.begin(), expectedCode.end(), statusCode) != expectedCode.end();
+}
+
+bool TosClientImpl::checkExpectedCode(int statusCode, int expectedCode) {
+    return statusCode == expectedCode;
+}
+
+void logErrRes(int statusCode, std::string code, bool isHighLatencyReq, const std::shared_ptr<spdlog::logger>& logger) {
+    if (logger != nullptr) {
+        if (isHighLatencyReq) {
+            logger->warn("http status code:{}, http error:{}", statusCode, code);
+        } else {
+            logger->info("http status code:{}, http error:{}", statusCode, code);
+        }
+    } else if (isHighLatencyReq) {
+        std::ostringstream ss;
+        ss << "http status code:" << statusCode << ", ";
+        ss << "http error:" << code << ", ";
+        std::cout << ss.str() << std::endl;
+    }
+    return;
+}
+
 Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const std::shared_ptr<TosRequest>& request,
                                                                          int expectedCode) {
     Outcome<TosError, std::shared_ptr<TosResponse>> ret;
@@ -6877,27 +6912,56 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         ret.setE(se);
         return ret;
     }
+    if (findInHighLatencyLogMethods(request->getFuncName())) {
+        request->setCheckHighLatency(true);
+    }
+
     auto logger = LogUtils::GetLogger();
     auto rateLimiter = request->getRataLimiter();
-    auto maxRetry = config_.getMaxRetryCount() < 0 ? 1 : config_.getMaxRetryCount();
+    auto maxRetry = config_.getMaxRetryCount() < 0 ? 0 : config_.getMaxRetryCount();
+    long retrySleepTime = 0;
     for (int retry = 0;; retry++) {
         if (retry != 0) {
-            TimeUtils::sleepMilliSecondTimes(config_.getRetrySleepScale() * (1 << retry));
+            TimeUtils::sleepMilliSecondTimes(retrySleepTime);
         }
         auto startTime = std::chrono::high_resolution_clock::now();
         // 实际进行一次请求
         auto resp = transport_->roundTrip(request);
         auto endTime = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
-        if (resp->getStatusCode() == expectedCode) {
+        bool isHighLatencyReq = resp->isHighLatency();
+        if (checkExpectedCode(resp->getStatusCode(), expectedCode)) {
             if (logger != nullptr) {
-                logger->info("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
-                             resp->getRequestID(), fp_ms.count());
+                auto logger = LogUtils::GetLogger();
+                if (isHighLatencyReq) {
+                    logger->warn("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
+                                 resp->getRequestID(), fp_ms.count());
+                } else {
+                    logger->info("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
+                                 resp->getRequestID(), fp_ms.count());
+                }
+            } else if (isHighLatencyReq) {
+                std::ostringstream ss;
+                ss << "Response StatusCode:" << resp->getStatusCode() << ", ";
+                ss << "RequestId:" << resp->getRequestID() << ", ";
+                ss << "Cost:" << fp_ms.count() << " ms";
+                std::cout << ss.str() << std::endl;
             }
+
             ret.setR(resp);
             ret.setSuccess(true);
             return ret;
         } else if (checkShouldRetry(request, resp) && retry < maxRetry) {
+            std::string retryInfo = "attempt=" + std::to_string(retry + 1) + "; max=" + std::to_string(maxRetry);
+            request->setSingleHeader(http::HEADER_SDK_RETRY_COUNT, retryInfo);
+            retrySleepTime = config_.getRetrySleepScale() * (1 << retry);
+            if ((resp->getStatusCode() == 429) || (resp->getStatusCode() == 503)) {
+                std::string retryAfter = resp->findHeader(http::HEADER_Retry_After);
+                if (!retryAfter.empty()) {
+                    long retryAfterTime = stol(retryAfter) * 1000;
+                    retrySleepTime = retryAfterTime > retrySleepTime ? retryAfterTime : retrySleepTime;
+                }
+            }
             if (logger != nullptr) {
                 logger->info("http status code:{}, http error:{}, func name:{}, will retry once", resp->getStatusCode(),
                              resp->getStatusMsg(), request->getFuncName());
@@ -6907,15 +6971,15 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             // check error
             ret.setSuccess(false);
             TosError se;
+            std::string requestUrl = request->toUrl().toString();
+            se.setRequestUrl(requestUrl);
             if (resp->getStatusMsg() == "operation timeout") {
                 se.setIsClientError(true);
                 se.setMessage("http request timeout");
                 se.setCode("operation timeout");
                 se.setCurlErrCode(resp->getCurlErrCode());
                 ret.setE(se);
-                if (logger != nullptr) {
-                    logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-                }
+                logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                 return ret;
             }
             if (resp->getStatusCode() >= 300 ||
@@ -6935,9 +6999,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     }
                     se.setStatusCode(resp->getStatusCode());
                     ret.setE(se);
-                    if (logger != nullptr) {
-                        logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-                    }
+                    logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                     return ret;
                 }
                 // 特别处理 404
@@ -6946,9 +7008,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     se.setStatusCode(resp->getStatusCode());
                     se.setRequestId(resp->getRequestID());
                     ret.setE(se);
-                    if (logger != nullptr) {
-                        logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-                    }
+                    logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                     return ret;
                 }
             }
@@ -6961,9 +7021,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             se.setMessage(resp->getStatusMsg());
             se.setRequestId(resp->getRequestID());
             ret.setE(se);
-            if (logger != nullptr) {
-                logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-            }
+            logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
             return ret;
         }
     }
@@ -6986,27 +7044,56 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         ret.setE(se);
         return ret;
     }
+    if (findInHighLatencyLogMethods(request->getFuncName())) {
+        request->setCheckHighLatency(true);
+    }
+
     auto logger = LogUtils::GetLogger();
     auto rateLimiter = request->getRataLimiter();
-    auto maxRetry = config_.getMaxRetryCount() < 0 ? 1 : config_.getMaxRetryCount();
+    auto maxRetry = config_.getMaxRetryCount() < 0 ? 0 : config_.getMaxRetryCount();
+    long retrySleepTime = 0;
     for (int retry = 0;; retry++) {
         if (retry != 0) {
-            TimeUtils::sleepMilliSecondTimes(config_.getRetrySleepScale() * (1 << retry));
+            TimeUtils::sleepMilliSecondTimes(retrySleepTime);
         }
         auto startTime = std::chrono::high_resolution_clock::now();
         // 实际进行一次请求
         auto resp = transport_->roundTrip(request);
         auto endTime = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double, std::milli> fp_ms = endTime - startTime;
-        if (std::find(expectedCode.begin(), expectedCode.end(), resp->getStatusCode()) != expectedCode.end()) {
+        bool isHighLatencyReq = resp->isHighLatency();
+        if (checkExpectedCode(resp->getStatusCode(), expectedCode)) {
             if (logger != nullptr) {
-                logger->info("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
-                             resp->getRequestID(), fp_ms.count());
+                auto logger = LogUtils::GetLogger();
+                if (isHighLatencyReq) {
+                    logger->warn("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
+                                 resp->getRequestID(), fp_ms.count());
+                } else {
+                    logger->info("Response StatusCode:{}, RequestId:{}, Cost:{} ms", resp->getStatusCode(),
+                                 resp->getRequestID(), fp_ms.count());
+                }
+            } else if (isHighLatencyReq) {
+                std::ostringstream ss;
+                ss << "Response StatusCode:" << resp->getStatusCode() << ", ";
+                ss << "RequestId:" << resp->getRequestID() << ", ";
+                ss << "Cost:" << fp_ms.count() << " ms";
+                std::cout << ss.str() << std::endl;
             }
+
             ret.setR(resp);
             ret.setSuccess(true);
             return ret;
         } else if (checkShouldRetry(request, resp) && retry < maxRetry) {
+            std::string retryInfo = "attempt=" + std::to_string(retry + 1) + "; max=" + std::to_string(maxRetry);
+            request->setSingleHeader(http::HEADER_SDK_RETRY_COUNT, retryInfo);
+            retrySleepTime = config_.getRetrySleepScale() * (1 << retry);
+            if ((resp->getStatusCode() == 429) || (resp->getStatusCode() == 503)) {
+                std::string retryAfter = resp->findHeader(http::HEADER_Retry_After);
+                if (!retryAfter.empty()) {
+                    long retryAfterTime = stol(retryAfter) * 1000;
+                    retrySleepTime = retryAfterTime > retrySleepTime ? retryAfterTime : retrySleepTime;
+                }
+            }
             if (logger != nullptr) {
                 logger->info("http status code:{}, http error:{}, func name:{}, will retry once", resp->getStatusCode(),
                              resp->getStatusMsg(), request->getFuncName());
@@ -7016,15 +7103,15 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             // check error
             ret.setSuccess(false);
             TosError se;
+            std::string requestUrl = request->toUrl().toString();
+            se.setRequestUrl(requestUrl);
             if (resp->getStatusMsg() == "operation timeout") {
                 se.setIsClientError(true);
                 se.setMessage("http request timeout");
                 se.setCode("operation timeout");
                 se.setCurlErrCode(resp->getCurlErrCode());
                 ret.setE(se);
-                if (logger != nullptr) {
-                    logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-                }
+                logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                 return ret;
             }
             if (resp->getStatusCode() >= 300 ||
@@ -7044,9 +7131,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     }
                     se.setStatusCode(resp->getStatusCode());
                     ret.setE(se);
-                    if (logger != nullptr) {
-                        logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-                    }
+                    logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                     return ret;
                 }
                 // 特别处理 404
@@ -7055,9 +7140,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     se.setStatusCode(resp->getStatusCode());
                     se.setRequestId(resp->getRequestID());
                     ret.setE(se);
-                    if (logger != nullptr) {
-                        logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-                    }
+                    logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                     return ret;
                 }
             }
@@ -7070,9 +7153,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             se.setMessage(resp->getStatusMsg());
             se.setRequestId(resp->getRequestID());
             ret.setE(se);
-            if (logger != nullptr) {
-                logger->info("http status code:{}, http error:{}", resp->getStatusCode(), se.getCode());
-            }
+            logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
             return ret;
         }
     }
@@ -7093,8 +7174,10 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
     auto schemeHostParameter = initSchemeAndHost(alternativeEndpoint);
     std::string alternativeEndpoint_ = schemeHostParameter.host_;
     std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
-    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries,
-                             config_.isCustomDomain());
+    std::string scheme = alternativeEndpoint_.empty() ? scheme_ : schemeHostParameter.scheme_;
+    int urlMode = alternativeEndpoint_.empty() ? urlMode_ : schemeHostParameter.urlMode_;
+    auto rb =
+            RequestBuilder(signer_, scheme, host, bucket, object, urlMode, headers, queries, config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     return rb;
 }

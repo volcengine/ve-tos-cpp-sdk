@@ -1,9 +1,16 @@
 ## Release Note
 
+### 2023.11.28 Version 2.6.5
+
+- 新增：初始化的 Region 新增柔佛 ap-southeast-1
+- 新增：支持配置打印高延迟日志
+- 新增：异常信息中新增 EC 详细错误码
+- 改变：重试策略适配服务端 Retry-After 机制
+- 修复：预签名 URL 使用 AlternativeEndpoint 参数和预期行为不一致的问题
+
 ### 2023.11.21 Version 2.6.4
 
 - 修复：windows 指定 unicode 时编码问题
--
 
 ### 2023.10.30 Version 2.6.3
 

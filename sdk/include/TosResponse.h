@@ -68,6 +68,12 @@ public:
     void setCurlErrCode(int curlErrCode) {
         curlErrCode_ = curlErrCode;
     }
+    bool isHighLatency() const {
+        return isHighLatency_;
+    }
+    void setIsHighLatency(bool isHighLatency) {
+        isHighLatency_ = isHighLatency;
+    }
 
 private:
     int statusCode_{};
@@ -78,5 +84,6 @@ private:
     std::string Id2_;
     uint64_t hashCrc64Result_ = 0;
     int curlErrCode_ = 0;
+    bool isHighLatency_ = false;
 };
 }  // namespace VolcengineTos

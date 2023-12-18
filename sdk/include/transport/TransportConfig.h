@@ -125,6 +125,12 @@ public:
     void setCaFile(const std::string& caFile) {
         caFile_ = caFile;
     }
+    int getHighLatencyLogThreshold() const {
+        return highLatencyLogThreshold_;
+    }
+    void setHighLatencyLogThreshold(int highLatencyLogThreshold) {
+        highLatencyLogThreshold_ = highLatencyLogThreshold;
+    }
 
 private:
     int maxIdleCount_ = 128;
@@ -147,5 +153,6 @@ private:
     int socketTimeout_ = 30000;
     std::string caPath_;
     std::string caFile_;
+    int highLatencyLogThreshold_ = 100;
 };
 }  // namespace VolcengineTos

@@ -15,4 +15,6 @@ void TosError::fromJsonString(const std::string& error) {
         j.at("RequestId").get_to(requestID_);
     if (j.contains("HostId"))
         j.at("HostId").get_to(hostID_);
+    if (j.contains("EC"))
+        j.at("EC").get_to(EC_);
 }

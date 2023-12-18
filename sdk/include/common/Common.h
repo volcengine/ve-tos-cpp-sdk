@@ -40,7 +40,8 @@ static const char* HEADER_IF_NONE_MATCH = "If-None-Match";
 static const char* HEADER_RANGE = "Range";
 static const char* HEADER_CONTENT_RANGE = "Content-Range";
 static const char* HEADER_LOCATION = "Location";
-
+static const char* HEADER_SDK_RETRY_COUNT = "X-Sdk-Retry-Count";
+static const char* HEADER_Retry_After = "Retry-After";
 }  // namespace http
 
 /**

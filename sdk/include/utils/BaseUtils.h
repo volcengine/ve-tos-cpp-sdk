@@ -107,7 +107,8 @@ public:
 
 static std::set<std::string> s3Endpoint{"tos-s3-cn-beijing.volces.com",    "tos-s3-cn-guangzhou.volces.com",
                                         "tos-s3-cn-shanghai.volces.com",   "tos-s3-cn-beijing.ivolces.com",
-                                        "tos-s3-cn-guangzhou.ivolces.com", "tos-s3-cn-shanghai.ivolces.com"};
+                                        "tos-s3-cn-guangzhou.ivolces.com",   "tos-s3-cn-shanghai.ivolces.com",
+                                        "tos-s3-ap-southeast-1.ivolces.com", "tos-s3-ap-southeast-1.volces.com"};
 class NetUtils {
 public:
     static bool isNotIP(std::string ip) {

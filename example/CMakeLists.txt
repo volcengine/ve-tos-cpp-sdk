@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.6.4
+        VERSION 2.6.5
         LANGUAGES CXX)
 
 add_executable(${PROJECT_NAME} example.cc)
