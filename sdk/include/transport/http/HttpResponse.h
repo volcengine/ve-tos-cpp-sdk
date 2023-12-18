@@ -86,6 +86,12 @@ public:
     void setCurlErrCode(int curlErrCode) {
         curlErrCode_ = curlErrCode;
     }
+    bool isHighLatencyReq() const {
+        return isHighLatencyReq_;
+    }
+    void setIsHighLatencyReq(bool isHighLatencyReq) {
+        isHighLatencyReq_ = isHighLatencyReq;
+    }
 
 private:
     int status_;  // succ, refused, otherErr
@@ -97,5 +103,6 @@ private:
     size_t bodySize_;
     uint64_t hashCrc64Result_ = 0;
     int curlErrCode_ = 0;
+    bool isHighLatencyReq_ = false;
 };
 }  // namespace VolcengineTos

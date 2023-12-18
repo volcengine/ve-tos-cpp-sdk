@@ -399,6 +399,9 @@ private:
                                                               int expectedCode);
     Outcome<TosError, std::shared_ptr<TosResponse>> roundTrip(const std::shared_ptr<TosRequest>& request,
                                                               std::vector<int> expectedCode);
+    static bool checkExpectedCode(int statusCode, int expectedCode);
+    static bool checkExpectedCode(int statusCode, std::vector<int> expectedCode);
+
     RequestBuilder newBuilder(const std::string& bucket, const std::string& object);
     RequestBuilder newBuilder(const std::string& bucket, const std::string& object,
                               const RequestOptionBuilder& builder);
@@ -418,7 +421,8 @@ private:
 
     std::map<std::string, std::string> supportedRegion_ = {{"cn-beijing", "https://tos-cn-beijing.volces.com"},
                                                            {"cn-guangzhou", "https://tos-cn-guangzhou.volces.com"},
-                                                           {"cn-shanghai", "https://tos-cn-shanghai.volces.com"}};
+                                                           {"cn-shanghai", "https://tos-cn-shanghai.volces.com"},
+                                                           {"ap-southeast-1", "https://tos-ap-southeast-1.volces.com"}};
     void getObject(RequestBuilder& rb, Outcome<TosError, GetObjectOutput>& res);
     void headObject(RequestBuilder& rb, Outcome<TosError, HeadObjectOutput>& res);
     void deleteObject(RequestBuilder& rb, Outcome<TosError, DeleteObjectOutput>& res);

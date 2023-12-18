@@ -17,6 +17,7 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.dnsCacheTime = config.getDnsCacheTime();
     conf.caPath = config.getCaPath();
     conf.caFile = config.getCaFile();
+    conf.highLatencyLogThreshold = config.getHighLatencyLogThreshold();
 
     client_ = std::make_shared<HttpClient>(conf);
 }
@@ -37,6 +38,7 @@ std::shared_ptr<TosResponse> DefaultTransport::roundTrip(const std::shared_ptr<T
     httpReq->setRateLimiter(request->getRataLimiter());
     httpReq->setCheckCrc64(request->isCheckCrc64());
     httpReq->setPreHashCrc64Ecma(request->getPreHashCrc64Ecma());
+    httpReq->setCheckHighLatency(request->isCheckHighLatency());
     auto httpResp = client_->doRequest(httpReq);
     auto res = std::make_shared<TosResponse>(httpResp->Body());
     res->setStatusCode(httpResp->statusCode());
@@ -44,6 +46,7 @@ std::shared_ptr<TosResponse> DefaultTransport::roundTrip(const std::shared_ptr<T
     res->setHeaders(httpResp->Headers());
     res->setHashCrc64Result(httpResp->getHashCrc64Result());
     res->setCurlErrCode(httpResp->getCurlErrCode());
+    res->setIsHighLatency(httpResp->isHighLatencyReq());
     std::string cl(httpResp->getHeaderValueByKey(http::HEADER_CONTENT_LENGTH));
     if (cl.empty()) {
         res->setContentLength(0);

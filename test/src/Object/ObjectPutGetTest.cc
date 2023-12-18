@@ -224,6 +224,22 @@ TEST_F(ObjectPutGetTest, PutObjectToNoExistingBucketTest) {
     EXPECT_EQ(output_obj_put.isSuccess(), false);
     EXPECT_EQ(output_obj_put.error().getStatusCode(), 404);
     EXPECT_EQ(output_obj_put.error().getMessage() == "The specified bucket does not exist.", true);
+    EXPECT_EQ(output_obj_put.error().getEc(), "0006-00000001");
+    auto endPoint = TestConfig::HTTPsEndpoint;
+    std::string host, schme;
+    if (StringUtils::startsWithIgnoreCase(endPoint, http::SchemeHTTPS)) {
+        host = endPoint.substr(std::strlen(http::SchemeHTTPS) + 3,
+                               endPoint.length() - std::strlen(http::SchemeHTTPS) - 3);
+        schme = "https://";
+    } else if (StringUtils::startsWithIgnoreCase(endPoint, http::SchemeHTTP)) {
+        host = endPoint.substr(std::strlen(http::SchemeHTTP) + 3,
+                               endPoint.length() - std::strlen(http::SchemeHTTP) - 3);
+        schme = "http://";
+    } else {
+        host = endPoint;
+        schme = "https://";
+    }
+    EXPECT_EQ(output_obj_put.error().getRequestUrl(), schme + bkt_name_ + "." + host + "/" + obj_key);
 }
 
 TEST_F(ObjectPutGetTest, GetObjectWithNoExistingNameTest) {

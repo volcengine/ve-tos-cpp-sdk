@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.6.4
+        VERSION 2.6.5
         LANGUAGES CXX)
 
 # project settings
@@ -62,15 +62,9 @@ else ()
     set(CLIENT_SSL_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
 
     message(STATUS "Looking for CURL")
-    find_package(CURL 7.61.0)
-    if (CURL_FOUND)
-        add_definitions(-DCURL_VERSION_7610)
-    else ()
-        message(STATUS "We will try to find an older version of CURL")
-        find_package(CURL)
-        if (NOT CURL_FOUND)
-            message(FATAL_ERROR "Could not find curl")
-        endif ()
+    find_package(CURL)
+    if (NOT CURL_FOUND)
+        message(FATAL_ERROR "Could not find curl")
     endif ()
     message(STATUS "CURL version: ${CURL_VERSION_STRING}")
     message(STATUS "CURL include: ${CURL_INCLUDE_DIRS}")

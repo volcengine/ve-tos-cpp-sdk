@@ -29,6 +29,7 @@ struct HttpConfig {
     int dnsCacheTime;
     std::string caPath;
     std::string caFile;
+    int highLatencyLogThreshold;
 };
 
 template< typename RESOURCE_TYPE>
@@ -227,6 +228,7 @@ protected:
     int dnsCacheTime_ = 0;
     std::string caPath_;
     std::string caFile_;
+    int highLatencyLogThreshold_ = 100;
     std::mutex mu_;
     VolcengineTos::CurlContainer *curlContainer_;
 };

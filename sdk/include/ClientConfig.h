@@ -16,7 +16,8 @@ public:
               enableVerifySSL(true),
               dnsCacheTime(0),
               socketTimeout(30000),
-              maxConnections(25) {
+              maxConnections(25),
+              highLatencyLogThreshold(100) {
     }
     ~ClientConfig() = default;
 
@@ -37,6 +38,7 @@ public:
     bool isCustomDomain = false;
     std::string caPath;
     std::string caFile;
+    int highLatencyLogThreshold;
 
     // int MaxConnections;
     // int IdleConnectionTime;

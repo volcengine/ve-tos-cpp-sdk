@@ -93,16 +93,45 @@ TEST_F(PreSignedPostSignatureTest, PreSignedPostSignatureTest) {
 }
 
 TEST_F(PreSignedPostSignatureTest, PreSignedURLWithAlternativeEndpointTest) {
-    PreSignedURLInput input(HttpMethodType::Get, "", "111", 86400);
+    PreSignedURLInput input(HttpMethodType::Get, "", objectKey, 86400);
     input.setAlternativeEndpoint("www.baidu.com");
     auto output = cliV2->preSignedURL(input);
     EXPECT_EQ(output.isSuccess(), true);
+    EXPECT_NE(output.result().getSignUrl().find("https://www.baidu.com/" + objectKey), std::string::npos);
+
+    input.setAlternativeEndpoint("http://www.baidu.com");
+    output = cliV2->preSignedURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    EXPECT_NE(output.result().getSignUrl().find("http://www.baidu.com/" + objectKey), std::string::npos);
 }
+
+TEST_F(PreSignedPostSignatureTest, PreSignedURLWithCustEndpointTest) {
+    ClientConfig conf;
+    conf.endPoint = "custom.domain";
+    conf.isCustomDomain = true;
+    auto cli = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
+    PreSignedURLInput input(HttpMethodType::Get, bucketName, objectKey, 86400);
+    auto output = cli->preSignedURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    EXPECT_NE(output.result().getSignUrl().find("https://custom.domain/" + objectKey), std::string::npos);
+}
+
 TEST_F(PreSignedPostSignatureTest, PreSignedURLTest) {
     PreSignedURLInput input(HttpMethodType::Get, bucketName, objectKey, 86400);
     auto output = cliV2->preSignedURL(input);
     EXPECT_EQ(output.isSuccess(), true);
 }
+
+TEST_F(PreSignedPostSignatureTest, PreSignedURLWithPublicRegionTest) {
+    auto cli = std::make_shared<TosClientV2>("ap-southeast-1", TestConfig::Ak, TestConfig::Sk);
+    PreSignedURLInput input(HttpMethodType::Get, bucketName, objectKey, 86400);
+    auto output = cli->preSignedURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+    EXPECT_NE(output.result().getSignUrl().find("https://" + bucketName + ".tos-ap-southeast-1.volces.com" + "/" +
+                                                objectKey),
+              std::string::npos);
+}
+
 TEST_F(PreSignedPostSignatureTest, PreSignedPolicyURLTest) {
     auto condition1 = PolicySignatureCondition("key", "", "starts-with");
     std::vector<PolicySignatureCondition> conditions{condition1};

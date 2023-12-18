@@ -137,6 +137,12 @@ public:
     void setFileContent(const std::shared_ptr<std::iostream>& fileContent) {
         fileContent_ = fileContent;
     }
+    bool isCheckHighLatency() const {
+        return checkHighLatency_;
+    }
+    void setCheckHighLatency(bool checkHighLatency) {
+        checkHighLatency_ = checkHighLatency;
+    }
 
 private:
     std::string scheme_;
@@ -156,5 +162,6 @@ private:
     std::string funcName_;
     int64_t contentOffset_ = 0;
     uint64_t preHashCrc64ecma_ = 0;
+    bool checkHighLatency_ = false;
 };
 }  // namespace VolcengineTos
