@@ -191,12 +191,10 @@ private:
     std::mutex containerLock_;
 };
 
-
 class HttpClient {
 public:
-    HttpClient() {
-        curlContainer_ = new CurlContainer(25,12000,10000);
-    }
+    HttpClient();
+
     explicit HttpClient(const HttpConfig& config);
     virtual ~HttpClient() {
         if (curlContainer_ != nullptr) {
@@ -217,8 +215,8 @@ protected:
 protected:
     int requestTimeout_ = 0;
     int socketTimeout_ = 30000;
-    int dialTimeout_;
-    int tcpKeepAlive_;
+    int dialTimeout_{};
+    int tcpKeepAlive_{};
     int connectTimeout_ = 10000;
     bool enableVerifySSL_ = true;
     std::string proxyHost_;
@@ -230,6 +228,6 @@ protected:
     std::string caFile_;
     int highLatencyLogThreshold_ = 100;
     std::mutex mu_;
-    VolcengineTos::CurlContainer *curlContainer_;
+    VolcengineTos::CurlContainer* curlContainer_{};
 };
 }  // namespace VolcengineTos

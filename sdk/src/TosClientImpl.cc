@@ -2517,7 +2517,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                     {
                         std::lock_guard<std::mutex> lck(lock_);
                         std::fstream tempFile;
-                        tempFile.open(tempFilePath, std::ios_base::out | std::ios_base::app | std::ios_base::in | std::ios_base::binary);
+                        tempFile.open(tempFilePath, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
                         if (tempFile) {
                             auto currentPos = partSize_ * (part.getPartNum() - 1);
                             tempFile.seekp(currentPos, tempFile.beg);
@@ -2682,9 +2682,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     }
     auto checkObjectExists = this->headObject(headInput);
     if (!checkObjectExists.isSuccess()) {
-        error.setIsClientError(true);
-        error.setMessage(checkObjectExists.error().getMessage());
-        res.setE(error);
+        res.setE(checkObjectExists.error());
         res.setSuccess(false);
         return res;
     }
