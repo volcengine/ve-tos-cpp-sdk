@@ -205,6 +205,27 @@ void HttpClient::initGlobalState() {
 void HttpClient::cleanupGlobalState() {
 }
 
+pthread_mutex_t lock_;
+
+void acquire_lock(CURL* handle, curl_lock_data data, curl_lock_access access, void* userptr) {
+    pthread_mutex_lock(&lock_);
+}
+
+void release_lock(CURL* handle, curl_lock_data data, void* userptr) {
+    pthread_mutex_unlock(&lock_);
+}
+
+HttpClient::HttpClient() {
+    curlContainer_ = new CurlContainer(25, 12000, 10000);
+    if (dnsCacheTime_ > 0) {
+        share_handle = curl_share_init();
+        // 共享 DNS 信息，带锁
+        curl_share_setopt(share_handle, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
+        curl_share_setopt(share_handle, CURLSHOPT_LOCKFUNC, acquire_lock);
+        curl_share_setopt(share_handle, CURLSHOPT_UNLOCKFUNC, release_lock);
+    }
+}
+
 HttpClient::HttpClient(const HttpConfig& config) {
     curlContainer_ = new CurlContainer(config.maxConnections,config.socketTimeout,config.connectTimeout);
     tcpKeepAlive_ = config.tcpKeepAlive;
@@ -220,14 +241,16 @@ HttpClient::HttpClient(const HttpConfig& config) {
     caPath_ = config.caPath;
     caFile_ = config.caFile;
     highLatencyLogThreshold_ = config.highLatencyLogThreshold;
-}
-void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
-    std::lock_guard<std::mutex> lock(mu_);
-    if (!share_handle) {
+    if (dnsCacheTime_ > 0) {
         share_handle = curl_share_init();
         // 共享 DNS 信息，带锁
         curl_share_setopt(share_handle, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
+        curl_share_setopt(share_handle, CURLSHOPT_LOCKFUNC, acquire_lock);
+        curl_share_setopt(share_handle, CURLSHOPT_UNLOCKFUNC, release_lock);
     }
+}
+
+void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
     // 当前 curl handler 使用共享 handle 的数据
     curl_easy_setopt(curl_handle, CURLOPT_SHARE, share_handle);
     // 在内存中保存DNS信息的时间

@@ -1,5 +1,10 @@
 ## Release Note
 
+### 2023.3.11 Version 2.6.6
+
+- 修复：DownLoadFile 并发场景写入文件有误
+- 修复：DNS Cache 高并发场景可能导致 Core 的问题
+
 ### 2023.11.28 Version 2.6.5
 
 - 新增：初始化的 Region 新增柔佛 ap-southeast-1
