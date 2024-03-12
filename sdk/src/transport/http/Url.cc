@@ -160,10 +160,17 @@ std::string Url::queryToStringWithEncode() const {
     }
     std::string res;
     for (const auto& q : query_) {
-        res += SignV4::uriEncode(q.first, true);
-        res += "=";
-        res += SignV4::uriEncode(q.second, true);
-        res += "&";
+        if (q.first == "X-Tos-Credential") {
+            res += q.first;
+            res += "=";
+            res += q.second;
+            res += "&";
+        } else {
+            res += SignV4::uriEncode(q.first, true);
+            res += "=";
+            res += SignV4::uriEncode(q.second, true);
+            res += "&";
+        }
     }
     res = res.substr(0, res.size() - 1);
     return res;
