@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2023.3.12 Version 2.6.7
+
+- 修复：PreSignURL Query X-Tos-Credential 被重复编码问题
+
 ### 2023.3.11 Version 2.6.6
 
 - 修复：DownLoadFile 并发场景写入文件有误
