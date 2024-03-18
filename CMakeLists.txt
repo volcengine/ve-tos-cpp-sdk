@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.6.7
+        VERSION 2.6.8
         LANGUAGES CXX)
 
 # project settings

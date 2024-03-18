@@ -1,6 +1,7 @@
 #include "../src/external/json/json.hpp"
 
 #include "model/object/UploadFileCheckpointV2.h"
+#include "utils/BaseUtils.h"
 
 void VolcengineTos::UploadFileCheckpointV2::dump(std::string checkpointFilePath) {
     nlohmann::json j;
@@ -11,7 +12,7 @@ void VolcengineTos::UploadFileCheckpointV2::dump(std::string checkpointFilePath)
     j["SSECustomerAlgorithm"] = sseAlgorithm_;
     j["SSECustomerMD5"] = sseKeyMd5_;
     j["EncodingType"] = encodingType_;
-    j["FilePath"] = filePath_;
+    j["FilePath"] = FileUtils::stringToUTF8(filePath_);
     j["FileInfo"] = fileInfo_.dump();
     nlohmann::json jParts = nlohmann::json::array();
     for (auto& part : partsInfo_) {

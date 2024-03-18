@@ -19,8 +19,13 @@ public:
     const std::string& getRegion() const {
         return region_;
     }
-    void setRegion(const std::string& region) {
-        region_ = region;
+    void setRegion(const std::string& region, const std::string& endpoint) {
+        // 当 region 为空，但 endpoint 设置的情况，将 region 设置为默认值 unset，在不校验 region 的情况下可以算签名成功
+        if (region.empty() && !endpoint.empty()) {
+            region_ = "unset";
+        } else {
+            region_ = region;
+        }
     }
     const TransportConfig& getTransportConfig() const {
         return transportConfig_;

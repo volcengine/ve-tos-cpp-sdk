@@ -1,5 +1,6 @@
 #include "../src/external/json/json.hpp"
 #include "model/object/DownloadFileFileInfo.h"
+#include "utils/BaseUtils.h"
 
 void VolcengineTos::DownloadFileFileInfo::load(const std::string& info) {
     auto j = nlohmann::json::parse(info);
@@ -10,7 +11,7 @@ void VolcengineTos::DownloadFileFileInfo::load(const std::string& info) {
 }
 std::string VolcengineTos::DownloadFileFileInfo::dump() {
     nlohmann::json j;
-    j["FilePath"] = filePath_;
-    j["TempFilePath"] = tempFilePath_;
+    j["FilePath"] = FileUtils::stringToUTF8(filePath_);
+    j["TempFilePath"] = FileUtils::stringToUTF8(tempFilePath_);
     return j.dump();
 }

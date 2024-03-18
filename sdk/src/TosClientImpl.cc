@@ -60,7 +60,7 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region)
     transport_ = std::make_shared<DefaultTransport>(conf);
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
-    config_.setRegion(region);
+    config_.setRegion(region, endpoint);
     auto schemeHostParameter = initSchemeAndHost(endpoint);
     scheme_ = schemeHostParameter.scheme_;
     host_ = schemeHostParameter.host_;
@@ -120,7 +120,7 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     // 保存参数到 config_ 里
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
-    config_.setRegion(region);
+    config_.setRegion(region, endpoint);
     config_.setIsCustomDomain(config.isCustomDomain);
     // 涉及到 req/roundTrip 的参数放到这里
     config_.setEnableCrc(config.enableCRC);
@@ -2624,11 +2624,15 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
     // 由于插入时判定了位置，因此不需要重新排序
     auto partSorted = checkpoint.getPartsInfo();
     // 然后计算crc64
-    uint64_t localCRC64 = partSorted[0].getHashCrc64Ecma();
-    for (int i = 1; i < partSorted.size(); i++) {
-        uint64_t size = partSorted[i].getRangeEnd() - partSorted[i].getRangeStart() + 1;
-        localCRC64 = CRC64::CombineCRC(localCRC64, partSorted[i].getHashCrc64Ecma(), size);
+    uint64_t localCRC64 = 0;
+    if (!partSorted.empty()) {
+        localCRC64 = partSorted[0].getHashCrc64Ecma();
+        for (int i = 1; i < partSorted.size(); i++) {
+            uint64_t size = partSorted[i].getRangeEnd() - partSorted[i].getRangeStart() + 1;
+            localCRC64 = CRC64::CombineCRC(localCRC64, partSorted[i].getHashCrc64Ecma(), size);
+        }
     }
+
     // 校验不通过，需要删除临时文件
     // headCrc64 对于旧对象可能没有这个参数
     if (localCRC64 != headCrc64 && headCrc64 != 0) {
@@ -4465,7 +4469,7 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
     std::chrono::duration<int> ttl(expires_);
     auto query = signer_->signQuery(req, ttl);
     for (auto& iter : query) {
-        req->setSingleQuery(SignV4::uriEncode(iter.first, true), SignV4::uriEncode(iter.second, true));
+        req->setSingleQuery(iter.first, iter.second);
     }
 
     auto url = req->toUrl().toString();
@@ -5935,9 +5939,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
     }
     auto checkObjectExists = this->headObject(headInput);
     if (!checkObjectExists.isSuccess()) {
-        error.setIsClientError(true);
-        error.setMessage(checkObjectExists.error().getMessage());
-        res.setE(error);
+        res.setE(checkObjectExists.error());
         res.setSuccess(false);
         return res;
     }
@@ -7522,7 +7524,7 @@ void TosClientImpl::setRegionEndpoint(const std::string& region, const std::stri
 
 void TosClientImpl::initRegionEndpoint(const std::string& endpoint, const std::string& region) {
     config_.setEndpoint(endpoint);
-    config_.setRegion(region);
+    config_.setRegion(region, endpoint);
     auto schemeHostParameter = initSchemeAndHost(endpoint);
     scheme_ = schemeHostParameter.scheme_;
     host_ = schemeHostParameter.host_;

@@ -17,7 +17,6 @@ const wchar_t TOS_WPATH_DELIMITER = L'/';
 #include <sys/stat.h>
 #include <set>
 namespace VolcengineTos {
-
 static const char base64_url_alphabet[] = {
         'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
         'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
@@ -26,11 +25,9 @@ static const char base64_url[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', '
                                   'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f',
                                   'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
                                   'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_'};
-
 static const char* iso8601Layout = "%Y%m%dT%H%M%SZ";
 static const char* yyyyMMdd = "%Y%m%d";
 static const char* serverTimeFormat = "%Y-%m-%dT%H:%M:%SZ";
-
 class TimeUtils {
 public:
     static std::string transTimeToFormat(const std::time_t& t, const char* format);
@@ -44,13 +41,9 @@ public:
 class StringUtils {
 public:
     static bool startsWithIgnoreCase(const std::string& src_str, const std::string& prefix);
-
     static std::string toLower(const std::string& input);
-
     static std::string stringToHex(const unsigned char* input, int length);
-
     static std::string stringReplace(const std::string& input, const std::string& substr, const std::string& newstr);
-
     static bool isValidUTF8(const std::string& input);
 };
 class MapUtils {
@@ -70,7 +63,6 @@ public:
     static std::string base64Encode(const unsigned char* input, size_t inputLen);
     static std::string base64EncodeURL(const unsigned char* input, size_t inputLen);
 };
-
 class FileUtils {
 public:
     static std::string getWorkPath() {
@@ -81,13 +73,31 @@ public:
         currentPath += TOS_PATH_DELIMITER;
         return currentPath;
     }
+    static std::string stringToUTF8(const std::string& str) {
+#ifdef _WIN32
+        int nwLen = ::MultiByteToWideChar(CP_ACP, 0, str.c_str(), -1, NULL, 0);
+        wchar_t* pwBuf = new wchar_t[nwLen + 1];
+        ZeroMemory(pwBuf, nwLen * 2 + 2);
+        ::MultiByteToWideChar(CP_ACP, 0, str.c_str(), str.length(), pwBuf, nwLen);
+        int nLen = ::WideCharToMultiByte(CP_UTF8, 0, pwBuf, -1, NULL, NULL, NULL, NULL);
+        char* pBuf = new char[nLen + 1];
+        ZeroMemory(pBuf, nLen + 1);
+        ::WideCharToMultiByte(CP_UTF8, 0, pwBuf, nwLen, pBuf, nLen, NULL, NULL);
+        std::string retStr(pBuf);
+        delete[] pwBuf;
+        delete[] pBuf;
+        pwBuf = NULL;
+        pBuf = NULL;
+        return retStr;
+#else
+        return str;
+#endif
+    }
     static std::string getTempPath(){
 #ifdef _WIN32
 #ifdef UNICODE
         wchar_t pWCSStrKey[MAX_PATH];
-
         GetTempPath(MAX_PATH, pWCSStrKey);
-
         int pSize = WideCharToMultiByte(CP_OEMCP, 0, pWCSStrKey, wcslen(pWCSStrKey), NULL, 0, NULL, NULL);
         char* strTmpPath = new char[pSize + 1];
         WideCharToMultiByte(CP_OEMCP, 0, pWCSStrKey, wcslen(pWCSStrKey), strTmpPath, pSize, NULL, NULL);
@@ -104,7 +114,6 @@ public:
     }
     static bool CreateDir(const std::string& folder, bool endWithFileName);
 };
-
 static std::set<std::string> s3Endpoint{"tos-s3-cn-beijing.volces.com",    "tos-s3-cn-guangzhou.volces.com",
                                         "tos-s3-cn-shanghai.volces.com",   "tos-s3-cn-beijing.ivolces.com",
                                         "tos-s3-cn-guangzhou.ivolces.com",   "tos-s3-cn-shanghai.ivolces.com",
@@ -128,7 +137,6 @@ public:
         }
         return true;
     }
-
 private:
     static bool checkV4(std::string& s);
 };

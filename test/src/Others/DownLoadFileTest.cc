@@ -356,4 +356,95 @@ TEST_F(DownLoadFileTest, DownLoadFileWithTrafficLimitTest) {
     EXPECT_EQ(time2 > time1, true);
     remove(filePath.c_str());
 }
+
+TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithProcessZeroSizeTest) {
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "downloadFile4";
+    remove(filePath.c_str());
+    std::string objectName = "Test-DownloadFile";
+    //    std::fstream file;
+    //    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+    //    file.close();
+    auto ss = std::make_shared<std::stringstream>();
+    PutObjectV2Input input_obj_put(bucketName, objectName, ss);
+    std::shared_ptr<RateLimiter> RateLimiter(NewRateLimiter(1024 * 1024, 1 * 1024));
+    input_obj_put.setRateLimiter(RateLimiter);
+    auto putOutput = cliV2->putObject(input_obj_put);
+    DownloadFileInput input;
+    // 对象名和桶名
+    HeadObjectV2Input headInput(bucketName, objectName);
+    input.setHeadObjectV2Input(headInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(5);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(true);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 下载后文件的保存路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    // 设置进度条
+    DataTransferListener processHandler = {ProgressCallback, nullptr};
+    input.setDataTransferListener(processHandler);
+    // 设置 rateLimiter
+    input.setRateLimiter(RateLimiter);
+    // 设置 DownloadEvent
+    DownloadEventListener downloadHandler = {DownloadCallBack};
+    input.setDownloadEventListener(downloadHandler);
+    // 设置 cancelHook
+    std::shared_ptr<CancelHook> CancelHook(NewCancelHook());
+    input.setCancelHook(CancelHook);
+
+    auto output = cliV2->downloadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+
+    std::fstream file_;
+    file_.open(filePath, std::ios_base::in | std::ios_base::binary);
+    file_.seekg(0, file_.beg);
+    std::ostringstream ssFromFile;
+    ssFromFile << file_.rdbuf();
+    file_.close();
+    std::string data;
+    bool check_data = (data == ssFromFile.str());
+    EXPECT_EQ(check_data, true);
+    remove(filePath.c_str());
+}
+TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointTest) {
+    std::string filePath =
+            workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "中文downloadFile1";
+    remove(filePath.c_str());
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    //    std::fstream file;
+    //    file.open(filePath, std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+    //    file.close();
+    auto ss = std::make_shared<std::stringstream>();
+    for (int i = 0; i < (11 << 20); ++i) {
+        *ss << 1;
+    }
+    PutObjectV2Input input_obj_put(bucketName, objectName, ss);
+    auto putOutput = cliV2->putObject(input_obj_put);
+    DownloadFileInput input;
+    // 对象名和桶名
+    HeadObjectV2Input headInput(bucketName, objectName);
+    input.setHeadObjectV2Input(headInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(3);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(true);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 下载后文件的保存路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    auto output = cliV2->downloadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+
+    std::fstream file_;
+    file_.open(filePath, std::ios_base::in | std::ios_base::binary);
+    file_.seekg(0, file_.beg);
+    std::ostringstream ssFromFile;
+    ssFromFile << file_.rdbuf();
+    file_.close();
+    std::string data = std::string((11 << 20), '1');
+    bool check_data = (data == ssFromFile.str());
+    EXPECT_EQ(check_data, true);
+    remove(filePath.c_str());
+}
 }  // namespace VolcengineTos

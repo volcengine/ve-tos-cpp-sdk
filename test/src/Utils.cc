@@ -131,6 +131,9 @@ void TestUtils::CleanAllBucket(const std::shared_ptr<TosClientV2>& client) {
 std::string TestUtils::GetRandomString(int length) {
     std::string letterBytes = "abcdefghijklmnopqrstuvwxyz0123456789";
     std::stringstream ss;
+
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
     for (int i = 0; i < length; i++) {
         int j = rand() % 35;
         ss << letterBytes[j];

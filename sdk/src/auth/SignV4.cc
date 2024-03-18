@@ -15,6 +15,9 @@
 
 namespace VolcengineTos {
 SignV4::SignV4(const std::shared_ptr<Credentials>& credentials, std::string region) : region_(std::move(region)) {
+    if (region_.empty()) {
+        region_ = "unset";
+    }
     credentials_ = credentials;
 }
 std::string joinMapToString(const std::vector<std::pair<std::string, std::string>>& KVs) {
