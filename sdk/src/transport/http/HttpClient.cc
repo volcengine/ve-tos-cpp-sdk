@@ -205,15 +205,23 @@ void HttpClient::initGlobalState() {
 void HttpClient::cleanupGlobalState() {
 }
 
-pthread_mutex_t lock_;
-
+#ifdef _WIN32
+size_t acquire_lock(void* clientp, curl_lock_data data, curl_lock_access access, void* userp) {
+    auto tt = curlShareLock;
+    EnterCriticalSection(&curlShareLock);
+    return 0;
+}
+void release_lock(void* clientp, curl_lock_data data, void* userp) {
+    LeaveCriticalSection(&curlShareLock);
+}
+#else
 void acquire_lock(CURL* handle, curl_lock_data data, curl_lock_access access, void* userptr) {
-    pthread_mutex_lock(&lock_);
+    pthread_mutex_lock(&curlShareLock);
 }
-
 void release_lock(CURL* handle, curl_lock_data data, void* userptr) {
-    pthread_mutex_unlock(&lock_);
+    pthread_mutex_unlock(&curlShareLock);
 }
+#endif
 
 HttpClient::HttpClient() {
     curlContainer_ = new CurlContainer(25, 12000, 10000);
@@ -237,7 +245,11 @@ HttpClient::HttpClient(const HttpConfig& config) {
     proxyPort_ = config.proxyPort;
     proxyUsername_ = config.proxyUsername;
     proxyPassword_ = config.proxyPassword;
+#ifdef _WIN32
+    dnsCacheTime_ = 0;
+#else
     dnsCacheTime_ = config.dnsCacheTime;
+#endif
     caPath_ = config.caPath;
     caFile_ = config.caFile;
     highLatencyLogThreshold_ = config.highLatencyLogThreshold;
@@ -403,7 +415,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD, &speed);
     }
 
-    if (request->isCheckHighLatency() && speed * 1024 < highLatencyLogThreshold_ && totalTime * 1000 > 500) {
+    if (request->isCheckHighLatency() && speed < highLatencyLogThreshold_ * 1024 && totalTime * 1000 > 500) {
         isHighLatencyReq = true;
         response->setIsHighLatencyReq(isHighLatencyReq);
     }

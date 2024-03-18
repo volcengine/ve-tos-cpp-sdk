@@ -14,6 +14,11 @@
 
 namespace VolcengineTos {
 static bool hasInitHttpClient = false;
+#ifdef _WIN32
+static CRITICAL_SECTION curlShareLock;
+#else
+static pthread_mutex_t curlShareLock;
+#endif
 struct HttpConfig {
     int maxConnections;
     int socketTimeout;

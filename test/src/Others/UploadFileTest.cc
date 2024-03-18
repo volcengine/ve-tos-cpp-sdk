@@ -16,7 +16,8 @@ protected:
         ClientConfig conf;
         conf.endPoint = TestConfig::Endpoint;
         conf.enableCRC = true;
-        cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
+        conf.dnsCacheTime = 1;
+        cliV2 = std::make_shared<TosClientV2>("", TestConfig::Ak, TestConfig::Sk, conf);
         bucketName = TestUtils::GetBucketName(TestConfig::TestPrefix);
         TestUtils::CreateBucket(cliV2, bucketName);
         workPath = FileUtils::getWorkPath();
@@ -229,4 +230,51 @@ TEST_F(UploadFileTest, UploadFileWithTrafficLimitTest) {
     auto time2 = fp_ms.count() / 1000;
     EXPECT_EQ(time2 > time1, true);
 }
+
+TEST_F(UploadFileTest, UploadFileWithCheckpointNameTest) {
+    std::string filePath =
+            workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "./中文😊uploadFile1";
+
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    UploadFileV2Input input;
+    // 对象名和桶名
+    CreateMultipartUploadInput createMultiPartInput(bucketName, objectName);
+    input.setCreateMultipartUploadInput(createMultiPartInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(true);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 待上传文件的路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    auto output = cliV2->uploadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+
+    auto temp = TestUtils::GetObjectContentByStream(cliV2, bucketName, objectName);
+    std::string data = std::string((11 << 20), '1');
+    bool check_data = (data == temp);
+    EXPECT_EQ(check_data, true);
+}
+
+TEST_F(UploadFileTest, UploadFileWithEmptyObjTest) {
+    std::string filePath = workPath + "test" + TOS_PATH_DELIMITER + "testdata" + TOS_PATH_DELIMITER + "emptyFile.txt";
+
+    std::string objectName = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    UploadFileV2Input input;
+    // 对象名和桶名
+    CreateMultipartUploadInput createMultiPartInput(bucketName, objectName);
+    input.setCreateMultipartUploadInput(createMultiPartInput);
+    // 并发下载分片的线程数 1-1000
+    input.setTaskNum(1);
+    // 开启 checkpoint 会在本地生成断点续传记录文件
+    input.setEnableCheckpoint(false);
+    // 默认分片大小 20MB
+    input.setPartSize(5 * 1024 * 1024);
+    // 待上传文件的路径，不可为空，不可为文件夹，建议设置绝对路径
+    input.setFilePath(filePath);
+    auto output = cliV2->uploadFile(input);
+    EXPECT_EQ(output.isSuccess(), true);
+}
+
 }  // namespace VolcengineTos

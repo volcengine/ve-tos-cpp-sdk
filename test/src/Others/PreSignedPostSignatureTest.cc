@@ -2,6 +2,7 @@
 #include "../Utils.h"
 #include "TosClientV2.h"
 #include <gtest/gtest.h>
+#include <map>
 
 namespace VolcengineTos {
 class PreSignedPostSignatureTest : public ::testing::Test {
@@ -118,6 +119,14 @@ TEST_F(PreSignedPostSignatureTest, PreSignedURLWithCustEndpointTest) {
 
 TEST_F(PreSignedPostSignatureTest, PreSignedURLTest) {
     PreSignedURLInput input(HttpMethodType::Get, bucketName, objectKey, 86400);
+    auto output = cliV2->preSignedURL(input);
+    EXPECT_EQ(output.isSuccess(), true);
+}
+
+TEST_F(PreSignedPostSignatureTest, PreSignedURLWithEncodeTest) {
+    PreSignedURLInput input(HttpMethodType::Get, bucketName, objectKey, 86400);
+    std::map<std::string, std::string> meta{{"中文/中文", "no/yes"}};
+    input.setQuery(meta);
     auto output = cliV2->preSignedURL(input);
     EXPECT_EQ(output.isSuccess(), true);
 }

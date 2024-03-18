@@ -1,5 +1,12 @@
 ## Release Note
 
+### 2024.3.18 Version 2.6.8
+
+- 修复：高时延日志参数单位
+- 修复：DownLoadFile 为 0 场景可能 Core 的问题
+- 修复：Windows 场景中，大对象返回 ContentLength 可能导致 Core 的问题
+- 优化：初始化 Client，必选参数 Region 为空场景
+
 ### 2023.3.12 Version 2.6.7
 
 - 修复：PreSignURL Query X-Tos-Credential 被重复编码问题

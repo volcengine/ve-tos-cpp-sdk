@@ -138,13 +138,15 @@ TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithOrthogonalCaseClientV1Test)
 TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithErrorBucketNameLengthClientV1Test) {
     std::string error_message = "invalid bucket name, the length must be [3, 63]";
 
+    auto randomStr = TestUtils::GetRandomString(20);
+    std::string bkt_1 = "0123456789-0123456789-0123456789-01234567890-" + randomStr;
+
     CreateBucketInput input_v1;
-    std::string bkt_1 = "0123456789-0123456789-0123456789-01234567890-01234567890-01234567890";
     input_v1.setBucket(bkt_1);
     auto output_v1_1 = cliV2->createBucket(input_v1);
     EXPECT_EQ(output_v1_1.isSuccess(), false);
     EXPECT_EQ(output_v1_1.error().getMessage() == error_message, true);
-    std::string bkt_2 = "0123456789-0123456789-0123456789-0123456789-0123456789-01234567";
+    std::string bkt_2 = "0123456789-0123456789-0123456789-01234567" + randomStr;
     input_v1.setBucket(bkt_2);
     auto output_v1_2 = cliV2->createBucket(input_v1);
     EXPECT_EQ(output_v1_2.isSuccess(), true);
@@ -155,7 +157,7 @@ TEST_F(BucketCreateHeadClientV1Test, CreateBucketWithErrorBucketNameLengthClient
     EXPECT_EQ(output_v1_3.isSuccess(), false);
     EXPECT_EQ(output_v1_3.error().getMessage() == error_message, true);
 
-    std::string bkt_4 = "ttttt";
+    std::string bkt_4 = TestConfig::TestPrefix + "ttttt" + randomStr;
     input_v1.setBucket(bkt_4);
     auto output_v1_4 = cliV2->createBucket(input_v1);
     EXPECT_EQ(output_v1_4.isSuccess(), true);
