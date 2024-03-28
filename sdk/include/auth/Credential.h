@@ -1,5 +1,5 @@
 #pragma once
-
+#include <string>
 namespace VolcengineTos {
 class Credential {
 public:
@@ -10,7 +10,6 @@ public:
               accessKeySecret_(std::move(accessKeySecret)),
               securityToken_(std::move(securityToken)) {
     }
-
     const std::string& getAccessKeyId() const {
         return accessKeyId_;
     }

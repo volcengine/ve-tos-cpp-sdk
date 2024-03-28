@@ -86,6 +86,12 @@ public:
     void setEc(const std::string& ec) {
         EC_ = ec;
     }
+    const RequestInfo& getRequestInfo() const {
+        return requestInfo_;
+    }
+    void setRequestInfo(const RequestInfo& requestInfo) {
+        requestInfo_ = requestInfo;
+    }
 
 private:
     bool isClientError_ = false;

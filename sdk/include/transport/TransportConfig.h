@@ -134,7 +134,7 @@ public:
 
 private:
     int maxIdleCount_ = 128;
-    int requestTimeout_ = 120000;
+    int requestTimeout_ = 30000;
     int dialTimeout_ = 10;
     int keepAlive_ = 30;
     int connectTimeout_ = 10000;

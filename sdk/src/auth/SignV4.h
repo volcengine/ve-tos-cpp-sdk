@@ -7,6 +7,8 @@
 #include "auth/Signer.h"
 #include "auth/Credentials.h"
 #include "auth/StaticCredentials.h"
+#include "auth/EnvCredentials.h"
+#include "auth/EcsCredentials.h"
 
 namespace VolcengineTos {
 typedef std::time_t (*func)();

@@ -1,11 +1,7 @@
-#include <utility>
 #include <memory>
-#include <curl/curl.h>
 #include "TosClient.h"
 #include "TosClientImpl.h"
 #include "transport/http/HttpClient.h"
-#include "spdlog/spdlog.h"
-#include "utils/LogUtils.h"
 using namespace VolcengineTos;
 
 TosClient::TosClient(const std::string& endpoint, const std::string& region, const std::string& accessKeyId,
@@ -28,6 +24,15 @@ TosClient::TosClient(const std::string& endpoint, const std::string& region, con
         : tosClientImpl_(std::make_shared<TosClientImpl>(endpoint, region, cred, config)) {
 }
 TosClient::TosClient(const std::string& endpoint, const std::string& region, const FederationCredentials& cred,
+                     const ClientConfig& config)
+        : tosClientImpl_(std::make_shared<TosClientImpl>(endpoint, region, cred, config)) {
+}
+
+TosClient::TosClient(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred)
+        : tosClientImpl_(std::make_shared<TosClientImpl>(endpoint, region, cred)) {
+}
+
+TosClient::TosClient(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred,
                      const ClientConfig& config)
         : tosClientImpl_(std::make_shared<TosClientImpl>(endpoint, region, cred, config)) {
 }

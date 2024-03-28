@@ -35,6 +35,7 @@ public:
     static std::time_t transGMTFormatStringToTime(const std::string& t);
     static std::string transLastModifiedTimeToString(std::time_t& t);
     static std::time_t transLastModifiedStringToTime(const std::string& t);
+    static std::time_t transEcsExpiredTimeStringToTime(const std::string& t);
     static void sleepSecondTimes(long time);
     static void sleepMilliSecondTimes(long time);
 };

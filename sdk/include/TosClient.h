@@ -50,9 +50,11 @@
 #include "model/object/UploadFileInput.h"
 #include "auth/FederationCredentials.h"
 #include "ClientConfig.h"
+#include "auth/EnvCredentials.h"
+#include "auth/EcsCredentials.h"
 
 namespace VolcengineTos {
-static const char* TOS_SDK_VERSION = "v2.6.8";
+static const char* TOS_SDK_VERSION = "v2.6.9";
 #ifdef WIN32
 static const char* PLATFORM_NAME = "windows";
 #elif __linux__
@@ -95,6 +97,11 @@ public:
     TosClient(const std::string& endpoint, const std::string& region, const StaticCredentials& cred,
               const ClientConfig& config);
     TosClient(const std::string& endpoint, const std::string& region, const FederationCredentials& cred,
+              const ClientConfig& config);
+
+    TosClient(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred);
+
+    TosClient(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred,
               const ClientConfig& config);
 
     virtual ~TosClient();
