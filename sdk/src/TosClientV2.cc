@@ -1,10 +1,8 @@
-#include <utility>
 #include <memory>
 #include <curl/curl.h>
 #include "TosClientV2.h"
 #include "TosClientImpl.h"
 #include "transport/http/HttpClient.h"
-#include "utils/LogUtils.h"
 using namespace VolcengineTos;
 
 void VolcengineTos::InitializeClient() {
@@ -51,6 +49,15 @@ TosClientV2::TosClientV2(const std::string& region, const FederationCredentials&
           tosClientImpl_(std::make_shared<TosClientImpl>(config.endPoint, region, cred, config)) {
 }
 
+TosClientV2::TosClientV2(const std::string& region, const std::shared_ptr<Credentials>& cred)
+        : TosClient("", region, cred), tosClientImpl_(std::make_shared<TosClientImpl>("", region, cred)) {
+}
+TosClientV2::TosClientV2(const std::string& region, const std::shared_ptr<Credentials>& cred,
+                         const ClientConfig& config)
+        : TosClient(config.endPoint, region, cred, config),
+          tosClientImpl_(std::make_shared<TosClientImpl>(config.endPoint, region, cred, config)) {
+}
+
 Outcome<TosError, CreateBucketV2Output> TosClientV2::createBucket(const CreateBucketV2Input& input) const {
     return tosClientImpl_->createBucket(input);
 }
@@ -64,11 +71,7 @@ Outcome<TosError, DeleteBucketOutput> TosClientV2::deleteBucket(const DeleteBuck
 Outcome<TosError, GetObjectV2Output> TosClientV2::getObject(const GetObjectV2Input& input) const {
     return tosClientImpl_->getObject(input, nullptr, nullptr);
 }
-// Outcome<TosError, GetObjectV2Output> TosClientV2::getObject(const GetObjectV2Input& input,
-//                                                             std::shared_ptr<std::iostream> resContent,
-//                                                             std::shared_ptr<DataConsumeCallBack> callBack) const {
-//     return tosClientImpl_->getObject(input, nullptr, std::move(resContent));
-// }
+
 Outcome<TosError, GetObjectToFileOutput> TosClientV2::getObjectToFile(const GetObjectToFileInput& input) const {
     return tosClientImpl_->getObjectToFile(input);
 }

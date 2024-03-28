@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.8
+        VERSION 2.6.9
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -8,6 +8,9 @@ set(SDK_HEADER
         include/auth/Signer.h
         include/auth/SignKeyInfo.h
         include/auth/StaticCredentials.h
+        include/auth/EnvCredentials.h
+        include/auth/EcsCredentials.h
+        include/auth/EcsToken.h
         include/auth/FederationCredentials.h
         include/auth/FederationToken.h
         include/auth/FederationTokenProvider.h
@@ -252,12 +255,15 @@ set(SDK_LIB
         src/transport/Transport.cc
         src/transport/DefaultTransport.h
         src/transport/DefaultTransport.cc
+        src/transport/SimpleTransport.h
+        src/transport/SimpleTransport.cc
         src/utils/BaseUtils.cc
         src/utils/crc64.cc
         src/auth/SignV4.h
         src/auth/SignV4.cc
         src/auth/Signer.cc
         src/auth/FederationCredentials.cc
+        src/auth/EcsCredentials.cc
         src/external/json/json.hpp
         src/model/acl/ObjectAclRules.cc
         src/model/acl/GetObjectAclOutput.cc

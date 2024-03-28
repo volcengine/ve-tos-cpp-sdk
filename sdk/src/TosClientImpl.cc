@@ -25,7 +25,6 @@
 #include <sys/stat.h>
 #include <cstdio>
 #include <thread>
-#include <mutex>
 #include <queue>
 #include <openssl/sha.h>
 
@@ -43,6 +42,7 @@ TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& reg
     credentials_ = std::make_shared<FederationCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
+
 void TosClientImpl::initWithoutConfig(const std::string& endpoint, const std::string& region) {
     if (endpoint.empty()) {
         if (supportedRegion_.count(region) != 0) {
@@ -84,6 +84,21 @@ TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& reg
     credentials_ = std::make_shared<FederationCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
+
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
+                             const std::shared_ptr<Credentials>& cred) {
+    initWithoutConfig(endpoint, region);
+    credentials_ = cred;
+    signer_ = std::make_shared<SignV4>(credentials_, region);
+}
+
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
+                             const std::shared_ptr<Credentials>& cred, const ClientConfig& config) {
+    initWithConfig(endpoint, region, config);
+    credentials_ = cred;
+    signer_ = std::make_shared<SignV4>(credentials_, region);
+}
+
 void TosClientImpl::initWithConfig(const std::string& endpoint, const std::string& region, const ClientConfig& config) {
     if (endpoint.empty()) {
         if (supportedRegion_.count(region) != 0) {
@@ -6892,7 +6907,6 @@ void logErrRes(int statusCode, std::string code, bool isHighLatencyReq, const st
         ss << "http error:" << code << ", ";
         std::cout << ss.str() << std::endl;
     }
-    return;
 }
 
 Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const std::shared_ptr<TosRequest>& request,
@@ -6973,6 +6987,16 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             TosError se;
             std::string requestUrl = request->toUrl().toString();
             se.setRequestUrl(requestUrl);
+
+            RequestInfo reqInfo;
+            auto headers = resp->getHeaders();
+            reqInfo.setId2(resp->findHeader("x-tos-id-2"));
+            reqInfo.setHeaders(headers);
+            reqInfo.setStatusCode(resp->getStatusCode());
+            reqInfo.setRequestId(MapUtils::findValueByKeyIgnoreCase(headers, HEADER_REQUEST_ID));
+            se.setRequestInfo(reqInfo);
+            se.setEc(resp->findHeader("x-tos-ec"));
+
             if (resp->getStatusMsg() == "operation timeout") {
                 se.setIsClientError(true);
                 se.setMessage("http request timeout");
@@ -7105,6 +7129,16 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             TosError se;
             std::string requestUrl = request->toUrl().toString();
             se.setRequestUrl(requestUrl);
+
+            RequestInfo reqInfo;
+            auto headers = resp->getHeaders();
+            reqInfo.setId2(resp->findHeader("x-tos-id-2"));
+            reqInfo.setHeaders(headers);
+            reqInfo.setStatusCode(resp->getStatusCode());
+            reqInfo.setRequestId(MapUtils::findValueByKeyIgnoreCase(headers, HEADER_REQUEST_ID));
+            se.setRequestInfo(reqInfo);
+            se.setEc(resp->findHeader("x-tos-ec"));
+
             if (resp->getStatusMsg() == "operation timeout") {
                 se.setIsClientError(true);
                 se.setMessage("http request timeout");

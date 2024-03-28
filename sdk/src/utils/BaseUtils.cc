@@ -118,6 +118,29 @@ std::time_t TimeUtils::transLastModifiedStringToTime(const std::string& t) {
     }
     return tt < 0 ? -1 : tt;
 }
+
+std::time_t TimeUtils::transEcsExpiredTimeStringToTime(const std::string& t) {
+    const char* date = t.c_str();
+    std::tm tm;
+    std::time_t tt = -1;
+    int hour;
+    int min;
+    auto result = sscanf(date, "%4d-%2d-%2dT%2d:%2d:%2d+%2d:%2d", &tm.tm_year, &tm.tm_mon, &tm.tm_mday, &tm.tm_hour,
+                         &tm.tm_min, &tm.tm_sec, &hour, &min);
+    if (result == 8) {
+        tm.tm_year = tm.tm_year - 1900;
+        tm.tm_mon = tm.tm_mon - 1;
+#ifdef _WIN32
+        tt = _mkgmtime64(&tm);
+#else
+        tt = timegm(&tm);
+#endif  // _WIN32
+        // 考虑时区，获取 UTC 时间即可
+        tt = tt - 3600 * hour - 60 * min;
+    }
+    return tt < 0 ? -1 : tt;
+}
+
 // ToUtcTime
 std::string TimeUtils::transLastModifiedTimeToString(std::time_t& t) {
     std::stringstream date;

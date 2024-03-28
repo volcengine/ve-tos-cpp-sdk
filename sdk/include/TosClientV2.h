@@ -188,6 +188,8 @@
 #include "model/bucket/GetBucketRenameInput.h"
 #include "model/bucket/DeleteBucketRenameInput.h"
 #include "model/bucket/DeleteBucketRenameOutput.h"
+#include "auth/EnvCredentials.h"
+#include "auth/EcsCredentials.h"
 
 namespace VolcengineTos {
 
@@ -239,6 +241,10 @@ public:
                 const std::string& securityToken, const ClientConfig& config);
     TosClientV2(const std::string& region, const FederationCredentials& cred, const ClientConfig& config);
 
+    // Credentials
+    TosClientV2(const std::string& region, const std::shared_ptr<Credentials>& cred);
+    TosClientV2(const std::string& region, const std::shared_ptr<Credentials>& cred, const ClientConfig& config);
+
     ~TosClientV2() override = default;
 
     Outcome<TosError, CreateBucketV2Output> createBucket(const CreateBucketV2Input& input) const;
@@ -246,9 +252,6 @@ public:
     Outcome<TosError, DeleteBucketOutput> deleteBucket(const DeleteBucketInput& input) const;
 
     Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input) const;
-    //    Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input,
-    //                                                   std::shared_ptr<std::iostream> resContent,
-    //                                                   std::shared_ptr<DataConsumeCallBack> callBack) const;
 
     Outcome<TosError, GetObjectToFileOutput> getObjectToFile(const GetObjectToFileInput& input) const;
 

@@ -196,6 +196,9 @@ public:
                   const ClientConfig& config);
     TosClientImpl(const std::string& endpoint, const std::string& region, const FederationCredentials& cred,
                   const ClientConfig& config);
+    TosClientImpl(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred);
+    TosClientImpl(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred,
+                  const ClientConfig& config);
 
     ~TosClientImpl() = default;
     Outcome<TosError, CreateBucketOutput> createBucket(const CreateBucketInput& input);

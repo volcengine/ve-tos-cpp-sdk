@@ -236,9 +236,6 @@ TEST_F(DownLoadFileTest, DownLoadFileWithCheckpointWithProcessTest) {
     // 设置进度条
     DataTransferListener processHandler = {ProgressCallback, nullptr};
     input.setDataTransferListener(processHandler);
-    // 设置 rateLimiter
-    std::shared_ptr<RateLimiter> RateLimiter(NewRateLimiter(1024 * 1024, 1024 * 1024));
-    input.setRateLimiter(RateLimiter);
     // 设置 DownloadEvent
     DownloadEventListener downloadHandler = {DownloadCallBack};
     input.setDownloadEventListener(downloadHandler);
