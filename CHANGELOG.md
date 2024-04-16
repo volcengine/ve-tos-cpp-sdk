@@ -1,5 +1,8 @@
 ## Release Note
 
+### 2024.4.16 Version 2.6.10
+
+- 修复：Windows 场景中，大对象 stat 系统调用兼容性
 
 ### 2024.3.28 Version 2.6.9
 
