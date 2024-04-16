@@ -22,11 +22,16 @@
 #include "model/acl/PolicyURLInner.h"
 #include <cstring>
 #include <fstream>
-#include <sys/stat.h>
 #include <cstdio>
 #include <thread>
 #include <queue>
 #include <openssl/sha.h>
+#include <sys/stat.h>
+#ifdef _WIN32
+#define tos_stat ::_stat64
+#else
+#define tos_stat stat
+#endif
 
 using namespace VolcengineTos;
 
@@ -1217,8 +1222,8 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     return res;
 }
 std::string isValidFilePath(const std::string& filePath) {
-    struct stat ufs {};
-    if (stat(filePath.c_str(), &ufs) == 0) {
+    struct tos_stat ufs {};
+    if (tos_stat(filePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             return "invalid file path, the file does not exist";
         } else {
@@ -1309,15 +1314,15 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
         ret << uploadFilePath << "." << base64md5Path << ".upload";
         return ret.str();
     } else {
-        struct stat cfs {};
-        if (stat(checkPointFile.c_str(), &cfs) != 0) {
+        struct tos_stat cfs {};
+        if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 return "";
             }
         }
-        if (stat(checkPointFile.c_str(), &cfs) == 0) {
+        if (tos_stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
                 ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".upload";
                 return ret.str();
@@ -1333,8 +1338,8 @@ Outcome<TosError, UploadFileInfo> getUploadFileInfo(const std::string& uploadFil
     Outcome<TosError, UploadFileInfo> ret;
     UploadFileInfo ufi;
     TosError e;
-    struct stat ufs {};
-    if (stat(uploadFilePath.c_str(), &ufs) == 0) {
+    struct tos_stat ufs {};
+    if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
             ret.setE(e);
@@ -1364,8 +1369,8 @@ Outcome<TosError, UploadFileInfoV2> getUploadFileInfoV2(const std::string& uploa
     Outcome<TosError, UploadFileInfoV2> ret;
     UploadFileInfoV2 ufi;
     TosError e;
-    struct stat ufs {};
-    if (stat(uploadFilePath.c_str(), &ufs) == 0) {
+    struct tos_stat ufs {};
+    if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
             e.setIsClientError(true);
@@ -2279,15 +2284,15 @@ std::string getDownloadCheckpointPath(const std::string& bucket, const std::stri
         ret << filePath << "." << base64md5Path << ".download";
         return ret.str();
     } else {
-        struct stat cfs {};
-        if (stat(checkPointFile.c_str(), &cfs) != 0) {
+        struct tos_stat cfs {};
+        if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 return "";
             }
         }
-        if (stat(checkPointFile.c_str(), &cfs) == 0) {
+        if (tos_stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
                 ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".download";
                 return ret.str();
@@ -2352,11 +2357,11 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
 
     DownloadFileFileInfo fileinfo;
 
-    struct stat dfs {};
+    struct tos_stat dfs {};
     std::string filePath = input.getFilePath();
     // 设置文件路径
     // 路径不存在，需要先创建路径
-    if (stat(filePath.c_str(), &dfs) != 0) {
+    if (tos_stat(filePath.c_str(), &dfs) != 0) {
         // 判断是路径是文件夹语义还是文件语义，结尾为分隔符
         if (filePath.back() == TOS_PATH_DELIMITER) {
             // 文件夹语义则循环创建文件夹
@@ -2391,7 +2396,7 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
         }
     }
     // 重新 stat 一下，但理论上一定存在对应路径了
-    if (stat(filePath.c_str(), &dfs) == 0) {
+    if (tos_stat(filePath.c_str(), &dfs) == 0) {
         if (dfs.st_mode & S_IFDIR) {
             ret_filePath << filePath << TOS_PATH_DELIMITER << key;
             bool res = FileUtils::CreateDir(ret_filePath.str(), true);
@@ -5913,15 +5918,15 @@ std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
         ret << tmpPath << base64md5Path << ".copy";
         return ret.str();
     } else {
-        struct stat cfs {};
-        if (stat(checkPointFile.c_str(), &cfs) != 0) {
+        struct tos_stat cfs {};
+        if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
                 // 错误处理，创建文件夹失败的场景
                 return "";
             }
         }
-        if (stat(checkPointFile.c_str(), &cfs) == 0) {
+        if (tos_stat(checkPointFile.c_str(), &cfs) == 0) {
             if (cfs.st_mode & S_IFDIR) {
                 ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".copy";
                 return ret.str();
