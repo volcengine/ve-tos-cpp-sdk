@@ -138,6 +138,12 @@ public:
     const std::string& getStringFormatStorageClass() const {
         return StorageClassTypetoString[storageClass_];
     }
+    bool isDirectory() const {
+        return isDirectory_;
+    }
+    void setIsDirectory(bool isdirectory) {
+        isDirectory_ = isdirectory;
+    }
 
 private:
     RequestInfo requestInfo_;
@@ -161,5 +167,6 @@ private:
     std::string contentLanguage_;
     std::time_t expires_ = 0;
     std::string contentMD5_;
+    bool isDirectory_;
 };
 }  // namespace VolcengineTos

@@ -142,7 +142,12 @@ public:
     void setExpires(time_t expires) {
         getObjectBasicOutput_.setExpires(expires);
     }
-
+    bool isDirectory() const {
+        return getObjectBasicOutput_.isDirectory();
+    }
+    void setIsDirectory(bool isdirectory) {
+        getObjectBasicOutput_.setIsDirectory(isdirectory);
+    }
 private:
     GetObjectBasicOutput getObjectBasicOutput_;
     std::shared_ptr<std::iostream> content_;

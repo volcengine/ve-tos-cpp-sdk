@@ -319,3 +319,9 @@ Outcome<TosError, GetBucketRenameOutput> TosClientV2::getBucketRename(const GetB
 Outcome<TosError, DeleteBucketRenameOutput> TosClientV2::deleteBucketRename(const DeleteBucketRenameInput& input) {
     return tosClientImpl_->deleteBucketRename(input);
 }
+Outcome<TosError, GetFileStatusOutput> TosClientV2::getFileStatus(const GetFileStatusInput& input) {
+    return tosClientImpl_->getFileStatus(input);
+}
+//Outcome<TosError, ModifyObjectOutput> TosClientV2::modifyObject(const ModifyObjectInput& input) {
+//    return tosClientImpl_->modifyObject(input);
+//}

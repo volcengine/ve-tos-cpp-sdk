@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2024.6.18 Version 2.6.11
+- 支持分层命名空间桶
+- 支持 User-Agent 扩展规范
+
 ### 2024.4.16 Version 2.6.10
 
 - 修复：Windows 场景中，大对象 stat 系统调用兼容性

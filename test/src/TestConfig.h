@@ -10,8 +10,10 @@ static std::string RegionCrr = "";
 static std::string Ak = "";
 static std::string Sk = "";
 static std::string Bucket = "";
+static std::string BucketHns = "";
 static std::string Key = "";
-static std::string TestPrefix = "sdktest";
+static std::string TestPrefix = "";
+static std::string TestPrefixHns = "";
 static bool enableVerifySSL = false;
 
 }  // namespace TestConfig

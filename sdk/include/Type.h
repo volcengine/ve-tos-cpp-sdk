@@ -7,6 +7,7 @@
 #include <ctime>
 #include <functional>
 #include <sstream>
+#include <unordered_map>
 namespace VolcengineTos {
 enum class ACLType {
     NotSet = 0,
@@ -482,3 +483,25 @@ static MyCancelHook* NewCancelHook() {
 //     return myDataConsumeCallBack;
 // }
 }  // namespace VolcengineTos
+
+// 桶类型
+enum class BucketType {FNS=0, HNS};
+static std::map<BucketType, std::string> BucketTypetoString{
+        {BucketType::FNS, "fns"},
+        {BucketType::HNS, "hns"},};
+static std::map<std::string, BucketType> StringtoBucketType{
+        {"fns", BucketType::FNS},
+        {"hns", BucketType::HNS}};
+
+class BucketCache{
+public:
+    BucketType bucketType_;
+    std::chrono::steady_clock::time_point lastUpdateTimeNanos_;
+    std::chrono::seconds timeout_;
+};
+
+class BucketCacheLock{
+public:
+    std::unordered_map<std::string, std::unique_ptr<BucketCache>> bucketTypes_;
+    std::mutex lock;
+};

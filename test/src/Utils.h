@@ -11,6 +11,7 @@ public:
     static std::string GetObjectKey(const std::string& prefix);
 
     static void CreateBucket(const std::shared_ptr<TosClientV2>& client, const std::string& name);
+    static void CreateBucket(const std::shared_ptr<TosClientV2>& client, const std::string& name,const bool isHns);
 
     static void PutObject(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
                           const std::string& obj_name, const std::string& data);

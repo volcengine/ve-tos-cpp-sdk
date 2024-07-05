@@ -52,7 +52,10 @@
 #include "ClientConfig.h"
 #include "auth/EnvCredentials.h"
 #include "auth/EcsCredentials.h"
-
+#include "model/object/GetFileStatusInput.h"
+#include "model/object/GetFileStatusOutput.h"
+#include "model/object/ModifyObjectInput.h"
+#include "model/object/ModifyObjectOutput.h"
 namespace VolcengineTos {
 static const char* TOS_SDK_VERSION = "v2.6.9";
 #ifdef WIN32

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.6.10
+        VERSION 2.6.11
         LANGUAGES CXX)
 
 # project settings
@@ -75,7 +75,7 @@ endif ()
 
 list(APPEND SDK_COMPILER_FLAGS "-std=c++11")
 if (WIN32)
-    set(CMAKE_CXX_FLAGS_RELEASE  "${CMAKE_CXX_FLAGS_RELEASE}/MT")
+    set(CMAKE_CXX_FLAGS_RELEASE  "${CMAKE_CXX_FLAGS_RELEASE} /MT")
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 endif ()
 

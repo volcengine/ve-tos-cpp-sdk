@@ -376,6 +376,10 @@ public:
     Outcome<TosError, PutBucketRenameOutput> putBucketRename(const PutBucketRenameInput& input);
     Outcome<TosError, GetBucketRenameOutput> getBucketRename(const GetBucketRenameInput& input);
     Outcome<TosError, DeleteBucketRenameOutput> deleteBucketRename(const DeleteBucketRenameInput& input);
+    Outcome<TosError,GetFileStatusOutput> getFileStatus(const GetFileStatusInput& input);
+//    Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input);
+    Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input,
+                                                       const std::string preHashCrc64ecma,bool enableCrcCheck);
 
     void setMaxRetryCount(int maxretrycount);
     void setCredential(const std::string& accessKeyId, const std::string& secretKeyId);
@@ -421,6 +425,7 @@ private:
     Config config_;
     bool connectWithIP_ = false;
     bool connectWithS3EndPoint_ = false;
+    std::vector<BucketCacheLock> bucketCacheLocks_{16};
 
     std::map<std::string, std::string> supportedRegion_ = {{"cn-beijing", "https://tos-cn-beijing.volces.com"},
                                                            {"cn-guangzhou", "https://tos-cn-guangzhou.volces.com"},
@@ -428,6 +433,7 @@ private:
                                                            {"ap-southeast-1", "https://tos-ap-southeast-1.volces.com"}};
     void getObject(RequestBuilder& rb, Outcome<TosError, GetObjectOutput>& res);
     void headObject(RequestBuilder& rb, Outcome<TosError, HeadObjectOutput>& res);
+    void getFileStatus(RequestBuilder& rb, Outcome<TosError, GetFileStatusOutput>& res);
     void deleteObject(RequestBuilder& rb, Outcome<TosError, DeleteObjectOutput>& res);
     void deleteMultiObjects(RequestBuilder& rb, const std::string& data, const std::string& dataMd5,
                             Outcome<TosError, DeleteMultiObjectsOutput>& res);
@@ -513,5 +519,6 @@ private:
     void SetRateLimiterToReq(const std::shared_ptr<TosRequest>& req, const std::shared_ptr<RateLimiter>& limiter);
     bool checkShouldRetry(const std::shared_ptr<TosRequest>& request, const std::shared_ptr<TosResponse>& response);
     RequestBuilder ParamFromConfToRb(RequestBuilder& rb);
+    Outcome<TosError,BucketType>  getBucketType(const std::string& bucketName);
 };
 }  // namespace VolcengineTos

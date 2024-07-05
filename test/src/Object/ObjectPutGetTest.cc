@@ -18,12 +18,18 @@ protected:
         conf.endPoint = TestConfig::HTTPsEndpoint;
         conf.enableVerifySSL = false;
         conf.maxRetryCount = 0;
+        conf.userAgentProductName = "tos";
+        conf.userAgentSoftName="cxxSdk";
+        conf.userAgentSoftVersion = "2.6.11";
+        conf.userAgentCustomizedKeyValues = {{"key1", "value1"}, {"key2", "value2"}};
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
+        bkt_name_hns = TestUtils::GetBucketName(TestConfig::TestPrefixHns);
 
         workPath = FileUtils::getWorkPath();
         std::cout << workPath << std::endl;
         TestUtils::CreateBucket(cliV2, bkt_name);
+        TestUtils::CreateBucket(cliV2, bkt_name_hns, true);
     }
 
     // Tears down the stuff shared by all tests in this test case.
@@ -35,11 +41,13 @@ protected:
 public:
     static std::shared_ptr<TosClientV2> cliV2;
     static std::string bkt_name;
+    static std::string bkt_name_hns;
     static std::string workPath;
 };
 
 std::shared_ptr<TosClientV2> ObjectPutGetTest::cliV2 = nullptr;
 std::string ObjectPutGetTest::bkt_name = "";
+std::string ObjectPutGetTest::bkt_name_hns = "";
 std::string ObjectPutGetTest::workPath = "";
 
 TEST_F(ObjectPutGetTest, PutObjectWithoutParametersTest) {
@@ -83,6 +91,81 @@ TEST_F(ObjectPutGetTest, PutObjectWithoutParametersTest) {
     bool content_compare = (data == tmp_string);
     EXPECT_EQ(content_length_compare & length_compare, true);
     EXPECT_EQ(content_compare, true);
+}
+TEST_F(ObjectPutGetTest, PutGetFileStatusTestDirectory) {
+    std::string obj_key = "cxx/sdk/test"+TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    std::string data = "123";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put.setContent(ss);
+    input_obj_put_basic.setBucket(bkt_name_hns);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    auto headObjectInput = HeadObjectV2Input(bkt_name_hns, obj_key);
+    auto headObjectOutput = cliV2->headObject(headObjectInput);
+    EXPECT_EQ(headObjectOutput.isSuccess(), true);
+    EXPECT_EQ(headObjectOutput.result().isDirectory(), false);
+
+    headObjectInput = HeadObjectV2Input(bkt_name_hns, "cxx/sdk/");
+    headObjectOutput = cliV2->headObject(headObjectInput);
+    EXPECT_EQ(headObjectOutput.isSuccess(), true);
+    EXPECT_EQ(headObjectOutput.result().isDirectory(), true);
+
+    auto getObjectInput = GetObjectV2Input(bkt_name_hns, obj_key);
+    auto getObjectOutput = cliV2->getObject(getObjectInput);
+    EXPECT_EQ(getObjectOutput.isSuccess(), true);
+    EXPECT_EQ(getObjectOutput.result().isDirectory(), false);
+
+    getObjectInput = GetObjectV2Input(bkt_name_hns, "cxx/sdk/");
+    getObjectOutput = cliV2->getObject(getObjectInput);
+    EXPECT_EQ(getObjectOutput.isSuccess(), true);
+    EXPECT_EQ(getObjectOutput.result().isDirectory(), true);
+}
+TEST_F(ObjectPutGetTest, PutGetFileStatusTestHNS) {
+    std::string obj_key = "cxx/sdk/test"+TestUtils::GetObjectKey(TestConfig::TestPrefixHns);
+    std::string data = "123";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put.setContent(ss);
+    input_obj_put_basic.setBucket(bkt_name_hns);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    auto getFileStatusInput = GetFileStatusInput(bkt_name_hns, obj_key);
+    auto getFileStatusOutput = cliV2->getFileStatus(getFileStatusInput);
+    EXPECT_EQ(getFileStatusOutput.isSuccess(), true);
+
+    getFileStatusInput = GetFileStatusInput(bkt_name_hns, obj_key);
+    getFileStatusOutput = cliV2->getFileStatus(getFileStatusInput);
+    EXPECT_EQ(getFileStatusOutput.isSuccess(), true);
+}
+TEST_F(ObjectPutGetTest, PutGetFileStatusTestFNS) {
+    std::string obj_key = "cxx/sdk/test"+TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    std::string data = "123";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put.setContent(ss);
+    input_obj_put_basic.setBucket(bkt_name);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    auto getFileStatusInput = GetFileStatusInput(bkt_name, obj_key);
+    auto getFileStatusOutput = cliV2->getFileStatus(getFileStatusInput);
+    EXPECT_EQ(getFileStatusOutput.isSuccess(), true);
+
+    getFileStatusInput = GetFileStatusInput(bkt_name, obj_key);
+    getFileStatusOutput = cliV2->getFileStatus(getFileStatusInput);
+    EXPECT_EQ(getFileStatusOutput.isSuccess(), true);
 }
 TEST_F(ObjectPutGetTest, PutZeroSizeObjectTest) {
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);

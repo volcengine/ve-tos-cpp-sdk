@@ -74,6 +74,59 @@ TEST_F(BucketListTest, ListBucketTest) {
     TestUtils::CleanBucket(cliV2, bkt);
 }
 
+TEST_F(BucketListTest, ListBucketWithTypeTest) {
+    std::string testPrefix = TestConfig::TestPrefix + "list-1";
+    std::string testPrefixHns = TestConfig::TestPrefixHns+"list-1";
+    std::string bkt = TestUtils::GetBucketName(testPrefix);
+    std::string bktHns = TestUtils::GetBucketName(testPrefixHns);
+    ListBucketsInput input_list;
+    auto output_list_all_part1 = cliV2->listBuckets(input_list);
+    EXPECT_EQ(output_list_all_part1.isSuccess(), true);
+    auto buckets_part1 = output_list_all_part1.result().getBuckets();
+    for (const auto& bkt_ : buckets_part1) {
+        std::string bkt_name = bkt_.getName();
+        if (bkt_name.rfind(testPrefix, 0) == 0 && bkt_.getLocation() == TestConfig::Region) {
+            std::cout << "Delete bucket name:" << bkt_name << std::endl;
+            TestUtils::CleanBucket(cliV2, bkt_name);
+        }
+    }
+
+    // create a new bucket
+    CreateBucketV2Input input_v2;
+    input_v2.setBucket(bkt);
+    auto output_v2 = cliV2->createBucket(input_v2);
+    EXPECT_EQ(output_v2.isSuccess(), true);
+
+    input_v2.setBucket(bktHns);
+    input_v2.setBucketType(BucketType::HNS);
+    output_v2 = cliV2->createBucket(input_v2);
+    EXPECT_EQ(output_v2.isSuccess(), true);
+
+    // total count
+    auto outputAllBuckets = cliV2->listBuckets(input_list);
+    EXPECT_EQ(outputAllBuckets.isSuccess(), true);
+    auto totalCount = outputAllBuckets.result().getBuckets().size();
+
+    // fns count
+    input_list.setBucketType(BucketType::FNS);
+    auto outputFnsBuckets = cliV2->listBuckets(input_list);
+    EXPECT_EQ(outputFnsBuckets.isSuccess(), true);
+    auto fnsCount = outputFnsBuckets.result().getBuckets().size();
+
+    // hns count
+    input_list.setBucketType(BucketType::HNS);
+    auto outputHnsBuckets = cliV2->listBuckets(input_list);
+    EXPECT_EQ(outputHnsBuckets.isSuccess(), true);
+    auto hnsCount = outputHnsBuckets.result().getBuckets().size();
+
+    EXPECT_EQ(totalCount, fnsCount + hnsCount);
+
+    // delete created bucket
+    TestUtils::CleanBucket(cliV2, bkt);
+    TestUtils::CleanBucket(cliV2, bktHns);
+}
+
+
 // Client V1 Test
 TEST_F(BucketListTest, ListBucketClientV1Test) {
     std::string testPrefix = TestConfig::TestPrefix + "list";

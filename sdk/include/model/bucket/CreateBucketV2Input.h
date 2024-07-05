@@ -64,6 +64,12 @@ public:
     void setAzRedundancy(const AzRedundancyType& azRedundancy) {
         azRedundancy_ = azRedundancy;
     }
+    const BucketType& getBucketType() const {
+        return bucketType_;
+    }
+    void setBucketType(const BucketType& bucketType) {
+        bucketType_ = bucketType;
+    }
 
 private:
     std::string bucket_;
@@ -75,5 +81,6 @@ private:
     std::string grantWriteAcp_;
     StorageClassType storageClass_ = StorageClassType::STANDARD;
     AzRedundancyType azRedundancy_ = AzRedundancyType::NotSet;
+    BucketType bucketType_ = BucketType::FNS;
 };
 }  // namespace VolcengineTos

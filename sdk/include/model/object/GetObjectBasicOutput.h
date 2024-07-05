@@ -137,6 +137,12 @@ public:
     void setExpires(time_t expires) {
         expires_ = expires;
     }
+    bool isDirectory() const {
+        return isDirectory_;
+    }
+    void setIsDirectory(bool isdirectory) {
+        isDirectory_ = isdirectory;
+    }
 
 private:
     RequestInfo requestInfo_;
@@ -161,5 +167,6 @@ private:
     std::string contentEncoding_;
     std::string contentLanguage_;
     std::time_t expires_ = 0;
+    bool isDirectory_ = 0;
 };
 }  // namespace VolcengineTos
