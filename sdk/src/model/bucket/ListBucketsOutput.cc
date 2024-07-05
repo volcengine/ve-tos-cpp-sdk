@@ -1,6 +1,7 @@
 #include "model/bucket/ListBucketsOutput.h"
 #include "../src/external/json/json.hpp"
 #include "model/acl/Owner.h"
+#include "Type.h"
 using namespace nlohmann;
 
 VolcengineTos::ListedBucket parseListedBucket(const json& bucket) {
@@ -15,6 +16,8 @@ VolcengineTos::ListedBucket parseListedBucket(const json& bucket) {
         lb.setExtranetEndpoint(bucket.at("ExtranetEndpoint").get<std::string>());
     if (bucket.contains("IntranetEndpoint"))
         lb.setIntranetEndpoint(bucket.at("IntranetEndpoint").get<std::string>());
+    if (bucket.contains("BucketType"))
+        lb.setBucketType(StringtoBucketType[bucket.at("BucketType").get<std::string>()]);
     return lb;
 }
 

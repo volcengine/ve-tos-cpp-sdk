@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "Type.h"
 namespace VolcengineTos {
 class ListedBucket {
 public:
@@ -35,12 +36,18 @@ public:
     void setIntranetEndpoint(const std::string& intranetEndpoint) {
         intranetEndpoint_ = intranetEndpoint;
     }
-
+    BucketType getBucketType() const {
+        return bucketType_;
+    }
+    void setBucketType(BucketType bucketType) {
+        bucketType_ = bucketType;
+    }
 private:
     std::string creationDate_;
     std::string name_;
     std::string location_;
     std::string extranetEndpoint_;
     std::string intranetEndpoint_;
+    BucketType bucketType_;
 };
 }  // namespace VolcengineTos

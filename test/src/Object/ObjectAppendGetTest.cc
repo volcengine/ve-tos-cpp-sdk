@@ -17,22 +17,27 @@ protected:
         conf.endPoint = TestConfig::Endpoint;
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
+        bkt_name_hns = TestUtils::GetBucketName(TestConfig::TestPrefixHns);
         TestUtils::CreateBucket(cliV2, bkt_name);
+        TestUtils::CreateBucket(cliV2, bkt_name_hns, true);
     }
 
     // Tears down the stuff shared by all tests in this test case.
     static void TearDownTestCase() {
         TestUtils::CleanBucket(cliV2, bkt_name);
+        TestUtils::CleanBucket(cliV2,bkt_name_hns);
         cliV2 = nullptr;
     }
 
 public:
     static std::shared_ptr<TosClientV2> cliV2;
     static std::string bkt_name;
+    static std::string bkt_name_hns;
 };
 
 std::shared_ptr<TosClientV2> ObjectAppendGetTest::cliV2 = nullptr;
 std::string ObjectAppendGetTest::bkt_name = "";
+std::string ObjectAppendGetTest::bkt_name_hns = "";
 
 TEST_F(ObjectAppendGetTest, AppendWithoutParametersTest) {
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
@@ -81,6 +86,75 @@ TEST_F(ObjectAppendGetTest, AppendWithoutParametersTest) {
     EXPECT_EQ(length_compare, true);
     EXPECT_EQ(content_compare, true);
 }
+TEST_F(ObjectAppendGetTest, PutAppendGetHnsTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefixHns);
+    auto part0 = std::make_shared<std::stringstream>();
+    auto part0Size = 128;
+    for (int i = 0; i < part0Size; ++i) {
+        *part0 << "0";
+    }
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put.setContent(part0);
+    input_obj_put_basic.setBucket(bkt_name_hns);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    auto part1Size = 128;
+    auto part1 = std::make_shared<std::stringstream>();
+    for (int i = 0; i < part1Size; ++i) {
+        *part1 << "1";
+    }
+    AppendObjectV2Input inputAppend(bkt_name_hns, obj_key, part1, part1Size);
+    inputAppend.setContentLength(part1Size);
+    auto output = cliV2->appendObject(inputAppend);
+    if (!output.isSuccess()) {
+        std::cout << output.error().String() << std::endl;
+    }
+    std::cout << "Next Append Offset is: " << output.result().getNextAppendOffset() << std::endl;
+    EXPECT_EQ(output.isSuccess(), true);
+
+    auto part2Size = 128;
+    auto part2 = std::make_shared<std::stringstream>();
+    for (int i = 0; i < part2Size; ++i) {
+        *part2 << "2";
+    }
+    inputAppend.setContent(part2);
+    inputAppend.setOffset(output.result().getNextAppendOffset());
+    inputAppend.setPreHashCrc64Ecma(output.result().getHashCrc64ecma());
+    output = cliV2->appendObject(inputAppend);
+    if (!output.isSuccess()) {
+        std::cout << output.error().String() << std::endl;
+    }
+    std::cout << "Next Append Offset is: " << output.result().getNextAppendOffset() << std::endl;
+    EXPECT_EQ(output.isSuccess(), true);
+
+    GetObjectV2Input inputObjGet(bkt_name_hns, obj_key);
+    auto outputObjGet = cliV2->getObject(inputObjGet);
+    EXPECT_EQ(outputObjGet.isSuccess(), true);
+    auto basicOutput = outputObjGet.result().getGetObjectBasicOutput();
+    auto contentOutput = outputObjGet.result().getContent();
+    std::string ss_;
+
+    auto stream = contentOutput.get();
+
+    std::ostringstream ss;
+    ss << outputObjGet.result().getContent()->rdbuf();
+    std::string tmp_string = ss.str();
+
+    int data_size = part0Size+part1Size+part2Size;
+    std::string data = std::string(part0Size, '0');
+    data.append(std::string(part1Size, '1'));
+    data.append(std::string(part2Size, '2'));
+    int tmp_string_size = tmp_string.size();
+    bool length_compare = (data_size == tmp_string_size);
+    bool content_compare = (data == tmp_string);
+    EXPECT_EQ(length_compare, true);
+    EXPECT_EQ(content_compare, true);
+}
+
 TEST_F(ObjectAppendGetTest, AppendObjectToNonexistentBucketTest) {
     std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
     auto part0 = std::make_shared<std::stringstream>();

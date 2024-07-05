@@ -93,6 +93,12 @@ static const char* HEADER_COMPLETE_ALL = "X-Tos-Complete-All";
 static const char* HEADER_CALLBACK = "X-Tos-Callback";
 static const char* HEADER_CALLBACK_VAR = "X-Tos-Callback-Var";
 
+// HNS
+static const char* HEADER_DIRECTORY = "X-Tos-Directory";
+static const char* HEADER_BUCKET_TYPE = "X-Tos-Bucket-Type";
+static const char* HEADER_CRC32 = "x-tos-hash-crc32c";
+static const char* HEADER_NEXT_MODIFY_OFFSET = "x-tos-next-modify-offset";
+
 /**
  * replace source object metadata when calling copyObject
  */

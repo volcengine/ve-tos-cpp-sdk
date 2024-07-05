@@ -26,6 +26,18 @@ void TestUtils::CreateBucket(const std::shared_ptr<TosClientV2>& client, const s
         return;
     }
 }
+void TestUtils::CreateBucket(const std::shared_ptr<TosClientV2>& client, const std::string& name,const bool isHns) {
+    CreateBucketV2Input input_v2;
+    input_v2.setBucket(name);
+    if (isHns) {
+        input_v2.setBucketType(BucketType::HNS);
+    }
+    auto output = client->createBucket(input_v2);
+    if (!output.isSuccess()) {
+        std::cout << output.error().String() << std::endl;
+        return;
+    }
+}
 
 void TestUtils::PutObject(const std::shared_ptr<TosClientV2>& client, const std::string& bkt_name,
                           const std::string& obj_name, const std::string& data) {

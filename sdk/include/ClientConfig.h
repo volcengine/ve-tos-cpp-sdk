@@ -1,7 +1,6 @@
 #pragma once
 #include "common/Common.h"
 #include <string>
-
 namespace VolcengineTos {
 class ClientConfig {
 public:
@@ -39,6 +38,10 @@ public:
     std::string caPath;
     std::string caFile;
     int highLatencyLogThreshold;
+    std::string userAgentProductName;
+    std::string userAgentSoftName;
+    std::string userAgentSoftVersion;
+    std::map<std::string,std::string> userAgentCustomizedKeyValues;
 
     // int MaxConnections;
     // int IdleConnectionTime;

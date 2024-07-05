@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.10
+        VERSION 2.6.11
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -246,6 +246,7 @@ set(SDK_HEADER
         include/model/bucket/GetBucketRenameOutput.h
         include/model/bucket/DeleteBucketRenameInput.h
         include/model/bucket/DeleteBucketRenameOutput.h
+        include/model/object/GetFileStatusInput.h
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc

@@ -27,6 +27,7 @@
 #include <queue>
 #include <openssl/sha.h>
 #include <sys/stat.h>
+#include <cmath>
 #ifdef _WIN32
 #define tos_stat ::_stat64
 #else
@@ -155,6 +156,40 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     }
     if (NetUtils::isS3Endpoint(host_)) {
         connectWithS3EndPoint_ = true;
+    }
+    // user_agent扩展设置
+    if (!config.userAgentProductName.empty() || !config.userAgentSoftName.empty() ||
+        !config.userAgentSoftVersion.empty() || !config.userAgentCustomizedKeyValues.empty()) {
+        std::stringstream ss;
+        ss << userAgent_;
+
+        if (!config.userAgentProductName.empty()) {
+            ss << "--" << config.userAgentProductName << "/";
+        } else {
+            ss << "--undefined/";
+        }
+        if (!config.userAgentSoftName.empty()) {
+            ss << config.userAgentSoftName << "/";
+        } else {
+            ss << "undefined/";
+        }
+        if (!config.userAgentSoftVersion.empty()) {
+            ss << config.userAgentSoftVersion << "";
+        } else {
+            ss << "undefined";
+        }
+        for (auto it = config.userAgentCustomizedKeyValues.begin(); it != config.userAgentCustomizedKeyValues.end();
+             it++) {
+            if (it == config.userAgentCustomizedKeyValues.begin()) {
+                ss << "(";
+            }
+            if (std::next(it) == config.userAgentCustomizedKeyValues.end()) {
+                ss << it->first << "/" << it->second << ")";
+                break;
+            }
+            ss << it->first << "/" << it->second << ";";
+        }
+        userAgent_ = ss.str();
     }
 }
 
@@ -340,6 +375,7 @@ static void createBucketSetOptionHeader(RequestBuilder& rb, const CreateBucketV2
     rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
     rb.withHeader(HEADER_AZ_REDUNDANCY, AzRedundancyTypetoString[input.getAzRedundancy()]);
+    rb.withHeader(HEADER_BUCKET_TYPE, BucketTypetoString[input.getBucketType()]);
 }
 Outcome<TosError, CreateBucketV2Output> TosClientImpl::createBucket(const CreateBucketV2Input& input) {
     Outcome<TosError, CreateBucketV2Output> res;
@@ -420,6 +456,7 @@ Outcome<TosError, HeadBucketV2Output> TosClientImpl::headBucket(const HeadBucket
     output.setRegion(tosRes.result()->findHeader(HEADER_BUCKET_REGION));
     output.setStorageClass(StringtoStorageClassType[tosRes.result()->findHeader(HEADER_STORAGE_CLASS)]);
     output.setAzRedundancy(StringtoAzRedundancyType[tosRes.result()->findHeader(HEADER_AZ_REDUNDANCY)]);
+    output.setBucketType(StringtoBucketType[tosRes.result()->findHeader(HEADER_BUCKET_TYPE)]);
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -477,7 +514,9 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const DeleteBu
 }
 Outcome<TosError, ListBucketsOutput> TosClientImpl::listBuckets(const ListBucketsInput& input) {
     Outcome<TosError, ListBucketsOutput> res;
-    auto req = newBuilder("", "").Build(http::MethodGet);
+    auto rb = newBuilder("", "");
+    rb.withHeader(HEADER_BUCKET_TYPE, BucketTypetoString[input.getBucketType()]);
+    auto req = rb.Build(http::MethodGet);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
@@ -827,6 +866,70 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
     return res;
 }
 
+Outcome<TosError, GetFileStatusOutput> TosClientImpl::getFileStatus(const GetFileStatusInput& input) {
+    Outcome<TosError, GetFileStatusOutput> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto bucketTypeOut = getBucketType(input.getBucket());
+    if (!bucketTypeOut.isSuccess()) {
+        res.setSuccess(false);
+        res.setE(bucketTypeOut.error());
+        return res;
+    }
+    if (bucketTypeOut.result() == BucketType::HNS) {
+        auto headObjectV2Input = HeadObjectV2Input(input.getBucket(), input.getKey());
+        auto headObjectV2Output = this->headObject(headObjectV2Input);
+        if (!headObjectV2Output.isSuccess()) {
+            res.setE(headObjectV2Output.error());
+            res.setSuccess(false);
+            return res;
+        }
+        GetFileStatusOutput output;
+        output.setRequestInfo(headObjectV2Output.result().getRequestInfo());
+        output.setKey(headObjectV2Input.getKey());
+        output.setSize(headObjectV2Output.result().getContentLength());
+        output.setCrc64(std::to_string(headObjectV2Output.result().getHashCrc64Ecma()));
+        output.setLastModified(headObjectV2Output.result().getLastModified());
+        if (headObjectV2Output.result().getRequestInfo().getHeaders().count(HEADER_CRC32) != 0) {
+            output.setCrc32(headObjectV2Output.result().getRequestInfo().getHeaders().at(HEADER_CRC32));
+        }
+        res.setSuccess(true);
+        res.setR(output);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    rb.withQuery("stat", "");
+    this->getFileStatus(rb, res);
+    if (res.isSuccess()) {
+        res.result().setKey(input.getKey());
+    }
+    return res;
+}
+
+void TosClientImpl::getFileStatus(RequestBuilder& rb, Outcome<TosError, GetFileStatusOutput>& res) {
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, expectedCode(rb));
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return;
+    }
+    GetFileStatusOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.fromJsonString(ss.str());
+    res.setSuccess(true);
+    res.setR(output);
+}
+
 Outcome<TosError, HeadObjectOutput> TosClientImpl::headObject(const std::string& bucket, const std::string& objectKey) {
     Outcome<TosError, HeadObjectOutput> res;
     std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
@@ -1137,6 +1240,55 @@ static void putObjectSetOptionHeader(RequestBuilder& rb, const PutObjectBasicInp
         rb.withHeader(HEADER_CALLBACK_VAR, basic_input.getCallBackVar());
     }
 }
+
+//Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyObjectInput& input) {
+//    return modifyObject(input, "0", false);
+//}
+
+Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyObjectInput& input,
+                                                                  const std::string preHashCrc64ecma,
+                                                                bool enableCrcCheck) {
+    Outcome<TosError, ModifyObjectOutput> res;
+    auto check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey());
+    rb.withQuery("modify", "");
+    rb.withQuery("offset", std::to_string(input.getOffset()));
+    if (input.getTrafficLimit() != 0) {
+        rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
+    }
+
+    auto req = rb.Build(http::MethodPost, input.getContent());
+    auto handler = input.getDataTransferListener();
+    auto limiter = input.getRateLimiter();
+    SetProcessHandlerToReq(req, handler);
+    SetRateLimiterToReq(req, limiter);
+    req->setPreHashCrc64Ecma(std::stoull(preHashCrc64ecma));
+    req->setCheckCrc64(enableCrcCheck);
+    req->setContentLength(input.getContentLength());
+    req->setFuncName(__func__);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+        return res;
+    }
+    ModifyObjectOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    output.setHashCrc64Ecma(tosRes.result()->findHeader(HEADER_CRC64));
+    output.setNextModifyOffset(std::stol(tosRes.result()->findHeader(HEADER_NEXT_MODIFY_OFFSET)));
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
 Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2Input& input) {
     Outcome<TosError, PutObjectV2Output> res;
     const auto& putObjectBasicInput_ = input.getPutObjectBasicInput();
@@ -2831,6 +2983,35 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
         res.setSuccess(false);
         return res;
     }
+    auto bucketType = getBucketType(input.getBucket());
+    if (!bucketType.isSuccess()) {
+        res.setE(bucketType.error());
+        res.setSuccess(false);
+        return res;
+    }
+    if (bucketType.result() == BucketType::HNS) {
+        auto winput = ModifyObjectInput(input.getBucket(), input.getKey());
+        winput.setOffset(input.getOffset());
+        winput.setContent(input.getContent());
+        winput.setContentLength(input.getContentLength());
+        winput.setDataTransferListener(input.getDataTransferListener());
+        winput.setRateLimiter(input.getRateLimiter());
+        winput.setTrafficLimit(input.getTrafficLimit());
+        auto woutput = modifyObject(winput, std::to_string(input.getPreHashCrc64Ecma()), config_.isEnableCrc());
+        if (!woutput.isSuccess()) {
+            res.setE(woutput.error());
+            res.setSuccess(false);
+            return res;
+        }
+        AppendObjectV2Output output;
+        output.setRequestInfo(woutput.result().getRequestInfo());
+        output.setNextAppendOffset(woutput.result().getNextModifyOffset());
+        output.setHashCrc64ecma(std::stoull(woutput.result().getHashCrc64Ecma()));
+        res.setSuccess(true);
+        res.setR(output);
+        return res;
+    }
+
     // offset有默认值因此不校验
     auto rb = newBuilder(input.getBucket(), input.getKey());
     rb.withQuery("append", "");
@@ -7574,4 +7755,37 @@ void TosClientImpl::initRegionEndpoint(const std::string& endpoint, const std::s
     if (NetUtils::isS3Endpoint(host_)) {
         connectWithS3EndPoint_ = true;
     }
+}
+Outcome<TosError, BucketType> TosClientImpl::getBucketType(const std::string& bucketName) {
+    Outcome<TosError, BucketType> ret;
+    auto& bcl = bucketCacheLocks_[std::hash<std::string>{}(bucketName) % bucketCacheLocks_.size()];
+
+    bcl.lock.lock();
+    auto it = bcl.bucketTypes_.find(bucketName);
+    if (it != bcl.bucketTypes_.end() &&
+        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+                                                             it->second->lastUpdateTimeNanos_) < it->second->timeout_) {
+        ret.setSuccess(true);
+        ret.setR(it->second->bucketType_);
+        bcl.lock.unlock();
+        return ret;
+    }
+    HeadBucketV2Input headBucketV2Input;
+    headBucketV2Input.setBucket(bucketName);
+    auto headBucketV2Output = this->headBucket(headBucketV2Input);
+    if (!headBucketV2Output.isSuccess()) {
+        ret.setSuccess(false);
+        ret.setE(headBucketV2Output.error());
+        bcl.lock.unlock();
+        return ret;
+    }
+    std::unique_ptr<BucketCache> cache(new BucketCache());
+    cache->bucketType_ = headBucketV2Output.result().getBucketType();
+    cache->lastUpdateTimeNanos_ = std::chrono::steady_clock::now();
+    cache->timeout_ = std::chrono::seconds(15 * 60);
+    bcl.bucketTypes_.emplace(bucketName, std::move(cache));
+    ret.setSuccess(true);
+    ret.setR(headBucketV2Output.result().getBucketType());
+    bcl.lock.unlock();
+    return ret;
 }

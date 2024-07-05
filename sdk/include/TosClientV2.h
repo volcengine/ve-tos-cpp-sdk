@@ -358,6 +358,8 @@ public:
     Outcome<TosError, PutBucketRenameOutput> putBucketRename(const PutBucketRenameInput& input);
     Outcome<TosError, GetBucketRenameOutput> getBucketRename(const GetBucketRenameInput& input);
     Outcome<TosError, DeleteBucketRenameOutput> deleteBucketRename(const DeleteBucketRenameInput& input);
+    Outcome<TosError,GetFileStatusOutput> getFileStatus(const GetFileStatusInput& input);
+//    Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input);
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;

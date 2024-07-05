@@ -40,6 +40,7 @@ void VolcengineTos::GetObjectBasicOutput::fromResponse(TosResponse& res) {
     contentEncoding_ = res.findHeader(http::HEADER_CONTENT_ENCODING);
     contentLanguage_ = res.findHeader(http::HEADER_CONTENT_LANGUAGE);
     expires_ = TimeUtils::transGMTFormatStringToTime(res.findHeader(http::HEADER_EXPIRES));
+    isDirectory_ = res.findHeader(HEADER_DIRECTORY) == "true";
 }
 // bool VolcengineTos::GetObjectBasicOutput::operator==(const VolcengineTos::GetObjectBasicOutput& rhs) const {
 //     return contentRange_ == rhs.contentRange_ && eTags_ == rhs.eTags_ && lastModified_ == rhs.lastModified_ &&

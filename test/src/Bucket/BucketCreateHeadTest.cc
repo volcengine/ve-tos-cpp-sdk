@@ -68,6 +68,53 @@ TEST_F(BucketCreateHeadTest, CreateBucketWithBucketNameTest) {
     auto output_v2_delete = cliV2->deleteBucket(input_v2_delete);
     EXPECT_EQ(output_v2_delete.isSuccess(), true);
 }
+TEST_F(BucketCreateHeadTest, CreateBucketWithHns) {
+    std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefixHns);
+    CreateBucketV2Input inputV2(bkt);
+    inputV2.setBucketType(BucketType::HNS);
+
+    auto outputV2 = cliV2->createBucket(inputV2);
+    EXPECT_EQ(outputV2.isSuccess(), true);
+
+    // 校验桶元数据
+    HeadBucketV2Input inputV2Head(bkt);
+    auto output_v2_head = cliV2->headBucket(inputV2Head);
+    EXPECT_EQ(output_v2_head.isSuccess(), true);
+    bool regionCheck = (output_v2_head.result().getRegion() == TestConfig::Region);
+    bool storageClassCheck = (output_v2_head.result().getStorageClass() == StorageClassType::STANDARD);
+    bool bucketTypeCheck = (output_v2_head.result().getBucketType() == BucketType::HNS);
+    EXPECT_EQ(regionCheck, true);
+    EXPECT_EQ(storageClassCheck, true);
+    EXPECT_EQ(bucketTypeCheck, true);
+
+
+    DeleteBucketInput inputV2Delete(bkt);
+    auto outputV2Delete = cliV2->deleteBucket(inputV2Delete);
+    EXPECT_EQ(outputV2Delete.isSuccess(), true);
+}
+TEST_F(BucketCreateHeadTest, CreateBucketWithFns) {
+    std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefix);
+    CreateBucketV2Input inputV2(bkt);
+
+    auto outputV2 = cliV2->createBucket(inputV2);
+    EXPECT_EQ(outputV2.isSuccess(), true);
+
+    // 校验桶元数据
+    HeadBucketV2Input inputV2Head(bkt);
+    auto output_v2_head = cliV2->headBucket(inputV2Head);
+    EXPECT_EQ(output_v2_head.isSuccess(), true);
+    bool regionCheck = (output_v2_head.result().getRegion() == TestConfig::Region);
+    bool storageClassCheck = (output_v2_head.result().getStorageClass() == StorageClassType::STANDARD);
+    bool bucketTypeCheck = (output_v2_head.result().getBucketType() == BucketType::FNS);
+    EXPECT_EQ(regionCheck, true);
+    EXPECT_EQ(storageClassCheck, true);
+    EXPECT_EQ(bucketTypeCheck, true);
+
+    DeleteBucketInput inputV2Delete(bkt);
+    auto outputV2Delete = cliV2->deleteBucket(inputV2Delete);
+    EXPECT_EQ(outputV2Delete.isSuccess(), true);
+}
+
 TEST_F(BucketCreateHeadTest, CreateBucketWithParametersTest) {
     std::string bkt = TestUtils::GetBucketName(TestConfig::TestPrefix);
     CreateBucketV2Input input_v2(bkt);
