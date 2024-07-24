@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.11
+        VERSION 2.6.12
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -356,6 +356,7 @@ set(SDK_LIB
         src/model/object/RestoreObjectInput.cc
         src/model/bucket/PutBucketRenameInput.cc
         src/model/bucket/GetBucketRenameOutput.cc
+        src/model/object/GetFileStatusOutput.cc
         )
 
 # add spdlog
