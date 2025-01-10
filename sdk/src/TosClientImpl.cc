@@ -907,9 +907,6 @@ Outcome<TosError, GetFileStatusOutput> TosClientImpl::getFileStatus(const GetFil
     auto rb = newBuilder(input.getBucket(), input.getKey());
     rb.withQuery("stat", "");
     this->getFileStatus(rb, res);
-    if (res.isSuccess()) {
-        res.result().setKey(input.getKey());
-    }
     return res;
 }
 

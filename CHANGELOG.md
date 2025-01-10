@@ -1,4 +1,7 @@
 ## Release Note
+### 2025.1.9 Version 2.6.13
+- 修复：GetFileStatus 接口扁平桶返回对象名错误的问题
+
 ### 2024.7.24 Version 2.6.12
 - 优化编译
 
