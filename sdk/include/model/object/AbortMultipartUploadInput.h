@@ -1,8 +1,11 @@
 #pragma once
 
 #include <string>
+
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class AbortMultipartUploadInput {
+class AbortMultipartUploadInput : public GenericInput {
 public:
     AbortMultipartUploadInput() = default;
     ~AbortMultipartUploadInput() = default;

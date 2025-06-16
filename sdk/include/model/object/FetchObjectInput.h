@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class FetchObjectInput {
+class FetchObjectInput : public GenericInput {
 public:
     FetchObjectInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

@@ -4,8 +4,10 @@
 #include <utility>
 #include <vector>
 #include "CORSRule.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PutBucketCORSInput {
+class PutBucketCORSInput : public GenericInput {
 public:
     explicit PutBucketCORSInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

@@ -3,9 +3,10 @@
 #include <string>
 #include <utility>
 #include <Type.h>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class GetBucketMirrorBackInput {
+class GetBucketMirrorBackInput : public GenericInput {
 public:
     explicit GetBucketMirrorBackInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

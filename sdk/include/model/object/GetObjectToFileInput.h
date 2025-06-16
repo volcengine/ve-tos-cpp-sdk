@@ -4,8 +4,10 @@
 #include <utility>
 #include "Type.h"
 #include "GetObjectV2Input.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class GetObjectToFileInput {
+class GetObjectToFileInput : public GenericInput {
 public:
     GetObjectToFileInput(std::string bucket, std::string key, std::string filepath)
             : getObjectInput_(std::move(bucket), std::move(key)), filePath_(std::move(filepath)) {

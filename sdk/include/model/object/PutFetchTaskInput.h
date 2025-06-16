@@ -1,7 +1,9 @@
 #pragma once
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PutFetchTaskInput {
+class PutFetchTaskInput : public GenericInput {
 public:
     PutFetchTaskInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

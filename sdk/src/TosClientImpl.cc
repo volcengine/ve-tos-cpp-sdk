@@ -42,34 +42,38 @@ TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& reg
     credentials_ = std::make_shared<StaticCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
-TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
-                             const FederationCredentials& cred) {
-    initWithoutConfig(endpoint, region);
+
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const FederationCredentials& cred) {
+    initWithoutConfig(endpoint,  region);
     credentials_ = std::make_shared<FederationCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
 
 void TosClientImpl::initWithoutConfig(const std::string& endpoint, const std::string& region) {
-    if (endpoint.empty()) {
-        if (supportedRegion_.count(region) != 0) {
-            init(supportedRegion_[region], region);
-        } else {
-            init(endpoint, region);
-            //            std::cout << "Please Check Region is Supported" << std::endl;
-        }
-    } else {
-        init(endpoint, region);
+    std::string tmpEndpoint = endpoint;
+    std::string tmpControlEndpoint = "";
+    if (endpoint.empty() && supportedRegion_.count(region) != 0) {
+        tmpEndpoint = supportedRegion_[region];
     }
+    if (supportedRegionToControlEndpoint_.count(region) != 0) {
+        tmpControlEndpoint = supportedRegionToControlEndpoint_[region];
+    }
+
+    init(tmpEndpoint, tmpControlEndpoint, region);
 }
-void TosClientImpl::init(const std::string& endpoint, const std::string& region) {
+
+void TosClientImpl::init(const std::string& endpoint, const std::string& controlEndpoint, const std::string& region) {
     TransportConfig conf;
     transport_ = std::make_shared<DefaultTransport>(conf);
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
+    config_.setControlEndpoint(controlEndpoint);
     config_.setRegion(region, endpoint);
     auto schemeHostParameter = initSchemeAndHost(endpoint);
     scheme_ = schemeHostParameter.scheme_;
     host_ = schemeHostParameter.host_;
+    auto controlSchemeHostParameter = initSchemeAndHost(controlEndpoint);
+    controlHost_ = controlSchemeHostParameter.host_;
     urlMode_ = schemeHostParameter.urlMode_;
     if (!NetUtils::isNotIP(host_)) {
         connectWithIP_ = true;
@@ -78,14 +82,15 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region)
         connectWithS3EndPoint_ = true;
     }
 }
-TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const StaticCredentials& cred,
-                             const ClientConfig& config) {
+
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
+                             const StaticCredentials& cred, const ClientConfig& config) {
     initWithConfig(endpoint, region, config);
     credentials_ = std::make_shared<StaticCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
-TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const FederationCredentials& cred,
-                             const ClientConfig& config) {
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
+                             const FederationCredentials& cred, const ClientConfig& config) {
     initWithConfig(endpoint, region, config);
     credentials_ = std::make_shared<FederationCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
@@ -106,19 +111,19 @@ TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& reg
 }
 
 void TosClientImpl::initWithConfig(const std::string& endpoint, const std::string& region, const ClientConfig& config) {
-    if (endpoint.empty()) {
-        if (supportedRegion_.count(region) != 0) {
-            init(supportedRegion_[region], region, config);
-        } else {
-            init(endpoint, region, config);
-            //            std::cout << "Please Check Region is Supported" << std::endl;
-        }
-    } else {
-        init(endpoint, region, config);
+    std::string tmpEndpoint = endpoint;
+    std::string tmpControlEndpoint = config.controlEndPoint;
+    if (endpoint.empty() && supportedRegion_.count(region) != 0) {
+        tmpEndpoint = supportedRegion_[region];
     }
+    if (config.controlEndPoint.empty() && supportedRegionToControlEndpoint_.count(region) != 0) {
+        tmpControlEndpoint = supportedRegionToControlEndpoint_[region];
+    }
+
+    init(tmpEndpoint, tmpControlEndpoint,  region, config);
 }
 
-void TosClientImpl::init(const std::string& endpoint, const std::string& region, const ClientConfig& config) {
+void TosClientImpl::init(const std::string& endpoint, const std::string& controlEndpoint, const std::string& region, const ClientConfig& config) {
     TransportConfig conf;
     // 涉及到 HttpClient 的参数放到这里
     // 需要同步修改 DefaultTransport(const TransportConfig& config) 以传参给 HttpConfig
@@ -134,6 +139,8 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     conf.setSocketTimeout(config.socketTimeout);
     conf.setCaFile(config.caFile);
     conf.setCaPath(config.caPath);
+    conf.setClientCrt(config.clientCrt);
+    conf.setClientKey(config.clientKey);
     conf.setHighLatencyLogThreshold(config.highLatencyLogThreshold);
 
     transport_ = std::make_shared<DefaultTransport>(conf);
@@ -141,6 +148,7 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     // 保存参数到 config_ 里
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
+    config_.setControlEndpoint(controlEndpoint);
     config_.setRegion(region, endpoint);
     config_.setIsCustomDomain(config.isCustomDomain);
     // 涉及到 req/roundTrip 的参数放到这里
@@ -150,6 +158,8 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& region,
     auto schemeHostParameter = initSchemeAndHost(endpoint);
     scheme_ = schemeHostParameter.scheme_;
     host_ = schemeHostParameter.host_;
+    auto controlSchemeHostParameter = initSchemeAndHost(controlEndpoint);
+    controlHost_ = controlSchemeHostParameter.host_;
     urlMode_ = schemeHostParameter.urlMode_;
     if (!NetUtils::isNotIP(host_)) {
         connectWithIP_ = true;
@@ -231,6 +241,19 @@ std::string isValidBucketName(const std::string& name, bool isCustomDomain) {
     if (name[0] == '-' || name[name.length() - 1] == '-') {
         return "invalid bucket name, the bucket name can be neither starting with ' - ' nor ending with ' - '";
     }
+    return "";
+}
+
+std::string isValidAccountID(const std::string& accountID) {
+    if (accountID.empty()) {
+        return "invalid accountID";
+    }
+    for (char c : accountID) {
+        if (!('0' <= c && c <= '9')) {
+            return "invalid accountID, the character set is illegal";
+        }
+    }
+
     return "";
 }
 
@@ -348,14 +371,18 @@ Outcome<TosError, CreateBucketOutput> TosClientImpl::createBucket(const CreateBu
         res.setSuccess(false);
         return res;
     }
-
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "",input);
     createBucketSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodPut, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CreateBucketOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     CreateBucketOutput output;
@@ -388,7 +415,7 @@ Outcome<TosError, CreateBucketV2Output> TosClientImpl::createBucket(const Create
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "",input);
     createBucketSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodPut, nullptr);
     // 设置funcName
@@ -397,6 +424,11 @@ Outcome<TosError, CreateBucketV2Output> TosClientImpl::createBucket(const Create
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CreateBucketV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     CreateBucketV2Output output;
@@ -418,11 +450,16 @@ Outcome<TosError, HeadBucketOutput> TosClientImpl::headBucket(const std::string&
         res.setE(error);
         return res;
     }
-    auto req = newBuilder(bucket, "").Build(http::MethodHead, nullptr);
+    auto req = newBuilder(bucket, "", GenericInput()).Build(http::MethodHead, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        HeadBucketOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     HeadBucketOutput output;
@@ -444,11 +481,16 @@ Outcome<TosError, HeadBucketV2Output> TosClientImpl::headBucket(const HeadBucket
         res.setE(error);
         return res;
     }
-    auto req = newBuilder(input.getBucket(), "").Build(http::MethodHead, nullptr);
+    auto req = newBuilder(input.getBucket(), "", input).Build(http::MethodHead, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        HeadBucketV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     HeadBucketV2Output output;
@@ -473,11 +515,16 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const std::str
         res.setE(error);
         return res;
     }
-    auto req = newBuilder(bucket, "").Build(http::MethodDelete);
+    auto req = newBuilder(bucket, "", GenericInput()).Build(http::MethodDelete);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketOutput output;
@@ -497,13 +544,18 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const DeleteBu
         res.setE(error);
         return res;
     }
-    auto req = newBuilder(input.getBucket(), "").Build(http::MethodDelete);
+    auto req = newBuilder(input.getBucket(), "",input).Build(http::MethodDelete);
     // 设置funcName
     req->setFuncName(__func__);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketOutput output;
@@ -514,13 +566,18 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const DeleteBu
 }
 Outcome<TosError, ListBucketsOutput> TosClientImpl::listBuckets(const ListBucketsInput& input) {
     Outcome<TosError, ListBucketsOutput> res;
-    auto rb = newBuilder("", "");
+    auto rb = newBuilder("", "",input);
     rb.withHeader(HEADER_BUCKET_TYPE, BucketTypetoString[input.getBucketType()]);
     auto req = rb.Build(http::MethodGet);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListBucketsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListBucketsOutput output;
@@ -547,7 +604,7 @@ Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const st
         return res;
     }
 
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", GenericInput());
     rb.withQuery("policy", "");
     auto ss = std::make_shared<std::stringstream>(policy);
     auto req = rb.Build(http::MethodPut, ss);
@@ -555,6 +612,11 @@ Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const st
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketPolicyOutput output;
@@ -576,13 +638,18 @@ Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const st
         return res;
     }
 
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", GenericInput());
     rb.withQuery("policy", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketPolicyOutput output;
@@ -607,13 +674,18 @@ Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(co
         return res;
     }
 
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", GenericInput());
     rb.withQuery("policy", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketPolicyOutput output;
@@ -634,7 +706,7 @@ Outcome<TosError, GetObjectOutput> TosClientImpl::getObject(const std::string& b
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     this->getObject(rb, res);
     return res;
 }
@@ -650,7 +722,7 @@ Outcome<TosError, GetObjectOutput> TosClientImpl::getObject(const std::string& b
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     this->getObject(rb, res);
     return res;
 }
@@ -762,7 +834,7 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     getObjectSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodGet, nullptr);
     if (fileContent != nullptr) {
@@ -786,6 +858,11 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetObjectV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetObjectV2Output output;
@@ -904,7 +981,7 @@ Outcome<TosError, GetFileStatusOutput> TosClientImpl::getFileStatus(const GetFil
         res.setR(output);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("stat", "");
     this->getFileStatus(rb, res);
     return res;
@@ -916,6 +993,11 @@ void TosClientImpl::getFileStatus(RequestBuilder& rb, Outcome<TosError, GetFileS
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetFileStatusOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     GetFileStatusOutput output;
@@ -938,7 +1020,7 @@ Outcome<TosError, HeadObjectOutput> TosClientImpl::headObject(const std::string&
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     this->headObject(rb, res);
     return res;
 }
@@ -954,7 +1036,7 @@ Outcome<TosError, HeadObjectOutput> TosClientImpl::headObject(const std::string&
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     this->headObject(rb, res);
     return res;
 }
@@ -986,13 +1068,18 @@ Outcome<TosError, HeadObjectV2Output> TosClientImpl::headObject(const HeadObject
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     headObjectSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodHead, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        HeadObjectV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     HeadObjectV2Output output;
@@ -1015,7 +1102,7 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const std::str
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     this->deleteObject(rb, res);
     return res;
 }
@@ -1032,7 +1119,7 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const std::str
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     this->deleteObject(rb, res);
     return res;
 }
@@ -1047,9 +1134,18 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const DeleteOb
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
 
     rb.withQueryCheckEmpty("versionId", input.getVersionID());
+
+    if (input.getRecursive()) {
+        rb.withQueryCheckEmpty("recursive", "true");
+    }
+
+    if (input.getSkipTrash()) {
+        rb.withQueryCheckEmpty("skipTrash", "true");
+    }
 
     auto req = rb.Build(http::MethodDelete, nullptr);
     // 设置funcName
@@ -1058,12 +1154,18 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const DeleteOb
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteObjectOutput output;
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     output.setDeleteMarker(tosRes.result()->findHeader(HEADER_DELETE_MARKER) == "true");
     output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
+    output.setTrashPath(tosRes.result()->findHeader(HEADER_Trash_Path));
     res.setSuccess(true);
     res.setR(output);
     return res;
@@ -1090,7 +1192,16 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(co
     }
     std::string data = input.toJsonString();
     std::string dataMd5 = CryptoUtils::md5Sum(data);
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", input);
+
+    if (input.getRecursive()) {
+        rb.withQueryCheckEmpty("recursive", "true");
+    }
+
+    if (input.getSkipTrash()) {
+        rb.withQueryCheckEmpty("skipTrash", "true");
+    }
+
     this->deleteMultiObjects(rb, data, dataMd5, res);
     return res;
 }
@@ -1116,7 +1227,7 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(co
     }
     std::string data = input.toJsonString();
     std::string dataMd5 = CryptoUtils::md5Sum(data);
-    auto rb = newBuilder(bucket, "", builder);
+    auto rb = newBuilder(bucket, "", builder, input);
     this->deleteMultiObjects(rb, data, dataMd5, res);
     return res;
 }
@@ -1141,7 +1252,7 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(De
 
     std::string data = input.toJsonString();
     std::string dataMd5 = CryptoUtils::md5Sum(data);
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     rb.withHeader(http::HEADER_CONTENT_MD5, dataMd5);
     rb.withQuery("delete", "");
@@ -1150,6 +1261,11 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(De
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteMultiObjectsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     std::stringstream out;
@@ -1173,7 +1289,7 @@ Outcome<TosError, PutObjectOutput> TosClientImpl::putObject(const std::string& b
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     setContentType(rb, objectKey);
     auto req = rb.Build(http::MethodPut, content);
     this->putObject(req, res);
@@ -1192,7 +1308,7 @@ Outcome<TosError, PutObjectOutput> TosClientImpl::putObject(const std::string& b
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     setContentType(rb, objectKey);
     auto req = rb.Build(http::MethodPut, content);
     this->putObject(req, res);
@@ -1255,7 +1371,7 @@ Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyOb
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("modify", "");
     rb.withQuery("offset", std::to_string(input.getOffset()));
     if (input.getTrafficLimit() != 0) {
@@ -1275,6 +1391,11 @@ Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyOb
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ModifyObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ModifyObjectOutput output;
@@ -1309,7 +1430,9 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(putObjectBasicInput_.getBucket(), putObjectBasicInput_.getKey());
+    auto rb = newBuilder(putObjectBasicInput_.getBucket(),
+                         putObjectBasicInput_.getKey(),
+                         input);
 
     if (config_.isAutoRecognizeContentType()) {
         setContentType(rb, putObjectBasicInput_.getKey());
@@ -1330,6 +1453,11 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutObjectV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     if (config_.isEnableCrc()) {
@@ -2133,6 +2261,11 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
             }
         }
 
+        // 删除 checkPoint 文件
+        if (input.isEnableCheckpoint()) {
+            deleteCheckpointFile(checkpointFilePath);
+        }
+
         ret.setSuccess(false);
         error.setIsClientError(true);
         error.setMessage("the task is canceled");
@@ -2917,7 +3050,7 @@ Outcome<TosError, AppendObjectOutput> TosClientImpl::appendObject(const std::str
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     setContentType(rb, objectKey);
     rb.withQuery("append", "");
     rb.withQuery("offset", std::to_string(offset));
@@ -2939,7 +3072,7 @@ Outcome<TosError, AppendObjectOutput> TosClientImpl::appendObject(const std::str
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     setContentType(rb, objectKey);
     rb.withQuery("append", "");
     rb.withQuery("offset", std::to_string(offset));
@@ -3010,7 +3143,7 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
     }
 
     // offset有默认值因此不校验
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("append", "");
     rb.withQuery("offset", std::to_string(input.getOffset()));
 
@@ -3035,6 +3168,11 @@ Outcome<TosError, AppendObjectV2Output> TosClientImpl::appendObject(const Append
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        AppendObjectV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     // crc64 校验
@@ -3080,7 +3218,7 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const std::s
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     this->setObjectMeta(rb, res);
     return res;
 }
@@ -3109,7 +3247,7 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const SetObj
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("metadata", "");
     rb.withQueryCheckEmpty("versionid", input.getVersionId());
 
@@ -3121,6 +3259,11 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const SetObj
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        SetObjectMetaOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     SetObjectMetaOutput output;
@@ -3144,7 +3287,7 @@ Outcome<TosError, ListObjectsOutput> TosClientImpl::listObjects(const std::strin
         return res;
     }
 
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", input);
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
     rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
     rb.withQueryCheckEmpty("marker", input.getMarker());
@@ -3157,6 +3300,11 @@ Outcome<TosError, ListObjectsOutput> TosClientImpl::listObjects(const std::strin
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListObjectsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListObjectsOutput output;
@@ -3181,7 +3329,7 @@ Outcome<TosError, ListObjectsV2Output> TosClientImpl::listObjects(const ListObje
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
     rb.withQueryCheckEmpty("encoding-type", input.getEncodingType());
@@ -3195,6 +3343,11 @@ Outcome<TosError, ListObjectsV2Output> TosClientImpl::listObjects(const ListObje
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListObjectsV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListObjectsV2Output output;
@@ -3220,7 +3373,7 @@ Outcome<TosError, ListObjectVersionsOutput> TosClientImpl::listObjectVersions(co
         return res;
     }
 
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", input);
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
     rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
     rb.withQueryCheckEmpty("key-marker", input.getKeyMarker());
@@ -3234,6 +3387,11 @@ Outcome<TosError, ListObjectVersionsOutput> TosClientImpl::listObjectVersions(co
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListObjectVersionsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListObjectVersionsOutput output;
@@ -3258,7 +3416,7 @@ Outcome<TosError, ListObjectVersionsV2Output> TosClientImpl::listObjectVersions(
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("versions", "");
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
     rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
@@ -3273,6 +3431,11 @@ Outcome<TosError, ListObjectVersionsV2Output> TosClientImpl::listObjectVersions(
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListObjectVersionsV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListObjectVersionsV2Output output;
@@ -3397,14 +3560,20 @@ Outcome<TosError, CopyObjectV2Output> TosClientImpl::copyObject(const CopyObject
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
 
     copyObjectSetOptionHeader(rb, input);
+    rb.withQueryCheckEmpty("versionId", input.getSrcVersionId());
     auto req = rb.BuildWithCopySource(http::MethodPut, input.getSrcBucket(), input.getSrcKey());
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CopyObjectV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     CopyObjectInner tempOutput;
@@ -3553,7 +3722,7 @@ Outcome<TosError, UploadPartCopyOutput> TosClientImpl::uploadPartCopy(const std:
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getDestinationKey());
+    auto rb = newBuilder(bucket, input.getDestinationKey(), input);
     this->uploadPartCopy(rb, input, res);
     return res;
 }
@@ -3588,7 +3757,7 @@ Outcome<TosError, UploadPartCopyOutput> TosClientImpl::uploadPartCopy(const std:
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getDestinationKey(), builder);
+    auto rb = newBuilder(bucket, input.getDestinationKey(), builder, input);
     this->uploadPartCopy(rb, input, res);
     return res;
 }
@@ -3672,9 +3841,10 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("partNumber", std::to_string(input.getPartNumber()));
     rb.withQuery("uploadId", input.getUploadId());
+    rb.withQueryCheckEmpty("versionId", input.getSrcVersionId());
     uploadPartCopySetOptionHeader(rb, input);
     auto req = rb.BuildWithCopySource(http::MethodPut, input.getSrcBucket(), input.getSrcKey());
     SetCrc64ParmToReq(req);
@@ -3682,6 +3852,11 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        UploadPartCopyV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     UploadPartCopyInner tempOutput;
@@ -3744,7 +3919,7 @@ Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::str
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
     }
-    auto rb = newBuilder(bucket, input.getKey());
+    auto rb = newBuilder(bucket, input.getKey(), input);
     rb.withQuery("acl", "");
     setAclGrant(input, rb);
     auto req = rb.Build(http::MethodPut, ss);
@@ -3752,6 +3927,11 @@ Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::str
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutObjectAclOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutObjectAclOutput output;
@@ -3789,7 +3969,7 @@ Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObj
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("acl", "");
     setAclGrant(input, rb);
     rb.withHeader(HEADER_VERSIONID, input.getVersionId());
@@ -3800,6 +3980,11 @@ Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObj
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutObjectAclV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutObjectAclV2Output output;
@@ -3820,7 +4005,7 @@ Outcome<TosError, GetObjectAclOutput> TosClientImpl::getObjectAcl(const std::str
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     this->getObjectAcl(rb, res);
     return res;
 }
@@ -3837,7 +4022,7 @@ Outcome<TosError, GetObjectAclOutput> TosClientImpl::getObjectAcl(const std::str
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     this->getObjectAcl(rb, res);
     return res;
 }
@@ -3852,7 +4037,7 @@ Outcome<TosError, GetObjectAclV2Output> TosClientImpl::getObjectAcl(const GetObj
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("acl", "");
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
     auto req = rb.Build(http::MethodGet, nullptr);
@@ -3860,6 +4045,11 @@ Outcome<TosError, GetObjectAclV2Output> TosClientImpl::getObjectAcl(const GetObj
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetObjectAclV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetObjectAclV2Output output;
@@ -3885,7 +4075,7 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     setContentType(rb, objectKey);
     this->createMultipartUpload(rb, res);
     return res;
@@ -3902,7 +4092,7 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     setContentType(rb, objectKey);
     this->createMultipartUpload(rb, res);
     return res;
@@ -3953,7 +4143,7 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("uploads", "");
 
     if (config_.isAutoRecognizeContentType()) {
@@ -3968,6 +4158,11 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CreateMultipartUploadOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     inner::MultipartUpload upload;
@@ -4013,7 +4208,7 @@ Outcome<TosError, UploadPartOutput> TosClientImpl::uploadPart(const std::string&
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getKey());
+    auto rb = newBuilder(bucket, input.getKey(), input);
     this->uploadPart(rb, input, res);
     return res;
 }
@@ -4045,7 +4240,7 @@ Outcome<TosError, UploadPartOutput> TosClientImpl::uploadPart(const std::string&
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getKey(), builder);
+    auto rb = newBuilder(bucket, input.getKey(), builder, input);
     this->uploadPart(rb, input, res);
     return res;
 }
@@ -4097,7 +4292,7 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(uploadPartBasicInput_.getBucket(), uploadPartBasicInput_.getKey());
+    auto rb = newBuilder(uploadPartBasicInput_.getBucket(), uploadPartBasicInput_.getKey(), input);
     rb.setContentLength(input.getContentLength());
     rb.withQuery("uploadId", uploadPartBasicInput_.getUploadId());
     rb.withQuery("partNumber", std::to_string(uploadPartBasicInput_.getPartNumber()));
@@ -4129,6 +4324,11 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        UploadPartV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     // crc64校验
@@ -4240,13 +4440,18 @@ Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipar
     }
     multipart.sort();
     auto content = std::make_shared<std::stringstream>(multipart.toJsonString());
-    auto rb = newBuilder(bucket, input.getKey());
+    auto rb = newBuilder(bucket, input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
     auto req = rb.Build(http::MethodPost, content);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CompleteMultipartUploadOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     CompleteMultipartUploadOutput output;
@@ -4269,13 +4474,18 @@ Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipar
     }
     multipart.sort();
     auto content = std::make_shared<std::stringstream>(multipart.toJsonString());
-    auto rb = newBuilder(bucket, input.getKey());
+    auto rb = newBuilder(bucket, input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
     auto req = rb.Build(http::MethodPost, content);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CompleteMultipartUploadOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     CompleteMultipartUploadOutput output;
@@ -4332,7 +4542,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
         }
     }
 
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
     if (input.isCompleteAll()) {
         rb.withHeader(HEADER_COMPLETE_ALL, "yes");
@@ -4351,6 +4561,11 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CompleteMultipartUploadV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     CompleteMultipartUploadV2Output output;
@@ -4396,13 +4611,18 @@ Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUploa
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getKey());
+    auto rb = newBuilder(bucket, input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        AbortMultipartUploadOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     AbortMultipartUploadOutput output;
@@ -4431,7 +4651,7 @@ Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUploa
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
     auto req = rb.Build(http::MethodDelete, nullptr);
     // 设置funcName
@@ -4440,6 +4660,11 @@ Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUploa
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        AbortMultipartUploadOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     AbortMultipartUploadOutput output;
@@ -4460,7 +4685,7 @@ Outcome<TosError, ListUploadedPartsOutput> TosClientImpl::listUploadedParts(cons
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getKey());
+    auto rb = newBuilder(bucket, input.getKey(), input);
     this->listUploadedParts(rb, input.getUploadId(), res);
     return res;
 }
@@ -4477,7 +4702,7 @@ Outcome<TosError, ListUploadedPartsOutput> TosClientImpl::listUploadedParts(cons
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, input.getKey(), builder);
+    auto rb = newBuilder(bucket, input.getKey(), builder, input);
     this->listUploadedParts(rb, input.getUploadId(), res);
     return res;
 }
@@ -4501,7 +4726,7 @@ Outcome<TosError, ListPartsOutput> TosClientImpl::listParts(const ListPartsInput
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
 
     if (input.getMaxParts() != 0) {
@@ -4516,6 +4741,11 @@ Outcome<TosError, ListPartsOutput> TosClientImpl::listParts(const ListPartsInput
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListPartsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListPartsOutput output;
@@ -4531,7 +4761,7 @@ Outcome<TosError, ListPartsOutput> TosClientImpl::listParts(const ListPartsInput
 Outcome<TosError, ListMultipartUploadsOutput> TosClientImpl::listMultipartUploads(
         const std::string& bucket, const ListMultipartUploadsInput& input) {
     Outcome<TosError, ListMultipartUploadsOutput> res;
-    auto rb = newBuilder(bucket, "");
+    auto rb = newBuilder(bucket, "", input);
     rb.withQuery("uploads", "");
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
     rb.withQueryCheckEmpty("delimiter", input.getDelimiter());
@@ -4546,6 +4776,11 @@ Outcome<TosError, ListMultipartUploadsOutput> TosClientImpl::listMultipartUpload
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListMultipartUploadsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListMultipartUploadsOutput output;
@@ -4571,7 +4806,7 @@ static void listMultipartUploadsSetOptionHeader(RequestBuilder& rb, const ListMu
 Outcome<TosError, ListMultipartUploadsV2Output> TosClientImpl::listMultipartUploads(
         const ListMultipartUploadsV2Input& input) {
     Outcome<TosError, ListMultipartUploadsV2Output> res;
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("uploads", "");
     listMultipartUploadsSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodGet, nullptr);
@@ -4579,6 +4814,11 @@ Outcome<TosError, ListMultipartUploadsV2Output> TosClientImpl::listMultipartUplo
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListMultipartUploadsV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListMultipartUploadsV2Output output;
@@ -4604,7 +4844,7 @@ Outcome<TosError, std::string> TosClientImpl::preSignedURL(const std::string& ht
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey);
+    auto rb = newBuilder(bucket, objectKey, GenericInput());
     this->preSignedURL(rb, httpMethod, ttl, res);
     return res;
 }
@@ -4621,7 +4861,7 @@ Outcome<TosError, std::string> TosClientImpl::preSignedURL(const std::string& ht
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(bucket, objectKey, builder);
+    auto rb = newBuilder(bucket, objectKey, builder, GenericInput());
     this->preSignedURL(rb, httpMethod, ttl, res);
     return res;
 }
@@ -4662,7 +4902,7 @@ Outcome<TosError, PreSignedURLOutput> TosClientImpl::preSignedURL(const PreSigne
         res.setE(se);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey(), input.getAlternativeEndpoint(), headers, querys);
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input.getAlternativeEndpoint(), headers, querys, input);
     auto req = rb.buildSignedURL(HttpMethodTypetoString[input.getHttpMethod()]);
     std::chrono::duration<int> ttl(expires_);
     auto query = signer_->signQuery(req, ttl);
@@ -4701,7 +4941,7 @@ Outcome<TosError, PutBucketCORSOutput> TosClientImpl::putBucketCORS(const PutBuc
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -4714,6 +4954,11 @@ Outcome<TosError, PutBucketCORSOutput> TosClientImpl::putBucketCORS(const PutBuc
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketCORSOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketCORSOutput output;
@@ -4734,13 +4979,18 @@ Outcome<TosError, GetBucketCORSOutput> TosClientImpl::getBucketCORS(const GetBuc
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("cors", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketCORSOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketCORSOutput output;
@@ -4763,13 +5013,18 @@ Outcome<TosError, DeleteBucketCORSOutput> TosClientImpl::deleteBucketCORS(const 
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("cors", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketCORSOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketCORSOutput output;
@@ -4792,7 +5047,7 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("list-type", "2");
     rb.withQuery("fetch-owner", "true");
     rb.withQueryCheckEmpty("prefix", input.getPrefix());
@@ -4808,6 +5063,11 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListObjectsType2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListObjectsType2Output output;
@@ -4842,6 +5102,11 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
             if (!tosRes.isSuccess()) {
                 res.setE(tosRes.error());
                 res.setSuccess(false);
+
+                ListObjectsType2Output output;
+                output.setRequestInfo(tosRes.result()->GetRequestInfo());
+                res.setR(output);
+
                 return res;
             }
             ListObjectsType2Output outputTemp;
@@ -4888,7 +5153,7 @@ Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageCl
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("storageClass", "");
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
     auto req = rb.Build(http::MethodPut, nullptr);
@@ -4896,6 +5161,11 @@ Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageCl
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketStorageClassOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketStorageClassOutput output;
@@ -4916,13 +5186,18 @@ Outcome<TosError, GetBucketLocationOutput> TosClientImpl::getBucketLocation(cons
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("location", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketLocationOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketLocationOutput output;
@@ -4957,7 +5232,7 @@ Outcome<TosError, PutBucketLifecycleOutput> TosClientImpl::putBucketLifecycle(co
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -4970,6 +5245,11 @@ Outcome<TosError, PutBucketLifecycleOutput> TosClientImpl::putBucketLifecycle(co
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketLifecycleOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketLifecycleOutput output;
@@ -4990,13 +5270,18 @@ Outcome<TosError, GetBucketLifecycleOutput> TosClientImpl::getBucketLifecycle(co
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("lifecycle", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketLifecycleOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketLifecycleOutput output;
@@ -5020,13 +5305,18 @@ Outcome<TosError, DeleteBucketLifecycleOutput> TosClientImpl::deleteBucketLifecy
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("lifecycle", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketLifecycleOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketLifecycleOutput output;
@@ -5056,7 +5346,7 @@ Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const Pu
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("policy", "");
     auto ss = std::make_shared<std::stringstream>(input.getPolicy());
     auto req = rb.Build(http::MethodPut, ss);
@@ -5064,6 +5354,11 @@ Outcome<TosError, PutBucketPolicyOutput> TosClientImpl::putBucketPolicy(const Pu
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketPolicyOutput output;
@@ -5085,13 +5380,18 @@ Outcome<TosError, GetBucketPolicyOutput> TosClientImpl::getBucketPolicy(const Ge
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("policy", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketPolicyOutput output;
@@ -5115,13 +5415,18 @@ Outcome<TosError, DeleteBucketPolicyOutput> TosClientImpl::deleteBucketPolicy(co
         return res;
     }
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("policy", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketPolicyOutput output;
@@ -5153,7 +5458,7 @@ Outcome<TosError, PutBucketMirrorBackOutput> TosClientImpl::putBucketMirrorBack(
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -5166,6 +5471,11 @@ Outcome<TosError, PutBucketMirrorBackOutput> TosClientImpl::putBucketMirrorBack(
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketMirrorBackOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketMirrorBackOutput output;
@@ -5186,13 +5496,18 @@ Outcome<TosError, GetBucketMirrorBackOutput> TosClientImpl::getBucketMirrorBack(
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("mirror", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketMirrorBackOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketMirrorBackOutput output;
@@ -5216,13 +5531,18 @@ Outcome<TosError, DeleteBucketMirrorBackOutput> TosClientImpl::deleteBucketMirro
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("mirror", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketMirrorBackOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketMirrorBackOutput output;
@@ -5255,7 +5575,7 @@ Outcome<TosError, PutObjectTaggingOutput> TosClientImpl::putObjectTagging(const 
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -5269,6 +5589,11 @@ Outcome<TosError, PutObjectTaggingOutput> TosClientImpl::putObjectTagging(const 
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutObjectTaggingOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutObjectTaggingOutput output;
@@ -5289,7 +5614,7 @@ Outcome<TosError, GetObjectTaggingOutput> TosClientImpl::getObjectTagging(const 
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("tagging", "");
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
     auto req = rb.Build(http::MethodGet, nullptr);
@@ -5297,6 +5622,11 @@ Outcome<TosError, GetObjectTaggingOutput> TosClientImpl::getObjectTagging(const 
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetObjectTaggingOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetObjectTaggingOutput output;
@@ -5319,7 +5649,7 @@ Outcome<TosError, DeleteObjectTaggingOutput> TosClientImpl::deleteObjectTagging(
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("tagging", "");
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
     auto req = rb.Build(http::MethodDelete, nullptr);
@@ -5327,6 +5657,11 @@ Outcome<TosError, DeleteObjectTaggingOutput> TosClientImpl::deleteObjectTagging(
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteObjectTaggingOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteObjectTaggingOutput output;
@@ -5367,7 +5702,7 @@ Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucke
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -5381,6 +5716,11 @@ Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucke
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketAclOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketAclOutput output;
@@ -5401,13 +5741,18 @@ Outcome<TosError, GetBucketAclOutput> TosClientImpl::getBucketAcl(const GetBucke
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("acl", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketAclOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketAclOutput output;
@@ -5463,7 +5808,7 @@ Outcome<TosError, FetchObjectOutput> TosClientImpl::fetchObject(const FetchObjec
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
         std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
@@ -5478,6 +5823,11 @@ Outcome<TosError, FetchObjectOutput> TosClientImpl::fetchObject(const FetchObjec
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        FetchObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     FetchObjectOutput output;
@@ -5532,7 +5882,7 @@ Outcome<TosError, PutFetchTaskOutput> TosClientImpl::putFetchTask(const PutFetch
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
         std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
@@ -5547,6 +5897,11 @@ Outcome<TosError, PutFetchTaskOutput> TosClientImpl::putFetchTask(const PutFetch
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutFetchTaskOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutFetchTaskOutput output;
@@ -6001,6 +6356,11 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
             }
         }
 
+        // 删除 checkPoint 文件
+        if (input.isEnableCheckpoint()) {
+            deleteCheckpointFile(checkpointFilePath);
+        }
+
         ret.setSuccess(false);
         error.setIsClientError(true);
         error.setMessage("the task is canceled");
@@ -6325,7 +6685,7 @@ Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplicatio
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
         std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
@@ -6337,6 +6697,11 @@ Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplicatio
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketReplicationOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketReplicationOutput output;
@@ -6358,7 +6723,7 @@ Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplicatio
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("replication", "");
     rb.withQuery("progress", "");
 
@@ -6368,6 +6733,11 @@ Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplicatio
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketReplicationOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketReplicationOutput output;
@@ -6391,13 +6761,18 @@ Outcome<TosError, DeleteBucketReplicationOutput> TosClientImpl::deleteBucketRepl
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("replication", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketReplicationOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketReplicationOutput output;
@@ -6422,7 +6797,7 @@ Outcome<TosError, PutBucketVersioningOutput> TosClientImpl::putBucketVersioning(
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
 
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -6435,6 +6810,11 @@ Outcome<TosError, PutBucketVersioningOutput> TosClientImpl::putBucketVersioning(
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketVersioningOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketVersioningOutput output;
@@ -6455,13 +6835,18 @@ Outcome<TosError, GetBucketVersioningOutput> TosClientImpl::getBucketVersioning(
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("versioning", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketVersioningOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketVersioningOutput output;
@@ -6488,7 +6873,7 @@ Outcome<TosError, PutBucketWebsiteOutput> TosClientImpl::putBucketWebsite(const 
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -6501,6 +6886,11 @@ Outcome<TosError, PutBucketWebsiteOutput> TosClientImpl::putBucketWebsite(const 
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketWebsiteOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketWebsiteOutput output;
@@ -6521,13 +6911,18 @@ Outcome<TosError, GetBucketWebsiteOutput> TosClientImpl::getBucketWebsite(const 
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("website", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketWebsiteOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketWebsiteOutput output;
@@ -6550,13 +6945,18 @@ Outcome<TosError, DeleteBucketWebsiteOutput> TosClientImpl::deleteBucketWebsite(
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("website", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketWebsiteOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketWebsiteOutput output;
@@ -6582,7 +6982,7 @@ Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotificat
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -6595,6 +6995,11 @@ Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotificat
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketNotificationOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketNotificationOutput output;
@@ -6616,13 +7021,18 @@ Outcome<TosError, GetBucketNotificationOutput> TosClientImpl::getBucketNotificat
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("notification", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketNotificationOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketNotificationOutput output;
@@ -6650,7 +7060,7 @@ Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDom
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
 
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
@@ -6663,6 +7073,11 @@ Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDom
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketCustomDomainOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketCustomDomainOutput output;
@@ -6684,13 +7099,18 @@ Outcome<TosError, ListBucketCustomDomainOutput> TosClientImpl::listBucketCustomD
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("customdomain", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListBucketCustomDomainOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     ListBucketCustomDomainOutput output;
@@ -6714,13 +7134,18 @@ Outcome<TosError, DeleteBucketCustomDomainOutput> TosClientImpl::deleteBucketCus
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("customdomain", input.getDomain());
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketCustomDomainOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketCustomDomainOutput output;
@@ -6746,7 +7171,7 @@ Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLo
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
         std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
@@ -6758,6 +7183,11 @@ Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLo
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketRealTimeLogOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketRealTimeLogOutput output;
@@ -6779,13 +7209,18 @@ Outcome<TosError, GetBucketRealTimeLogOutput> TosClientImpl::getBucketRealTimeLo
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("realtimeLog", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketRealTimeLogOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketRealTimeLogOutput output;
@@ -6809,13 +7244,18 @@ Outcome<TosError, DeleteBucketRealTimeLogOutput> TosClientImpl::deleteBucketReal
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("realtimeLog", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketRealTimeLogOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketRealTimeLogOutput output;
@@ -6837,7 +7277,7 @@ Outcome<TosError, RestoreObjectOutput> TosClientImpl::restoreObject(const Restor
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("restore", "");
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
     std::shared_ptr<std::stringstream> ss = nullptr;
@@ -6852,6 +7292,11 @@ Outcome<TosError, RestoreObjectOutput> TosClientImpl::restoreObject(const Restor
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        RestoreObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     RestoreObjectOutput output;
@@ -6880,15 +7325,28 @@ Outcome<TosError, RenameObjectOutput> TosClientImpl::renameObject(const RenameOb
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), input.getKey());
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("rename", "");
     rb.withQuery("name", input.getNewKey());
+
+    if (input.getForbidOverwrite()) {
+        rb.withHeader(HEADER_FORBID_OVERWRITE, "true");
+    }
+
+    if (input.getRecursiveMkdir()) {
+        rb.withHeader(HEADER_RECURSIVE_MKDIR, "true");
+    }
 
     auto req = rb.Build(http::MethodPut, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        RenameObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     RenameObjectOutput output;
@@ -6912,7 +7370,7 @@ Outcome<TosError, PutBucketRenameOutput> TosClientImpl::putBucketRename(const Pu
 
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     if (jsonRules != "null") {
         ss = std::make_shared<std::stringstream>(jsonRules);
         std::string jsonRulesMd5 = CryptoUtils::md5Sum(jsonRules);
@@ -6924,6 +7382,11 @@ Outcome<TosError, PutBucketRenameOutput> TosClientImpl::putBucketRename(const Pu
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutBucketRenameOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     PutBucketRenameOutput output;
@@ -6943,13 +7406,18 @@ Outcome<TosError, GetBucketRenameOutput> TosClientImpl::getBucketRename(const Ge
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("rename", "");
     auto req = rb.Build(http::MethodGet, nullptr);
     auto tosRes = roundTrip(req, 200);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetBucketRenameOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     GetBucketRenameOutput output;
@@ -6972,13 +7440,18 @@ Outcome<TosError, DeleteBucketRenameOutput> TosClientImpl::deleteBucketRename(co
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "");
+    auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("rename", "");
     auto req = rb.Build(http::MethodDelete, nullptr);
     auto tosRes = roundTrip(req, 204);
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteBucketRenameOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return res;
     }
     DeleteBucketRenameOutput output;
@@ -7178,7 +7651,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             reqInfo.setStatusCode(resp->getStatusCode());
             reqInfo.setRequestId(MapUtils::findValueByKeyIgnoreCase(headers, HEADER_REQUEST_ID));
             se.setRequestInfo(reqInfo);
-            se.setEc(resp->findHeader("x-tos-ec"));
+            se.setEc(resp->getEcCode());
+
+            ret.setR(resp);
 
             if (resp->getStatusMsg() == "operation timeout") {
                 se.setIsClientError(true);
@@ -7206,6 +7681,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     }
                     se.setStatusCode(resp->getStatusCode());
                     ret.setE(se);
+
                     logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                     return ret;
                 }
@@ -7376,34 +7852,51 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
     }
 }
 
-RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object) {
+bool TosClientImpl::controlHostEmpty() {
+    return controlHost_.empty();
+}
+
+RequestBuilder TosClientImpl::newBuilder(const std::string& accountID, const GenericInput& genericInput) {
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> queries;
-    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries,
+    auto rb = RequestBuilder(signer_, scheme_, host_, controlHost_, accountID, "", "", urlMode_, headers, queries,
                              config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
+    rb.setRequestDate(genericInput.getRequestDate());
     return rb;
 }
+
+RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object, const GenericInput& genericInput) {
+    std::map<std::string, std::string> headers;
+    std::map<std::string, std::string> queries;
+    auto rb = RequestBuilder(signer_, scheme_, host_, "", "", bucket, object,
+                             urlMode_, headers, queries,config_.isCustomDomain());
+    rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
+    rb.setRequestDate(genericInput.getRequestDate());
+    return rb;
+}
+
 RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object,
                                          const std::string& alternativeEndpoint,
                                          const std::map<std::string, std::string>& headers,
-                                         std::map<std::string, std::string>& queries) {
+                                         std::map<std::string, std::string>& queries, const GenericInput& genericInput) {
     auto schemeHostParameter = initSchemeAndHost(alternativeEndpoint);
     std::string alternativeEndpoint_ = schemeHostParameter.host_;
     std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
     std::string scheme = alternativeEndpoint_.empty() ? scheme_ : schemeHostParameter.scheme_;
     int urlMode = alternativeEndpoint_.empty() ? urlMode_ : schemeHostParameter.urlMode_;
-    auto rb =
-            RequestBuilder(signer_, scheme, host, bucket, object, urlMode, headers, queries, config_.isCustomDomain());
+    auto rb = RequestBuilder(signer_, scheme, host, "", "", bucket, object, urlMode, headers,
+                             queries, config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
+    rb.setRequestDate(genericInput.getRequestDate());
     return rb;
 }
 RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object,
-                                         const RequestOptionBuilder& builder) {
+                                         const RequestOptionBuilder& builder, const GenericInput& genericInput) {
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> queries;
-    auto rb = RequestBuilder(signer_, scheme_, host_, bucket, object, urlMode_, headers, queries,
-                             config_.isCustomDomain());
+    auto rb = RequestBuilder(signer_, scheme_, host_,"","", bucket, object,
+                             urlMode_, headers, queries, config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     auto headerIter = builder.getHeaders().begin();
     for (; headerIter != builder.getHeaders().end(); ++headerIter) {
@@ -7416,6 +7909,7 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
     rb.setContentLength(builder.getContentLength());
     rb.setAutoRecognizeContentType(builder.isAutoRecognizeContentType());
     rb.setRange(builder.getRange());
+    rb.setRequestDate(genericInput.getRequestDate());
     return rb;
 }
 
@@ -7425,6 +7919,11 @@ void TosClientImpl::getObject(RequestBuilder& rb, Outcome<TosError, GetObjectOut
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     GetObjectOutput output;
@@ -7441,6 +7940,11 @@ void TosClientImpl::headObject(RequestBuilder& rb, Outcome<TosError, HeadObjectO
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        HeadObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     HeadObjectOutput output;
@@ -7456,6 +7960,11 @@ void TosClientImpl::deleteObject(RequestBuilder& rb, Outcome<TosError, DeleteObj
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     DeleteObjectOutput output;
@@ -7474,6 +7983,11 @@ void TosClientImpl::deleteMultiObjects(RequestBuilder& rb, const std::string& da
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        DeleteMultiObjectsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     std::stringstream out;
@@ -7488,6 +8002,11 @@ void TosClientImpl::putObject(const std::shared_ptr<TosRequest>& req, Outcome<To
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        PutObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     PutObjectOutput output;
@@ -7506,6 +8025,11 @@ void TosClientImpl::appendObject(const std::shared_ptr<TosRequest>& req, Outcome
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        AppendObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     auto nextOffset = tosRes.result()->findHeader(HEADER_NEXT_APPEND_OFFSET);
@@ -7527,6 +8051,11 @@ void TosClientImpl::setObjectMeta(RequestBuilder& rb, Outcome<TosError, SetObjec
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        SetObjectMetaOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     SetObjectMetaOutput output;
@@ -7536,14 +8065,14 @@ void TosClientImpl::setObjectMeta(RequestBuilder& rb, Outcome<TosError, SetObjec
 }
 void TosClientImpl::copyObject(const std::string& dstBucket, const std::string& dstObject, const std::string& srcBucket,
                                const std::string& srcObject, Outcome<TosError, CopyObjectOutput>& outcome) {
-    auto rb = newBuilder(dstBucket, dstObject);
+    auto rb = newBuilder(dstBucket, dstObject, GenericInput());
     auto req = rb.BuildWithCopySource(http::MethodPut, srcBucket, srcObject);
     this->copyObject(req, outcome);
 }
 void TosClientImpl::copyObject(const std::string& dstBucket, const std::string& dstObject, const std::string& srcBucket,
                                const std::string& srcObject, const RequestOptionBuilder& builder,
                                Outcome<TosError, CopyObjectOutput>& outcome) {
-    auto rb = newBuilder(dstBucket, dstObject, builder);
+    auto rb = newBuilder(dstBucket, dstObject, builder, GenericInput());
     auto req = rb.BuildWithCopySource(http::MethodPut, srcBucket, srcObject);
     this->copyObject(req, outcome);
 }
@@ -7552,6 +8081,11 @@ void TosClientImpl::copyObject(std::shared_ptr<TosRequest>& req, Outcome<TosErro
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CopyObjectOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     CopyObjectOutput output;
@@ -7575,6 +8109,11 @@ void TosClientImpl::uploadPartCopy(RequestBuilder& rb, const UploadPartCopyInput
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        UploadPartCopyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     inner::InnerUploadPartCopyOutput out;
@@ -7600,6 +8139,11 @@ void TosClientImpl::getObjectAcl(RequestBuilder& rb, Outcome<TosError, GetObject
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        GetObjectAclOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     GetObjectAclOutput output;
@@ -7617,6 +8161,11 @@ void TosClientImpl::createMultipartUpload(RequestBuilder& rb, Outcome<TosError, 
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        CreateMultipartUploadOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     inner::MultipartUpload upload;
@@ -7653,6 +8202,11 @@ void TosClientImpl::uploadPart(RequestBuilder& rb, const UploadPartInput& input,
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        UploadPartOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     UploadPartOutput output;
@@ -7672,6 +8226,11 @@ void TosClientImpl::listUploadedParts(RequestBuilder& rb, const std::string& upl
     if (!tosRes.isSuccess()) {
         res.setE(tosRes.error());
         res.setSuccess(false);
+
+        ListUploadedPartsOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
         return;
     }
     ListUploadedPartsOutput output;
@@ -7753,6 +8312,7 @@ void TosClientImpl::initRegionEndpoint(const std::string& endpoint, const std::s
         connectWithS3EndPoint_ = true;
     }
 }
+
 Outcome<TosError, BucketType> TosClientImpl::getBucketType(const std::string& bucketName) {
     Outcome<TosError, BucketType> ret;
     auto& bcl = bucketCacheLocks_[std::hash<std::string>{}(bucketName) % bucketCacheLocks_.size()];
@@ -7760,7 +8320,7 @@ Outcome<TosError, BucketType> TosClientImpl::getBucketType(const std::string& bu
     bcl.lock.lock();
     auto it = bcl.bucketTypes_.find(bucketName);
     if (it != bcl.bucketTypes_.end() &&
-        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() -
+        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() -
                                                              it->second->lastUpdateTimeNanos_) < it->second->timeout_) {
         ret.setSuccess(true);
         ret.setR(it->second->bucketType_);
@@ -7780,9 +8340,144 @@ Outcome<TosError, BucketType> TosClientImpl::getBucketType(const std::string& bu
     cache->bucketType_ = headBucketV2Output.result().getBucketType();
     cache->lastUpdateTimeNanos_ = std::chrono::steady_clock::now();
     cache->timeout_ = std::chrono::seconds(15 * 60);
-    bcl.bucketTypes_.emplace(bucketName, std::move(cache));
+    bcl.bucketTypes_[bucketName] = std::move(cache);
     ret.setSuccess(true);
     ret.setR(headBucketV2Output.result().getBucketType());
     bcl.lock.unlock();
     return ret;
+}
+
+Outcome<TosError, PutQosPolicyOutput> TosClientImpl::putQosPolicy(const PutQosPolicyInput& input){
+    Outcome<TosError, PutQosPolicyOutput> res;
+    std::string check = isValidAccountID(input.getAccountID());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    if (input.getPolicy().empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid policy, the policy must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    if (controlHostEmpty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid control endpoint, the control endpoint must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getAccountID(), input);
+    auto ss = std::make_shared<std::stringstream>(input.getPolicy());
+    auto req = rb.BuildControlRequest(http::MethodPut, ss);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+
+        PutQosPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
+        return res;
+    }
+    PutQosPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetQosPolicyOutput> TosClientImpl::getQosPolicy(const GetQosPolicyInput& input){
+    Outcome<TosError, GetQosPolicyOutput> res;
+    std::string check = isValidAccountID(input.getAccountID());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    if (controlHostEmpty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid control endpoint, the control endpoint must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getAccountID(), input);
+    auto req = rb.BuildControlRequest(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+
+        GetQosPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
+        return res;
+    }
+    GetQosPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    std::stringstream ss;
+    ss << tosRes.result()->getContent()->rdbuf();
+    output.setPolicy(ss.str());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, DeleteQosPolicyOutput> TosClientImpl::deleteQosPolicy(const DeleteQosPolicyInput& input){
+    Outcome<TosError, DeleteQosPolicyOutput> res;
+    std::string check = isValidAccountID(input.getAccountID());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    if (controlHostEmpty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage("invalid control endpoint, the control endpoint must be not empty");
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+
+    auto rb = newBuilder(input.getAccountID(), input);
+    auto req = rb.BuildControlRequest(http::MethodDelete, nullptr);
+    auto tosRes = roundTrip(req, 204);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+
+        DeleteQosPolicyOutput output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
+        return res;
+    }
+    DeleteQosPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
 }

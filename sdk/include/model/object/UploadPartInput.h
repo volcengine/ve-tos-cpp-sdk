@@ -2,8 +2,10 @@
 
 #include <string>
 #include <utility>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class [[gnu::deprecated]] UploadPartInput {
+class [[gnu::deprecated]] UploadPartInput : public GenericInput {
 public:
     UploadPartInput() = default;
     ~UploadPartInput() = default;

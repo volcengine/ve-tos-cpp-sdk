@@ -3,9 +3,10 @@
 #include "Type.h"
 #include <string>
 #include <utility>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class UploadFileV2Input {
+class UploadFileV2Input : public GenericInput {
 public:
     UploadFileV2Input(std::string bucket, std::string key)
             : createMultipartUploadInput_(std::move(bucket), std::move(key)) {

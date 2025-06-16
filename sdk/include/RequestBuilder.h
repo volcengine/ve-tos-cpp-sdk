@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctime>
 #include <utility>
 #include "auth/Signer.h"
 #include "common/Common.h"
@@ -45,12 +46,14 @@ private:
 };
 class RequestBuilder {
 public:
-    RequestBuilder(std::shared_ptr<Signer> signer, std::string scheme, std::string host, std::string bucket,
-                   std::string object, int urlMode, std::map<std::string, std::string> headers,
-                   std::map<std::string, std::string> query, bool isCustomDomain)
+    RequestBuilder(std::shared_ptr<Signer> signer, std::string scheme, std::string host, std::string controlHost_,
+                   std::string accountID, std::string bucket, std::string object, int urlMode,
+                   std::map<std::string, std::string> headers, std::map<std::string, std::string> query, bool isCustomDomain)
             : signer_(std::move(signer)),
               scheme_(std::move(scheme)),
               host_(std::move(host)),
+              controlHost_(std::move(controlHost_)),
+              accountID_(std::move(accountID)),
               bucket_(std::move(bucket)),
               object_(std::move(object)),
               URLMode_(urlMode),
@@ -105,17 +108,29 @@ public:
             query_[key] = value;
         }
     }
+    std::time_t getRequestDate() const {
+        return requestDate_;
+    }
+    void setRequestDate(std::time_t requestDate) {
+        requestDate_ = requestDate;
+    }
+
     std::shared_ptr<TosRequest> Build(const std::string& method);
+    std::shared_ptr<TosRequest> BuildControlRequest(const std::string& method);
     std::shared_ptr<TosRequest> Build(const std::string& method, std::shared_ptr<std::iostream> content);
+    std::shared_ptr<TosRequest> BuildControlRequest(const std::string& method, std::shared_ptr<std::iostream> content);
     std::shared_ptr<TosRequest> BuildWithCopySource(const std::string& method, const std::string& srcBucket,
                                                     const std::string& srcObject);
     std::shared_ptr<TosRequest> build(const std::string& method);
+    std::shared_ptr<TosRequest> buildControlRequest(const std::string& method);
     std::shared_ptr<TosRequest> buildSignedURL(const std::string& method);
 
 private:
     std::shared_ptr<Signer> signer_;
     std::string scheme_;
     std::string host_;
+    std::string controlHost_;
+    std::string accountID_;
     std::string bucket_;
     std::string object_;
     int URLMode_ = 0;
@@ -125,5 +140,7 @@ private:
     std::map<std::string, std::string> query_;
     bool autoRecognizeContentType_ = true;
     bool isCustomDomain_ = false;
+
+    std::time_t requestDate_ = 0;
 };
 }  // namespace VolcengineTos

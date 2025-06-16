@@ -9,9 +9,11 @@
 #include "ErrorDocument.h"
 #include "IndexDocument.h"
 #include "RoutingRules.h"
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class PutBucketWebsiteInput {
+class PutBucketWebsiteInput : public GenericInput {
 public:
     explicit PutBucketWebsiteInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

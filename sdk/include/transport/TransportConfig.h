@@ -131,6 +131,18 @@ public:
     void setHighLatencyLogThreshold(int highLatencyLogThreshold) {
         highLatencyLogThreshold_ = highLatencyLogThreshold;
     }
+    const std::string& getClientCrt() const {
+        return clientCrt_;
+    }
+    void setClientCrt(const std::string& clientCrt) {
+        clientCrt_ = clientCrt;
+    }
+    const std::string& getClientKey() const {
+        return clientKey_;
+    }
+    void setClientKey(const std::string& clientKey) {
+        clientKey_ = clientKey;
+    }
 
 private:
     int maxIdleCount_ = 128;
@@ -154,5 +166,7 @@ private:
     std::string caPath_;
     std::string caFile_;
     int highLatencyLogThreshold_ = 100;
+    std::string clientCrt_;
+    std::string clientKey_;
 };
 }  // namespace VolcengineTos

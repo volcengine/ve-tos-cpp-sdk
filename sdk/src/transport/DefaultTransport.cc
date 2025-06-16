@@ -18,6 +18,8 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.caPath = config.getCaPath();
     conf.caFile = config.getCaFile();
     conf.highLatencyLogThreshold = config.getHighLatencyLogThreshold();
+    conf.clientCrt_ = config.getClientCrt();
+    conf.clientKey_ = config.getClientKey();
 
     client_ = std::make_shared<HttpClient>(conf);
 }

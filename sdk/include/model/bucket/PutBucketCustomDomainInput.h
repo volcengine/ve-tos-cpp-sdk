@@ -6,9 +6,10 @@
 #include <vector>
 
 #include "CustomDomainRule.h"
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class PutBucketCustomDomainInput {
+class PutBucketCustomDomainInput : public GenericInput {
 public:
     explicit PutBucketCustomDomainInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

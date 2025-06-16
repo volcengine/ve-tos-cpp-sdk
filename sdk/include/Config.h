@@ -10,6 +10,12 @@ class Config {
 public:
     Config() = default;
     ~Config() = default;
+    const std::string& getControlEndpoint() const {
+        return controlEndpoint_;
+    }
+    void setControlEndpoint(const std::string& endpoint) {
+        controlEndpoint_ = endpoint;
+    }
     const std::string& getEndpoint() const {
         return endpoint_;
     }
@@ -66,6 +72,7 @@ public:
 
 private:
     std::string endpoint_;
+    std::string controlEndpoint_;
     std::string region_;
     bool enableCRC_ = true;
     bool autoRecognizeContentType_ = true;

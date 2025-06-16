@@ -5,9 +5,10 @@
 #include <vector>
 #include "Type.h"
 #include "PolicySignatureCondition.h"
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class PreSignedPolicyURLInput {
+class PreSignedPolicyURLInput : public GenericInput {
 public:
     PreSignedPolicyURLInput(std::string bucket, int64_t expires, std::vector<PolicySignatureCondition> conditions,
                             std::string alternativeEndpoint)

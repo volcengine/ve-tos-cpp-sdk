@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class ListUploadedPartsInput {
+class ListUploadedPartsInput : public GenericInput {
 public:
     const std::string& getKey() const {
         return key_;

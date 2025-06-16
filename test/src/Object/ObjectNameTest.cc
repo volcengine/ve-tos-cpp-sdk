@@ -90,6 +90,11 @@ TEST_F(ObjectNameTest, NameWithTooLargeSizeTest) {
     input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
     auto output_obj_put = cliV2->putObject(input_obj_put);
     EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    std::string obj_key_long(1200, 'a');
+    auto headObjectInput = HeadObjectV2Input(bkt_name, obj_key_long);
+    auto headObjectOutput = cliV2->headObject(headObjectInput);
+    EXPECT_EQ(headObjectOutput.error().getEc(), "0017-00000002");
 }
 
 TEST_F(ObjectNameTest, NameWithChineseLanguageTest) {

@@ -7,8 +7,10 @@
 
 #include "CloudFunctionConfiguration.h"
 #include "RocketMQConfiguration.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PutBucketNotificationInput {
+class PutBucketNotificationInput : public GenericInput {
 public:
     explicit PutBucketNotificationInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

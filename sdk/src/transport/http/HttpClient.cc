@@ -252,6 +252,8 @@ HttpClient::HttpClient(const HttpConfig& config) {
 #endif
     caPath_ = config.caPath;
     caFile_ = config.caFile;
+    clientCrt_ = config.clientCrt_;
+    clientKey_ = config.clientKey_;
     highLatencyLogThreshold_ = config.highLatencyLogThreshold;
     if (dnsCacheTime_ > 0) {
         share_handle = curl_share_init();
@@ -309,6 +311,12 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     }
     if(!caFile_.empty()){
         curl_easy_setopt(curl, CURLOPT_CAINFO, caFile_.c_str());
+    }
+    if(!clientCrt_.empty()){
+        curl_easy_setopt(curl, CURLOPT_SSLCERT, clientCrt_.c_str());
+    }
+    if(!clientKey_.empty()){
+        curl_easy_setopt(curl, CURLOPT_SSLKEY, clientKey_.c_str());
     }
     // set req specific params
     auto response = std::make_shared<HttpResponse>();

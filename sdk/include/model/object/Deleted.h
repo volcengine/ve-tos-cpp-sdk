@@ -29,10 +29,18 @@ public:
         deleteMarkerVersionID_ = deleteMarkerVersionId;
     }
 
+    const std::string& getTrashPath() const {
+        return trashPath_;
+    }
+    void setTrashPath(const std::string& trashPath) {
+        trashPath_ = trashPath;
+    }
+
 private:
     std::string key_;
     std::string versionID_;
     bool deleteMarker_;
     std::string deleteMarkerVersionID_;
+    std::string trashPath_;
 };
 }  // namespace VolcengineTos

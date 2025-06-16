@@ -2,8 +2,10 @@
 #include <string>
 #include <utility>
 #include "TagSet.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PutObjectTaggingInput {
+class PutObjectTaggingInput : public GenericInput {
 public:
     PutObjectTaggingInput() = default;
     virtual ~PutObjectTaggingInput() = default;

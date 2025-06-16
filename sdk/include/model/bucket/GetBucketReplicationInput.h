@@ -5,9 +5,11 @@
 #include <utility>
 #include <vector>
 #include "MirrorBackRule.h"
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class GetBucketReplicationInput {
+class GetBucketReplicationInput : public GenericInput {
 public:
     GetBucketReplicationInput(std::string bucket, std::string ruleId)
             : bucket_(std::move(bucket)), ruleId_(std::move(ruleId)) {

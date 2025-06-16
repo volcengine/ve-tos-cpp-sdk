@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class RenameObjectInput {
+class RenameObjectInput : public GenericInput {
 public:
     RenameObjectInput(std::string bucket, std::string key, std::string newKey)
             : bucket_(std::move(bucket)), key_(std::move(key)), newKey_(std::move(newKey)) {
@@ -28,9 +30,27 @@ public:
         newKey_ = newKey;
     }
 
+    bool getRecursiveMkdir() const {
+        return recursiveMkdir_;
+    }
+
+    void setRecursiveMkdir(bool recursiveMkdir) {
+        recursiveMkdir_ = recursiveMkdir;
+    }
+
+    bool getForbidOverwrite() const {
+        return forbidOverwrite_;
+    }
+
+    void setForbidOverwrite(bool forbidOverwrite) {
+        forbidOverwrite_ = forbidOverwrite;
+    }
+
 private:
     std::string bucket_;
     std::string key_;
     std::string newKey_;
+    bool recursiveMkdir_ = false;
+    bool forbidOverwrite_ = false;
 };
 }  // namespace VolcengineTos

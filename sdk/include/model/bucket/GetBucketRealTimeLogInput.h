@@ -4,9 +4,10 @@
 #include <Type.h>
 #include <vector>
 #include "MirrorBackRule.h"
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class GetBucketRealTimeLogInput {
+class GetBucketRealTimeLogInput : public GenericInput {
 public:
     explicit GetBucketRealTimeLogInput(std::string bucket) : bucket_(std::move(bucket)) {
     }
