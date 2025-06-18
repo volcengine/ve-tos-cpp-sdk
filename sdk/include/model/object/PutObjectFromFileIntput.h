@@ -1,9 +1,10 @@
 #pragma once
 
 #include "PutObjectBasicInput.h"
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class PutObjectFromFileInput {
+class PutObjectFromFileInput : public GenericInput {
 public:
     PutObjectFromFileInput(std::string bucket, std::string key, std::string filepath)
             : putObjectBasicInput_(std::move(bucket), std::move(key)), filePath_(std::move(filepath)) {

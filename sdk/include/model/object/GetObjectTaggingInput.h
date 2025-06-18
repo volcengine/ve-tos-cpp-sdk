@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class GetObjectTaggingInput {
+class GetObjectTaggingInput : public GenericInput {
 public:
     GetObjectTaggingInput(std::string bucket, std::string key, std::string versionId)
             : bucket_(std::move(bucket)), key_(std::move(key)), versionID_(std::move(versionId)) {

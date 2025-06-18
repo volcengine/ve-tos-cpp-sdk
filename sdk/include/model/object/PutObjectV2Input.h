@@ -3,9 +3,11 @@
 #include <utility>
 
 #include "model/RequestInfo.h"
+#include "model/GenericInput.h"
 #include "PutObjectBasicInput.h"
+
 namespace VolcengineTos {
-class PutObjectV2Input {
+class PutObjectV2Input : public GenericInput {
 public:
     PutObjectV2Input() = default;
     ~PutObjectV2Input() = default;

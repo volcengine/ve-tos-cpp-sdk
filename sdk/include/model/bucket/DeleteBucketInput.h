@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class DeleteBucketInput {
+class DeleteBucketInput : public GenericInput {
 public:
     explicit DeleteBucketInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

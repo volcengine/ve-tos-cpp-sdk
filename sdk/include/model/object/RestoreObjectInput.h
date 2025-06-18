@@ -4,8 +4,10 @@
 #include <utility>
 #include "Type.h"
 #include "RestoreJobParameters.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class RestoreObjectInput {
+class RestoreObjectInput : public GenericInput {
 public:
     RestoreObjectInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

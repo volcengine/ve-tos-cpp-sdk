@@ -2,8 +2,10 @@
 
 #include <string>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class SetObjectMetaInput {
+class SetObjectMetaInput : public GenericInput {
 public:
     SetObjectMetaInput(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

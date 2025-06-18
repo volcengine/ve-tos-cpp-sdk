@@ -59,6 +59,7 @@ static const char* HEADER_SSE_CUSTOMER_KEY = "X-Tos-Server-Side-Encryption-Custo
 static const char* HEADER_SSE = "x-tos-server-side-encryption";
 static const char* HEADER_CRC64 = "x-tos-hash-crc64ecma";
 static const char* HEADER_REQUEST_ID = "X-Tos-Request-Id";
+static const char* HEADER_ACCOUNT_ID = "X-Tos-Account-Id";
 static const char* HEADER_ID_2 = "X-Tos-Id-2";
 static const char* HEADER_BUCKET_REGION = "X-Tos-Bucket-Region";
 static const char* HEADER_ACL = "X-Tos-Acl";
@@ -76,6 +77,8 @@ static const char* HEADER_COPY_SOURCE_IF_MATCH = "X-Tos-Copy-Source-If-Match";
 static const char* HEADER_COPY_SOURCE_IF_NONE_MATCH = "X-Tos-Copy-Source-If-None-Match";
 static const char* HEADER_COPY_SOURCE_IF_MODIFIED_SINCE = "X-Tos-Copy-Source-If-Modified-Since";
 static const char* HEADER_COPY_SOURCE_IF_UNMODIFIED_SINCE = "X-Tos-Copy-Source-If-Unmodified-Since";
+static const char* HEADER_Trash_Path = "x-tos-trash-path";
+static const char* HEADER_EC_CODE = "X-Tos-Ec";
 
 static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_ALGORITHM =
         "X-Tos-Copy-Source-Server-Side-Encryption-Customer-Algorithm";
@@ -98,6 +101,9 @@ static const char* HEADER_DIRECTORY = "X-Tos-Directory";
 static const char* HEADER_BUCKET_TYPE = "X-Tos-Bucket-Type";
 static const char* HEADER_CRC32 = "x-tos-hash-crc32c";
 static const char* HEADER_NEXT_MODIFY_OFFSET = "x-tos-next-modify-offset";
+static const char* HEADER_FORBID_OVERWRITE = "x-tos-forbid-overwrite";
+static const char* HEADER_RECURSIVE_MKDIR = "x-tos-recursive-mkdir";
+
 
 /**
  * replace source object metadata when calling copyObject

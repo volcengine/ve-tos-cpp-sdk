@@ -1,4 +1,14 @@
 ## Release Note
+### 2025.4.19 Version 2.6.15
+- 支持 请求时携带客户端证书
+- 修复 默认流控实现中返回时间单位错误问题
+- 支持 指定客户端签名时间
+- 支持 递归删除目录和 Rename 递归创建目录
+
+### 2025.1.23 Version 2.6.14
+- 支持 Qos Policy 相关接口
+- 支持 DeleteObject 和 DeleteMultiObjects 接口携带递归删除参数
+
 ### 2025.1.9 Version 2.6.13
 - 修复：GetFileStatus 接口扁平桶返回对象名错误的问题
 

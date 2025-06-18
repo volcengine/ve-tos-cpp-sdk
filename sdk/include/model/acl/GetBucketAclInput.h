@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class GetBucketAclInput {
+class GetBucketAclInput : public GenericInput {
 public:
     explicit GetBucketAclInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

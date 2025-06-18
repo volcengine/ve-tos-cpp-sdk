@@ -6,9 +6,11 @@
 #include <vector>
 
 #include "ReplicationRule.h"
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class PutBucketReplicationInput {
+class PutBucketReplicationInput : public GenericInput {
 public:
     explicit PutBucketReplicationInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

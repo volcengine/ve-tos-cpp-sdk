@@ -325,3 +325,13 @@ Outcome<TosError, GetFileStatusOutput> TosClientV2::getFileStatus(const GetFileS
 //Outcome<TosError, ModifyObjectOutput> TosClientV2::modifyObject(const ModifyObjectInput& input) {
 //    return tosClientImpl_->modifyObject(input);
 //}
+
+Outcome<TosError, PutQosPolicyOutput> TosClientV2::putQosPolicy(const PutQosPolicyInput& input) {
+    return tosClientImpl_->putQosPolicy(input);
+}
+Outcome<TosError, GetQosPolicyOutput> TosClientV2::getQosPolicy(const GetQosPolicyInput& input) {
+    return tosClientImpl_->getQosPolicy(input);
+}
+Outcome<TosError, DeleteQosPolicyOutput> TosClientV2::deleteQosPolicy(const DeleteQosPolicyInput& input) {
+    return tosClientImpl_->deleteQosPolicy(input);
+}

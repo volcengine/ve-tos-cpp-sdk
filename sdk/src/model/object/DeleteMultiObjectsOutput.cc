@@ -22,6 +22,9 @@ void VolcengineTos::DeleteMultiObjectsOutput::fromJsonString(const std::string& 
             if (de.contains("DeleteMarkerVersionId"))
                 de.at("DeleteMarkerVersionId").get_to(tmp);
             deleted.setDeleteMarkerVersionId(tmp);
+            if (de.contains("TrashPath"))
+                de.at("TrashPath").get_to(tmp);
+            deleted.setTrashPath(tmp);
             deleteds_.emplace_back(deleted);
         }
     }

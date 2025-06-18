@@ -2,8 +2,10 @@
 
 #include <string>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class AppendObjectV2Input {
+class AppendObjectV2Input : public GenericInput {
 public:
     AppendObjectV2Input(std::string bucket, std::string key, std::shared_ptr<std::iostream> content, int64_t offset)
             : bucket_(std::move(bucket)), key_(std::move(key)), offset_(offset), content_(std::move(content)) {

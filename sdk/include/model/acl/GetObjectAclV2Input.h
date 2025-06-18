@@ -2,8 +2,10 @@
 
 #include <string>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class GetObjectAclV2Input {
+class GetObjectAclV2Input : public GenericInput {
 public:
     GetObjectAclV2Input(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

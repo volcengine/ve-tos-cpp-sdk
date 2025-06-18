@@ -48,7 +48,12 @@ std::map<std::string, std::string> SignV4::signHeader(const std::shared_ptr<TosR
 
     auto signedHeader = this->signedHeader(header, false);
     // gen date for sign
-    std::time_t now = utcTimeNow();
+    std::time_t now;
+    if (req->getRequestDate() != 0) {
+        now = req->getRequestDate();
+    } else {
+        now = utcTimeNow();
+    }
     //  std::time_t now = std::chrono::system_clock::to_std::time_t(now_);
     const std::string& date = TimeUtils::transTimeToFormat(now, iso8601Layout);
     signedHeader.emplace_back(StringUtils::toLower(v4Date), date);

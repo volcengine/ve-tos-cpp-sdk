@@ -190,6 +190,12 @@
 #include "model/bucket/DeleteBucketRenameOutput.h"
 #include "auth/EnvCredentials.h"
 #include "auth/EcsCredentials.h"
+#include "model/control/PutQosPolicyInput.h"
+#include "model/control/PutQosPolicyOutput.h"
+#include "model/control/GetQosPolicyInput.h"
+#include "model/control/GetQosPolicyOutput.h"
+#include "model/control/DeleteQosPolicyInput.h"
+#include "model/control/DeleteQosPolicyOutput.h"
 
 namespace VolcengineTos {
 
@@ -359,7 +365,11 @@ public:
     Outcome<TosError, GetBucketRenameOutput> getBucketRename(const GetBucketRenameInput& input);
     Outcome<TosError, DeleteBucketRenameOutput> deleteBucketRename(const DeleteBucketRenameInput& input);
     Outcome<TosError,GetFileStatusOutput> getFileStatus(const GetFileStatusInput& input);
-//    Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input);
+    // Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input);
+
+    Outcome<TosError, PutQosPolicyOutput> putQosPolicy(const PutQosPolicyInput& input);
+    Outcome<TosError, GetQosPolicyOutput> getQosPolicy(const GetQosPolicyInput& input);
+    Outcome<TosError, DeleteQosPolicyOutput> deleteQosPolicy(const DeleteQosPolicyInput& input);
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;

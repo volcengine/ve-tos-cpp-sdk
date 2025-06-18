@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PreSignedURLInput {
+class PreSignedURLInput : public GenericInput {
 public:
     PreSignedURLInput(HttpMethodType httpMethod, std::string bucket, std::string key, int64_t expires)
             : httpMethod_(httpMethod), bucket_(std::move(bucket)), key_(std::move(key)), expires_(expires) {

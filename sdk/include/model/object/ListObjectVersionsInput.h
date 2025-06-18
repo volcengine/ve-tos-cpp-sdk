@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class [[gnu::deprecated]] ListObjectVersionsInput {
+class [[gnu::deprecated]] ListObjectVersionsInput : public GenericInput {
 public:
     const std::string& getPrefix() const {
         return prefix_;

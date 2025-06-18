@@ -35,6 +35,8 @@ struct HttpConfig {
     std::string caPath;
     std::string caFile;
     int highLatencyLogThreshold;
+    std::string clientCrt_;
+    std::string clientKey_;
 };
 
 template< typename RESOURCE_TYPE>
@@ -234,5 +236,7 @@ protected:
     int highLatencyLogThreshold_ = 100;
     std::mutex mu_;
     VolcengineTos::CurlContainer* curlContainer_{};
+    std::string clientCrt_; // 客户端证书路径
+    std::string clientKey_; // 客户端私钥路径
 };
 }  // namespace VolcengineTos

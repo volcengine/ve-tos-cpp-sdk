@@ -2,8 +2,10 @@
 
 #include <vector>
 #include "ObjectTobeDeleted.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class DeleteMultiObjectsInput {
+class DeleteMultiObjectsInput : public GenericInput {
 public:
     std::string toJsonString();
     const std::vector<ObjectTobeDeleted>& getObjectTobeDeleteds() const {
@@ -28,9 +30,27 @@ public:
         objectTobeDeleteds_.push_back(objectTobeDeleted);
     }
 
+    bool getRecursive() const {
+        return recursive_;
+    }
+
+    void setRecursive(bool isRecursive) {
+        recursive_ = isRecursive;
+    }
+
+    bool getSkipTrash() const {
+        return skipTrash_;
+    }
+
+    void setSkipTrash(bool skipTrash) {
+        skipTrash_ = skipTrash;
+    }
+
 private:
     std::vector<ObjectTobeDeleted> objectTobeDeleteds_;
     bool quiet_;
     std::string bucket_;
+    bool recursive_ = false;
+    bool skipTrash_ = false;
 };
 }  // namespace VolcengineTos

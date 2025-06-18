@@ -4,9 +4,11 @@
 #include <Type.h>
 #include <vector>
 #include "MirrorBackRule.h"
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class GetBucketWebsiteInput {
+class GetBucketWebsiteInput : public GenericInput {
 public:
     explicit GetBucketWebsiteInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

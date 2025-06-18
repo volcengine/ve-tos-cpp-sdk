@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class UploadPartCopyV2Input {
+class UploadPartCopyV2Input : public GenericInput {
 public:
     UploadPartCopyV2Input(std::string bucket, std::string key, std::string srcbucket, std::string srckey,
                           int partnumber, std::string uploadid)

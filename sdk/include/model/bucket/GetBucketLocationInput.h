@@ -2,9 +2,10 @@
 
 #include <string>
 #include <Type.h>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class GetBucketLocationInput {
+class GetBucketLocationInput : public GenericInput {
 public:
     explicit GetBucketLocationInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

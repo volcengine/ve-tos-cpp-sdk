@@ -20,7 +20,7 @@ protected:
         conf.maxRetryCount = 0;
         conf.userAgentProductName = "tos";
         conf.userAgentSoftName="cxxSdk";
-        conf.userAgentSoftVersion = "2.6.13";
+        conf.userAgentSoftVersion = "2.6.15";
         conf.userAgentCustomizedKeyValues = {{"key1", "value1"}, {"key2", "value2"}};
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
@@ -586,6 +586,40 @@ TEST_F(ObjectPutGetTest, PutObjectWithDataProcessTest) {
             tmp_string ==
                     "{\"FileSize\":{\"value\":\"21839\"},\"Format\":{\"value\":\"jpeg\"},\"ImageHeight\":{\"value\":\"267\"},\"ImageWidth\":{\"value\":\"400\"}}",
             true);
+}
+
+TEST_F(ObjectPutGetTest, PutZeroSizeObjectWithCustomReqTimeTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    std::string data = "";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put.setContent(ss);
+    input_obj_put_basic.setBucket(bkt_name);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+
+    std::time_t now = std::time(nullptr); // 当前时间
+    std::time_t oneHourLater = now + 3600; // 直接加3600秒（1小时=60 * 60秒）
+    input_obj_put.setRequestDate(oneHourLater);
+
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), false);
+    EXPECT_EQ(output_obj_put.error().getEc(), "0002-00000018");
+
+    auto headers = output_obj_put.result().getRequestInfo().getHeaders();
+    std::tm tm = {};
+    std::istringstream iss(headers["Date"]);
+
+    // 解析格式：Sun, 08 Jun 2025 08:31:27 GMT
+    iss >> std::get_time(&tm, "%a, %d %b %Y %H:%M:%S GMT");
+    EXPECT_EQ(iss.fail(), false);
+    auto server_date = timegm(&tm);
+    EXPECT_EQ(server_date > 0, true);
+
+    input_obj_put.setRequestDate(server_date);
+    output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
 }
 
 TEST_F(ObjectPutGetTest, GetObjectStramTest) {

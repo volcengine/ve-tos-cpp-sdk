@@ -3,9 +3,11 @@
 #include <string>
 #include <Type.h>
 #include <vector>
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class PutBucketStorageClassInput {
+class PutBucketStorageClassInput : public GenericInput {
 public:
     explicit PutBucketStorageClassInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

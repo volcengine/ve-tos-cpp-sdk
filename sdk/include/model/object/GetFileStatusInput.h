@@ -1,9 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class GetFileStatusInput {
+class GetFileStatusInput : public GenericInput {
 public:
     GetFileStatusInput() = default;
     ~GetFileStatusInput() = default;

@@ -2,8 +2,10 @@
 
 #include <string>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class CopyObjectV2Input {
+class CopyObjectV2Input : public GenericInput {
 public:
     CopyObjectV2Input(std::string bucket, std::string key, std::string srcbucket, std::string srckey)
             : bucket_(std::move(bucket)),

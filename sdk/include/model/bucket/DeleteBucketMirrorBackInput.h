@@ -3,9 +3,10 @@
 #include <string>
 #include <utility>
 #include <Type.h>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class DeleteBucketMirrorBackInput {
+class DeleteBucketMirrorBackInput : public GenericInput {
 public:
     DeleteBucketMirrorBackInput() = default;
     virtual ~DeleteBucketMirrorBackInput() = default;

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.13
+        VERSION 2.6.15
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -89,6 +89,7 @@ set(SDK_HEADER
         include/model/object/UploadFileCheckpoint.h
         include/model/object/UploadFilePartInfo.h
         include/model/RequestInfo.h
+        include/model/GenericInput.h
         include/utils/BaseUtils.h
         include/utils/crc64.h
         include/ClientConfig.h
@@ -247,6 +248,12 @@ set(SDK_HEADER
         include/model/bucket/DeleteBucketRenameInput.h
         include/model/bucket/DeleteBucketRenameOutput.h
         include/model/object/GetFileStatusInput.h
+        include/model/control/PutQosPolicyInput.h
+        include/model/control/PutQosPolicyOutput.h
+        include/model/control/GetQosPolicyInput.h
+        include/model/control/GetQosPolicyOutput.h
+        include/model/control/DeleteQosPolicyInput.h
+        include/model/control/DeleteQosPolicyOutput.h
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc

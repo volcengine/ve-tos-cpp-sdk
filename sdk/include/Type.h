@@ -8,6 +8,7 @@
 #include <functional>
 #include <sstream>
 #include <unordered_map>
+#include <chrono>
 namespace VolcengineTos {
 enum class ACLType {
     NotSet = 0,
@@ -263,7 +264,7 @@ static void UploadDownloadFileProcessCallback(const std::shared_ptr<DataTransfer
 // 限流limiter
 class RateLimiter {
 public:
-    virtual std::pair<bool, time_t> Acquire(int64_t want) = 0;
+    virtual std::pair<bool, time_t> Acquire(int64_t want) = 0; // 此处返回的时间单位应当为ms
     virtual ~RateLimiter() = default;
 };
 //  容量最小是80kb
@@ -271,7 +272,7 @@ public:
 class MyRateLimiter : public RateLimiter {
 public:
     MyRateLimiter(int64_t capacity, int64_t rate) : capacity_(capacity), rate_(rate), currentAmount_(capacity) {
-        lastTokenGiven_ = time(nullptr);
+        lastTokenGiven_ = std::chrono::steady_clock::now();
         if (capacity < 80000) {
             capacity_ = 80000;
         }
@@ -283,8 +284,9 @@ public:
         // 内部维护一个时间，每次调用的时候先加上对应的令牌
         // 然后再判断桶里剩余的令牌是否足够
         std::lock_guard<std::mutex> lockGuard(mutex_);
-        time_t differTime = time(nullptr) - lastTokenGiven_;
-        int64_t tokenIncreaseAmount = differTime * rate_;
+        auto currentTime = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastTokenGiven_).count();
+        int64_t tokenIncreaseAmount = duration * rate_/1000;
         int64_t tokenAmountMax = tokenIncreaseAmount + currentAmount_;
         currentAmount_ = tokenAmountMax > capacity_ ? capacity_ : tokenAmountMax;
         // 极端情况下，want > 总容量，直接放过
@@ -293,11 +295,12 @@ public:
             return res;
         }
         if (want > currentAmount_) {
-            std::time_t timeToWait = (want - currentAmount_) / rate_;
+            std::time_t timeToWait = (want - currentAmount_)*1000 / rate_;
+            if (timeToWait == 0){timeToWait = 10;}// 防止空转，最低sleep 10ms
             std::pair<bool, std::time_t> res(false, timeToWait);
             return res;
         }
-        lastTokenGiven_ = time(nullptr);
+        lastTokenGiven_ = std::chrono::steady_clock::now();
         currentAmount_ = currentAmount_ - want;
         std::pair<bool, std::time_t> res(true, 0);
         return res;
@@ -307,7 +310,7 @@ public:
 private:
     int64_t capacity_ = 0;
     int64_t rate_ = 0;
-    time_t lastTokenGiven_;
+    std::chrono::steady_clock::time_point lastTokenGiven_;
     int64_t currentAmount_ = 0;
     std::mutex mutex_;
 };

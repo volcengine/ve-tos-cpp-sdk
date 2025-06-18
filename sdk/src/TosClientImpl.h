@@ -187,6 +187,14 @@
 #include "model/bucket/GetBucketRenameInput.h"
 #include "model/bucket/DeleteBucketRenameInput.h"
 #include "model/bucket/DeleteBucketRenameOutput.h"
+#include "model/control/PutQosPolicyInput.h"
+#include "model/control/PutQosPolicyOutput.h"
+#include "model/control/GetQosPolicyInput.h"
+#include "model/control/GetQosPolicyOutput.h"
+#include "model/control/DeleteQosPolicyInput.h"
+#include "model/control/DeleteQosPolicyOutput.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
 class TosClientImpl {
 public:
@@ -380,6 +388,9 @@ public:
 //    Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input);
     Outcome<TosError, ModifyObjectOutput> modifyObject(const ModifyObjectInput& input,
                                                        const std::string preHashCrc64ecma,bool enableCrcCheck);
+    Outcome<TosError, PutQosPolicyOutput> putQosPolicy(const PutQosPolicyInput& input);
+    Outcome<TosError, GetQosPolicyOutput> getQosPolicy(const GetQosPolicyInput& input);
+    Outcome<TosError, DeleteQosPolicyOutput> deleteQosPolicy(const DeleteQosPolicyInput& input);
 
     void setMaxRetryCount(int maxretrycount);
     void setCredential(const std::string& accessKeyId, const std::string& secretKeyId);
@@ -409,14 +420,16 @@ private:
     static bool checkExpectedCode(int statusCode, int expectedCode);
     static bool checkExpectedCode(int statusCode, std::vector<int> expectedCode);
 
-    RequestBuilder newBuilder(const std::string& bucket, const std::string& object);
+    RequestBuilder newBuilder(const std::string& accountID, const GenericInput& genericInput);
+    RequestBuilder newBuilder(const std::string& bucket, const std::string& object, const GenericInput& genericInput);
     RequestBuilder newBuilder(const std::string& bucket, const std::string& object,
-                              const RequestOptionBuilder& builder);
+                              const RequestOptionBuilder& builder, const GenericInput& genericInput);
     RequestBuilder newBuilder(const std::string& bucket, const std::string& object,
                               const std::string& alternativeEndpoint, const std::map<std::string, std::string>& headers,
-                              std::map<std::string, std::string>& queries);
+                              std::map<std::string, std::string>& queries, const GenericInput& genericInput);
     std::string scheme_;
     std::string host_;
+    std::string controlHost_;
     int urlMode_ = URL_MODE_DEFAULT;
     std::string userAgent_ = DefaultUserAgent();
     std::shared_ptr<Credentials> credentials_;
@@ -431,6 +444,12 @@ private:
                                                            {"cn-guangzhou", "https://tos-cn-guangzhou.volces.com"},
                                                            {"cn-shanghai", "https://tos-cn-shanghai.volces.com"},
                                                            {"ap-southeast-1", "https://tos-ap-southeast-1.volces.com"}};
+
+    std::map<std::string, std::string> supportedRegionToControlEndpoint_ = {{"cn-beijing", "https://tos-control-cn-beijing.volces.com"},
+                                                                            {"cn-guangzhou", "https://tos-control-cn-guangzhou.volces.com"},
+                                                                            {"cn-shanghai", "https://tos-control-cn-shanghai.volces.com"},
+                                                                            {"ap-southeast-1", "https://tos-control-ap-southeast-1.volces.com"}};
+
     void getObject(RequestBuilder& rb, Outcome<TosError, GetObjectOutput>& res);
     void headObject(RequestBuilder& rb, Outcome<TosError, HeadObjectOutput>& res);
     void getFileStatus(RequestBuilder& rb, Outcome<TosError, GetFileStatusOutput>& res);
@@ -508,9 +527,9 @@ private:
                       Outcome<TosError, std::string>& res);
 
     void initWithoutConfig(const std::string& endpoint, const std::string& region);
-    void init(const std::string& endpoint, const std::string& region);
+    void init(const std::string& endpoint, const std::string& controlEndpoint, const std::string& region);
     void initWithConfig(const std::string& endpoint, const std::string& region, const ClientConfig& config);
-    void init(const std::string& endpoint, const std::string& region, const ClientConfig& config);
+    void init(const std::string& endpoint, const std::string& controlEndpoint, const std::string& region,  const ClientConfig& config);
     void initRegionEndpoint(const std::string& endpoint, const std::string& region);
     SchemeHostParameter initSchemeAndHost(const std::string& endpoint);
     int64_t calContentLength(const std::shared_ptr<std::iostream>& content);
@@ -520,5 +539,6 @@ private:
     bool checkShouldRetry(const std::shared_ptr<TosRequest>& request, const std::shared_ptr<TosResponse>& response);
     RequestBuilder ParamFromConfToRb(RequestBuilder& rb);
     Outcome<TosError,BucketType>  getBucketType(const std::string& bucketName);
+    bool controlHostEmpty();
 };
 }  // namespace VolcengineTos

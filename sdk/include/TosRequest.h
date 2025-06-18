@@ -144,6 +144,13 @@ public:
         checkHighLatency_ = checkHighLatency;
     }
 
+    std::time_t getRequestDate() const {
+        return requestDate_;
+    }
+    void setRequestDate(std::time_t requestDate) {
+        requestDate_ = requestDate;
+    }
+
 private:
     std::string scheme_;
     std::string method_;
@@ -163,5 +170,6 @@ private:
     int64_t contentOffset_ = 0;
     uint64_t preHashCrc64ecma_ = 0;
     bool checkHighLatency_ = false;
+    std::time_t requestDate_ = 0;
 };
 }  // namespace VolcengineTos

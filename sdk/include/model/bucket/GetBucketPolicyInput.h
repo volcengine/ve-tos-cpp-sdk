@@ -1,8 +1,10 @@
 #pragma once
 #include <string>
 #include <utility>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class GetBucketPolicyInput {
+class GetBucketPolicyInput : public GenericInput {
 public:
     explicit GetBucketPolicyInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

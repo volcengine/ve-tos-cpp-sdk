@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class UploadFileInput {
+class UploadFileInput : public GenericInput {
 public:
     const std::string& getObjectKey() const {
         return objectKey_;
