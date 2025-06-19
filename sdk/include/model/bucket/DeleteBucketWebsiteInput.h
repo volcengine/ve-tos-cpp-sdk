@@ -3,9 +3,10 @@
 #include <string>
 #include <Type.h>
 #include <vector>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class DeleteBucketWebsiteInput {
+class DeleteBucketWebsiteInput : public GenericInput {
 public:
     explicit DeleteBucketWebsiteInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

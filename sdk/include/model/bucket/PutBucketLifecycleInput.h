@@ -5,9 +5,11 @@
 #include <utility>
 #include <vector>
 #include "LifecycleRule.h"
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class PutBucketLifecycleInput {
+class PutBucketLifecycleInput : public GenericInput {
 public:
     explicit PutBucketLifecycleInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

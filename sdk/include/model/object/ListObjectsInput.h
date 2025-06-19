@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class [[gnu::deprecated]] ListObjectsInput {
+class [[gnu::deprecated]] ListObjectsInput : public GenericInput {
 public:
     ListObjectsInput() = default;
     ~ListObjectsInput() = default;

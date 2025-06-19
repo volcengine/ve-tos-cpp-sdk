@@ -6,9 +6,10 @@
 #include "Type.h"
 #include "Owner.h"
 #include "GrantV2.h"
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class PutBucketAclInput {
+class PutBucketAclInput : public GenericInput {
 public:
     explicit PutBucketAclInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

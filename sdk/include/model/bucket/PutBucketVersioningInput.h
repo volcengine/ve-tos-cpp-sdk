@@ -4,9 +4,11 @@
 #include <Type.h>
 #include <utility>
 #include <vector>
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class PutBucketVersioningInput {
+class PutBucketVersioningInput : public GenericInput {
 public:
     explicit PutBucketVersioningInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

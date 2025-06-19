@@ -2,8 +2,10 @@
 
 #include <string>
 #include <utility>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class ListObjectsType2Input {
+class ListObjectsType2Input : public GenericInput {
 public:
     explicit ListObjectsType2Input(std::string bucket) : bucket_(std::move(bucket)) {
     }

@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class [[gnu::deprecated]] ListMultipartUploadsInput {
+class [[gnu::deprecated]] ListMultipartUploadsInput : public GenericInput {
 public:
     ListMultipartUploadsInput() = default;
     ~ListMultipartUploadsInput() = default;

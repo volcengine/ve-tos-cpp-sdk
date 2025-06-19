@@ -3,8 +3,10 @@
 #include <string>
 #include "ObjectAclGrant.h"
 #include "ObjectAclRules.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class [[gnu::deprecated]] PutObjectAclInput {
+class [[gnu::deprecated]] PutObjectAclInput : public GenericInput {
 public:
     PutObjectAclInput() = default;
     ~PutObjectAclInput() = default;

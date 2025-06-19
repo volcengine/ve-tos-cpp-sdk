@@ -8,8 +8,10 @@
 #include "GrantV2.h"
 #include "model/object/PostSignatureCondition.h"
 #include "model/object/ContentLengthRange.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PreSignedPostSignatureInput {
+class PreSignedPostSignatureInput : public GenericInput {
 public:
     PreSignedPostSignatureInput() = default;
     PreSignedPostSignatureInput(std::string bucket, std::string key)

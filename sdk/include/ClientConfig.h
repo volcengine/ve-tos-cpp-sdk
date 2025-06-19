@@ -21,6 +21,7 @@ public:
     ~ClientConfig() = default;
 
     std::string endPoint;
+    std::string controlEndPoint;
     bool autoRecognizeContentType;
     int maxRetryCount;
     int connectionTimeout;
@@ -42,6 +43,8 @@ public:
     std::string userAgentSoftName;
     std::string userAgentSoftVersion;
     std::map<std::string,std::string> userAgentCustomizedKeyValues;
+    std::string clientCrt;
+    std::string clientKey;
 
     // int MaxConnections;
     // int IdleConnectionTime;

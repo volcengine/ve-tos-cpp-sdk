@@ -6,9 +6,11 @@
 #include <ostream>
 #include <algorithm>
 #include "UploadedPartV2.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
 
-class CompleteMultipartUploadV2Input {
+class CompleteMultipartUploadV2Input : public GenericInput {
 public:
     CompleteMultipartUploadV2Input(std::string bucket, std::string key, std::string uploadid,
                                    std::vector<UploadedPartV2> parts)

@@ -14,7 +14,7 @@ public:
     ~TosResponse() = default;
     std::string getRequestID();
     RequestInfo GetRequestInfo();
-
+    std::string getEcCode();
     int getStatusCode() const {
         return statusCode_;
     }

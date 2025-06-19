@@ -2,8 +2,10 @@
 
 #include <string>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class GetObjectV2Input {
+class GetObjectV2Input : public GenericInput {
 public:
     GetObjectV2Input() = default;
     ~GetObjectV2Input() = default;

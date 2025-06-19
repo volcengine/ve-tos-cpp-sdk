@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class [[gnu::deprecated]] CreateBucketInput {
+class [[gnu::deprecated]] CreateBucketInput : public GenericInput {
 public:
     const std::string& getBucket() const {
         return bucket_;

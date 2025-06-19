@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "UploadPartBasicInput.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class UploadPartFromFileInput {
+class UploadPartFromFileInput : public GenericInput {
 public:
     UploadPartFromFileInput(std::string bucket, std::string key, std::string uploadId, int partNumber,
                             std::string filepath, int64_t offset, int64_t partsize)

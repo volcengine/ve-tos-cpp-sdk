@@ -1,7 +1,9 @@
 #pragma once
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PutBucketPolicyInput {
+class PutBucketPolicyInput : public GenericInput {
 public:
     explicit PutBucketPolicyInput(const std::string& bucket) : bucket_(bucket) {
     }

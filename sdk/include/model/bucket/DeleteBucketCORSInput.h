@@ -2,8 +2,10 @@
 
 #include <string>
 #include <utility>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class DeleteBucketCORSInput {
+class DeleteBucketCORSInput : public GenericInput {
 public:
     explicit DeleteBucketCORSInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

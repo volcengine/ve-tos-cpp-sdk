@@ -6,9 +6,11 @@
 #include <vector>
 
 #include "RealTimeLogConfiguration.h"
+#include "model/GenericInput.h"
+
 
 namespace VolcengineTos {
-class PutBucketRealTimeLogInput {
+class PutBucketRealTimeLogInput : public GenericInput {
 public:
     explicit PutBucketRealTimeLogInput(std::string bucket) : bucket_(std::move(bucket)) {
     }

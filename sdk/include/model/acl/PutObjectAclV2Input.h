@@ -5,8 +5,10 @@
 #include "Type.h"
 #include "Owner.h"
 #include "GrantV2.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class PutObjectAclV2Input {
+class PutObjectAclV2Input : public GenericInput {
 public:
     PutObjectAclV2Input(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

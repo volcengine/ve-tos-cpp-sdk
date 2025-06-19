@@ -3,8 +3,10 @@
 #include <string>
 #include <utility>
 #include "Type.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class HeadObjectV2Input {
+class HeadObjectV2Input : public GenericInput {
 public:
     HeadObjectV2Input(std::string bucket, std::string key) : bucket_(std::move(bucket)), key_(std::move(key)) {
     }

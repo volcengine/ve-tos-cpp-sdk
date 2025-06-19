@@ -3,8 +3,10 @@
 #include <string>
 #include <memory>
 #include <utility>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class DownloadFileInput {
+class DownloadFileInput : public GenericInput {
 public:
     DownloadFileInput(std::string bucket, std::string key) : headObjectV2Input_(std::move(bucket), std::move(key)) {
     }

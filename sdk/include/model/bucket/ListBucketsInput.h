@@ -1,7 +1,9 @@
 #pragma once
 
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class ListBucketsInput {
+class ListBucketsInput : public GenericInput {
 public:
     explicit ListBucketsInput(BucketType bucketType) : bucketType_(bucketType) {}
     ListBucketsInput() = default;

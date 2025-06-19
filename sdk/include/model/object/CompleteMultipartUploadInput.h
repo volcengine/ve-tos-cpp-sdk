@@ -8,9 +8,11 @@
 #include "InnerUploadedPart.h"
 #include "UploadPartOutput.h"
 #include "UploadPartCopyOutput.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
 namespace inner {
-class InnerCompleteMultipartUploadInput {
+class InnerCompleteMultipartUploadInput : public GenericInput {
 public:
     std::string toJsonString();
     explicit InnerCompleteMultipartUploadInput(int length) {
@@ -39,7 +41,7 @@ private:
     std::vector<InnerUploadedPart> parts_;
 };
 }  // namespace inner
-class [[gnu::deprecated]] CompleteMultipartUploadInput {
+class [[gnu::deprecated]] CompleteMultipartUploadInput : public GenericInput{
 public:
     CompleteMultipartUploadInput(std::string key, std::string uploadId, std::vector<UploadPartOutput> uploadedParts)
             : key_(std::move(key)), uploadID_(std::move(uploadId)), uploadedParts_(std::move(uploadedParts)) {
@@ -74,7 +76,7 @@ private:
     std::vector<UploadPartOutput> uploadedParts_;
 };
 
-class [[gnu::deprecated]] CompleteMultipartCopyUploadInput {
+class [[gnu::deprecated]] CompleteMultipartCopyUploadInput : public GenericInput {
 public:
     CompleteMultipartCopyUploadInput(std::string key, std::string uploadId,
                                      std::vector<UploadPartCopyOutput> uploadedParts)

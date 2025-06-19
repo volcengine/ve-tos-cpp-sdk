@@ -23,10 +23,17 @@ public:
     void setVersionId(const std::string& versionId) {
         versionID_ = versionId;
     }
+    const std::string& getTrashPath() const {
+        return trashPath_;
+    }
+    void setTrashPath(const std::string& trashPath) {
+        trashPath_ = trashPath;
+    }
 
 private:
     RequestInfo requestInfo_;
     bool deleteMarker_;
     std::string versionID_;
+    std::string trashPath_;
 };
 }  // namespace VolcengineTos

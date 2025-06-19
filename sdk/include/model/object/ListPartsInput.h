@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class ListPartsInput {
+class ListPartsInput : public GenericInput {
 public:
     ListPartsInput(std::string bucket, std::string key, std::string uploadid)
             : bucket_(std::move(bucket)), key_(std::move(key)), uploadID_(std::move(uploadid)) {

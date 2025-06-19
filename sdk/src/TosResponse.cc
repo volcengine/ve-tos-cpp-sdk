@@ -15,3 +15,7 @@ RequestInfo TosResponse::GetRequestInfo() {
 std::string TosResponse::getRequestID() {
     return MapUtils::findValueByKeyIgnoreCase(headers_, HEADER_REQUEST_ID);
 }
+
+std::string TosResponse::getEcCode(){
+    return MapUtils::findValueByKeyIgnoreCase(headers_, HEADER_EC_CODE);
+}

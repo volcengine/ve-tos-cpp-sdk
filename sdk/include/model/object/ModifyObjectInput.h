@@ -4,8 +4,10 @@
 
 #include "model/RequestInfo.h"
 #include "PutObjectBasicInput.h"
+#include "model/GenericInput.h"
+
 namespace VolcengineTos {
-class ModifyObjectInput {
+class ModifyObjectInput : public GenericInput {
 public:
     ModifyObjectInput() = default;
     ~ModifyObjectInput() = default;

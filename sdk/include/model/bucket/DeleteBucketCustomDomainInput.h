@@ -4,9 +4,10 @@
 #include <Type.h>
 #include <utility>
 #include <vector>
+#include "model/GenericInput.h"
 
 namespace VolcengineTos {
-class DeleteBucketCustomDomainInput {
+class DeleteBucketCustomDomainInput : public GenericInput {
 public:
     DeleteBucketCustomDomainInput(std::string bucket, std::string domain)
             : bucket_(std::move(bucket)), domain_(std::move(domain)) {
