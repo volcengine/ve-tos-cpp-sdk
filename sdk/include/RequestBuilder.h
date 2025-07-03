@@ -115,6 +115,13 @@ public:
         requestDate_ = requestDate;
     }
 
+    const std::map<std::string, std::string>& getRequestHeader() const {
+        return requestHeader_;
+    }
+    void setRequestHeader(const std::map<std::string, std::string>& requestHeader) {
+        requestHeader_ = requestHeader;
+    }
+
     std::shared_ptr<TosRequest> Build(const std::string& method);
     std::shared_ptr<TosRequest> BuildControlRequest(const std::string& method);
     std::shared_ptr<TosRequest> Build(const std::string& method, std::shared_ptr<std::iostream> content);
@@ -142,5 +149,6 @@ private:
     bool isCustomDomain_ = false;
 
     std::time_t requestDate_ = 0;
+    std::map<std::string, std::string> requestHeader_ = {};
 };
 }  // namespace VolcengineTos
