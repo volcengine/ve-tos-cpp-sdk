@@ -7863,6 +7863,7 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& accountID, const Gen
                              config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     rb.setRequestDate(genericInput.getRequestDate());
+    rb.setRequestHeader(genericInput.getRequestHeader());
     return rb;
 }
 
@@ -7873,6 +7874,7 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
                              urlMode_, headers, queries,config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     rb.setRequestDate(genericInput.getRequestDate());
+    rb.setRequestHeader(genericInput.getRequestHeader());
     return rb;
 }
 
@@ -7889,6 +7891,7 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
                              queries, config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     rb.setRequestDate(genericInput.getRequestDate());
+    rb.setRequestHeader(genericInput.getRequestHeader());
     return rb;
 }
 RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object,
@@ -7910,6 +7913,7 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
     rb.setAutoRecognizeContentType(builder.isAutoRecognizeContentType());
     rb.setRange(builder.getRange());
     rb.setRequestDate(genericInput.getRequestDate());
+    rb.setRequestHeader(genericInput.getRequestHeader());
     return rb;
 }
 

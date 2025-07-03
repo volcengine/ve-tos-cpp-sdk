@@ -3,6 +3,37 @@
 #include "auth/SignV4.h"
 using namespace VolcengineTos;
 
+// 合并 GenericInput RequestHeader 和请求中的 header
+void mergeRequestHeaderAndHeader(const std::map<std::string, std::string> &reqHeader, std::map<std::string, std::string> &header) {
+    if (reqHeader.empty())
+        return;
+
+    std::map<std::string, std::string> lower_header;
+    for (const auto& pair : header) {
+        lower_header[StringUtils::toLower(pair.first)] = pair.second;
+    }
+
+    auto iter = reqHeader.begin();
+    for (; iter != reqHeader.end(); iter++) {
+        if (iter->first.empty()) {
+            continue;
+        }
+
+        std::string key(iter->first);
+        std::string kk = StringUtils::toLower(key);
+
+        if (kk == "content-length" || kk == "host" || kk == "x-tos-date" ||
+            kk == "range" || kk == "transfer-encoding" || kk == "authorization" ||
+            kk == "date") {
+            continue;
+        }
+
+        if (lower_header.find(kk) == lower_header.end()) {
+            header.insert({iter->first, iter->second});  // 如果不存在，插入键值对
+        }
+    }
+}
+
 std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
     std::string host, path;
     if (isCustomDomain_){
@@ -20,6 +51,7 @@ std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
         }
     }
 
+    mergeRequestHeaderAndHeader(requestHeader_, headers_);
     auto req = std::make_shared<TosRequest>(scheme_, method, host, path, headers_, query_);
     req->setRequestDate(requestDate_);
     return req;
@@ -27,6 +59,7 @@ std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
 
 std::shared_ptr<TosRequest> RequestBuilder::buildControlRequest(const std::string& method) {
     std::string host = accountID_ + "." + controlHost_;
+    mergeRequestHeaderAndHeader(requestHeader_, headers_);
     auto req = std::make_shared<TosRequest>(scheme_, method, host, "/qospolicy", headers_, query_);
     req->setRequestDate(requestDate_);
     return req;
@@ -46,6 +79,7 @@ std::shared_ptr<TosRequest> RequestBuilder::buildSignedURL(const std::string& me
         path += object_;
     }
 
+    mergeRequestHeaderAndHeader(requestHeader_, headers_);
     auto req = std::make_shared<TosRequest>(scheme_, method, host, path, headers_, query_);
     req->setRequestDate(requestDate_);
     return req;
