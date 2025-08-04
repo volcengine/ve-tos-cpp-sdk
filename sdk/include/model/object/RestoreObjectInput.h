@@ -55,6 +55,12 @@ public:
     void setRestoreJobParameters(const RestoreJobParameters& restoreJobParameters) {
         restoreJobParameters_ = restoreJobParameters;
     }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
     std::string toJsonString() const;
 
 private:
@@ -63,5 +69,6 @@ private:
     std::string versionID_;
     int days_ = 0;
     RestoreJobParameters restoreJobParameters_ = RestoreJobParameters(TierType::NotSet);
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos

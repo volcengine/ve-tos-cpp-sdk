@@ -792,8 +792,9 @@ static void getObjectSetOptionHeader(RequestBuilder& rb, const GetObjectV2Input&
     if (input.getTrafficLimit() != 0) {
         rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
     }
-    rb.withQueryCheckEmpty("x-tos-process", input.getProcess());
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
 
+    rb.withQueryCheckEmpty("x-tos-process", input.getProcess());
     rb.withQueryCheckEmpty("response-cache-control", input.getResponseCacheControl());
     rb.withQueryCheckEmpty("response-content-disposition", input.getResponseContentDisposition());
     rb.withQueryCheckEmpty("response-content-encoding", input.getResponseContentEncoding());
@@ -1137,6 +1138,9 @@ Outcome<TosError, DeleteObjectOutput> TosClientImpl::deleteObject(const DeleteOb
 
     auto rb = newBuilder(input.getBucket(), input.getKey(), input);
 
+    rb.withHeader(http::HEADER_IF_MATCH, input.getIfMatch());
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
+
     rb.withQueryCheckEmpty("versionId", input.getVersionID());
 
     if (input.getRecursive()) {
@@ -1253,8 +1257,14 @@ Outcome<TosError, DeleteMultiObjectsOutput> TosClientImpl::deleteMultiObjects(De
     std::string data = input.toJsonString();
     std::string dataMd5 = CryptoUtils::md5Sum(data);
     auto rb = newBuilder(input.getBucket(), "", input);
-
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
     rb.withHeader(http::HEADER_CONTENT_MD5, dataMd5);
+    if (input.getRecursive()) {
+        rb.withQueryCheckEmpty("recursive", "true");
+    }
+    if (input.getSkipTrash()) {
+        rb.withQueryCheckEmpty("skipTrash", "true");
+    }
     rb.withQuery("delete", "");
     auto req = rb.Build(http::MethodPost, std::make_shared<std::stringstream>(data));
     auto tosRes = roundTrip(req, 200);
@@ -1352,6 +1362,7 @@ static void putObjectSetOptionHeader(RequestBuilder& rb, const PutObjectBasicInp
     if (!basic_input.getCallBackVar().empty()) {
         rb.withHeader(HEADER_CALLBACK_VAR, basic_input.getCallBackVar());
     }
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, basic_input.getNotificationCustomParameters());
 }
 
 //Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyObjectInput& input) {
@@ -1377,6 +1388,7 @@ Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyOb
     if (input.getTrafficLimit() != 0) {
         rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
     }
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
 
     auto req = rb.Build(http::MethodPost, input.getContent());
     auto handler = input.getDataTransferListener();
@@ -3090,6 +3102,7 @@ static void appendObjectSetOptionHeader(RequestBuilder& rb, const AppendObjectV2
     setMetaHeader(input.getMeta(), rb);
     rb.withHeader(HEADER_WEBSITE_REDIRECT_LOCATION, input.getWebsiteRedirectLocation());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
     if (input.getTrafficLimit() != 0) {
         rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
     }
@@ -3524,6 +3537,7 @@ static void copyObjectSetOptionHeader(RequestBuilder& rb, const CopyObjectV2Inpu
     setMetaHeader(input.getMeta(), rb);
     rb.withHeader(HEADER_WEBSITE_REDIRECT_LOCATION, input.getWebsiteRedirectLocation());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
     if (input.getTrafficLimit() != 0) {
         rb.withHeader(HEADER_TRAFFIC_LIMIT, std::to_string(input.getTrafficLimit()));
     }
@@ -4544,6 +4558,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
 
     auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("uploadId", input.getUploadId());
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
     if (input.isCompleteAll()) {
         rb.withHeader(HEADER_COMPLETE_ALL, "yes");
     }
@@ -5773,6 +5788,7 @@ static void fetchObjectSetOptionHeader(RequestBuilder& rb, const FetchObjectInpu
     rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
     setMetaHeader(input.getMeta(), rb);
     setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
     rb.withHeader(HEADER_STORAGE_CLASS, StorageClassTypetoString[input.getStorageClass()]);
 }
 
@@ -7280,6 +7296,7 @@ Outcome<TosError, RestoreObjectOutput> TosClientImpl::restoreObject(const Restor
     auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("restore", "");
     rb.withQueryCheckEmpty("versionId", input.getVersionId());
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
     std::shared_ptr<std::stringstream> ss = nullptr;
     std::string jsonRules(input.toJsonString());
     if (jsonRules != "null") {
@@ -7336,6 +7353,8 @@ Outcome<TosError, RenameObjectOutput> TosClientImpl::renameObject(const RenameOb
     if (input.getRecursiveMkdir()) {
         rb.withHeader(HEADER_RECURSIVE_MKDIR, "true");
     }
+
+    rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, input.getNotificationCustomParameters());
 
     auto req = rb.Build(http::MethodPut, nullptr);
     auto tosRes = roundTrip(req, 204);

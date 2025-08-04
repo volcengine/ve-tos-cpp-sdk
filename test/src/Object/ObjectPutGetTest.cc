@@ -20,7 +20,7 @@ protected:
         conf.maxRetryCount = 0;
         conf.userAgentProductName = "tos";
         conf.userAgentSoftName="cxxSdk";
-        conf.userAgentSoftVersion = "2.6.16";
+        conf.userAgentSoftVersion = "2.6.17";
         conf.userAgentCustomizedKeyValues = {{"key1", "value1"}, {"key2", "value2"}};
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
@@ -182,6 +182,37 @@ TEST_F(ObjectPutGetTest, PutZeroSizeObjectTest) {
     auto output_obj_put = cliV2->putObject(input_obj_put);
     EXPECT_EQ(output_obj_put.isSuccess(), true);
 }
+
+TEST_F(ObjectPutGetTest, PutObjectAndDeleteWithIfMatchTest) {
+    std::string obj_key = TestUtils::GetObjectKey(TestConfig::TestPrefix);
+    std::string data = "123456789";
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input input_obj_put;
+    auto input_obj_put_basic = input_obj_put.getPutObjectBasicInput();
+    input_obj_put_basic.setNotificationCustomParameters("123456789");
+    input_obj_put.setContent(ss);
+    input_obj_put_basic.setBucket(bkt_name);
+    input_obj_put_basic.setKey(obj_key);
+    input_obj_put.setPutObjectBasicInput(input_obj_put_basic);
+    auto output_obj_put = cliV2->putObject(input_obj_put);
+    EXPECT_EQ(output_obj_put.isSuccess(), true);
+
+    HeadObjectV2Input head_object_input(bkt_name, obj_key);
+    auto headObjectOutput = cliV2->headObject(head_object_input);
+    EXPECT_EQ(headObjectOutput.isSuccess(), true);
+
+    DeleteObjectInput deleteObjectInput(bkt_name, obj_key);
+    deleteObjectInput.setIfMatch("1111111");
+    auto output1 = cliV2->deleteObject(deleteObjectInput);
+    EXPECT_EQ(output1.isSuccess(), false);
+
+    DeleteObjectInput deleteObjectInput2(bkt_name, obj_key);
+    deleteObjectInput2.setIfMatch(headObjectOutput.result().getETag());
+    deleteObjectInput2.setNotificationCustomParameters("delete-object 123");
+    auto output2 = cliV2->deleteObject(deleteObjectInput2);
+    EXPECT_EQ(output2.isSuccess(), true);
+}
+
 TEST_F(ObjectPutGetTest, PutObjectWithErrorNameTest) {
     std::string error_message = "invalid object name, the length must be [1, 696]";
     std::string obj_key = "";

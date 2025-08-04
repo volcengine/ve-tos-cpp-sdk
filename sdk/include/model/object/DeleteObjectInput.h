@@ -30,6 +30,20 @@ public:
         versionID_ = versionID;
     }
 
+    const std::string& getIfMatch() const {
+        return ifMatch_;
+    }
+    void setIfMatch(const std::string& ifMatch) {
+        ifMatch_ = ifMatch;
+    }
+
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
+
     bool getRecursive() const {
         return recursive_;
     }
@@ -50,6 +64,8 @@ private:
     std::string bucket_;
     std::string key_;
     std::string versionID_;
+    std::string ifMatch_;
+    std::string notificationCustomParameters_;
     bool recursive_ = false;
     bool skipTrash_ = false;
 };

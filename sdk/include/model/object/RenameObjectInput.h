@@ -45,6 +45,12 @@ public:
     void setForbidOverwrite(bool forbidOverwrite) {
         forbidOverwrite_ = forbidOverwrite;
     }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
 
 private:
     std::string bucket_;
@@ -52,5 +58,6 @@ private:
     std::string newKey_;
     bool recursiveMkdir_ = false;
     bool forbidOverwrite_ = false;
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos

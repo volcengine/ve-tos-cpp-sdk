@@ -60,6 +60,12 @@ public:
     void setTrafficLimit(long trafficLimit) {
         trafficLimit_ = trafficLimit;
     }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
 
 private:
     std::string bucket_;
@@ -70,5 +76,6 @@ private:
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};  // 进度条特性
     std::shared_ptr<RateLimiter> rateLimiter_ = nullptr;              // 客户端限速
     long trafficLimit_;
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos
