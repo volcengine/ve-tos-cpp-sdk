@@ -56,6 +56,7 @@ std::string ObjectCopyTest::data = "";
 
 TEST_F(ObjectCopyTest, CopyObjectToOtherBucketTest) {
     CopyObjectV2Input input_object_copy(bkt_name, obj_name, src_bkt_name, src_obj_name);
+    input_object_copy.setNotificationCustomParameters("copy-123");
     auto output_obj_copy = cliV2->copyObject(input_object_copy);
     EXPECT_EQ(output_obj_copy.isSuccess(), true);
     std::string tmp_string = TestUtils::GetObjectContentByStream(cliV2, bkt_name, obj_name);

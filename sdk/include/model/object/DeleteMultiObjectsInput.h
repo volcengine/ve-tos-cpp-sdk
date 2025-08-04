@@ -41,9 +41,14 @@ public:
     bool getSkipTrash() const {
         return skipTrash_;
     }
-
     void setSkipTrash(bool skipTrash) {
         skipTrash_ = skipTrash;
+    }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
     }
 
 private:
@@ -52,5 +57,6 @@ private:
     std::string bucket_;
     bool recursive_ = false;
     bool skipTrash_ = false;
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos

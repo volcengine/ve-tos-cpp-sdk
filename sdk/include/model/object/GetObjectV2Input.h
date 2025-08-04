@@ -150,6 +150,12 @@ public:
     void setProcess(const std::string& process) {
         process_ = process;
     }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
 
 private:
     std::string bucket_;
@@ -181,5 +187,7 @@ private:
 
     int64_t trafficLimit_ = 0;
     std::string process_;
+
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos

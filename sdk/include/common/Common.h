@@ -95,7 +95,7 @@ static const char* HEADER_TRAFFIC_LIMIT = "X-Tos-Traffic-Limit";
 static const char* HEADER_COMPLETE_ALL = "X-Tos-Complete-All";
 static const char* HEADER_CALLBACK = "X-Tos-Callback";
 static const char* HEADER_CALLBACK_VAR = "X-Tos-Callback-Var";
-
+static const char* HEADER_NOTIFY_CUSTOM_PARAM = "X-Tos-Notification-Custom-Parameters";
 // HNS
 static const char* HEADER_DIRECTORY = "X-Tos-Directory";
 static const char* HEADER_BUCKET_TYPE = "X-Tos-Bucket-Type";

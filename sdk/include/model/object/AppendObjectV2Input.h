@@ -151,6 +151,12 @@ public:
     void setTrafficLimit(int64_t trafficLimit) {
         trafficLimit_ = trafficLimit;
     }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
 
 private:
     std::string bucket_;
@@ -180,5 +186,7 @@ private:
     uint64_t preHashCrc64ecma_ = 0;  // 与初始化参数 EnableCRC 配套使用，代表上一次调用 AppendObjectOutput 返回的
                                      // HashCrc64ecma，第一次请求时为 0
     int64_t trafficLimit_ = 0;
+
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos

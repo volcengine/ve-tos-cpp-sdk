@@ -111,6 +111,12 @@ public:
     void setHexMd5(const std::string& hexMd5) {
         hexMD5_ = hexMd5;
     }
+    const std::string& getNotificationCustomParameters() const {
+        return notificationCustomParameters_;
+    }
+    void setNotificationCustomParameters(const std::string& notificationCustomParameters) {
+        notificationCustomParameters_ = notificationCustomParameters;
+    }
 
     std::string toJsonString() const;
 
@@ -133,5 +139,7 @@ private:
     std::string url_;
     bool ignoreSameKey_ = false;
     std::string hexMD5_;
+
+    std::string notificationCustomParameters_;
 };
 }  // namespace VolcengineTos

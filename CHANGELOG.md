@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2025.8.4 Version 2.6.17
+- 支持 deleteObject 接口携带 if-match 
+- 支持事件通知回调
+
 ### 2025.6.23 Version 2.6.16
 - 支持 请求指定请求头域
 
