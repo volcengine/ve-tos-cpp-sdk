@@ -57,7 +57,7 @@
 #include "model/object/ModifyObjectInput.h"
 #include "model/object/ModifyObjectOutput.h"
 namespace VolcengineTos {
-static const char* TOS_SDK_VERSION = "v2.6.17";
+static const char* TOS_SDK_VERSION = "v2.6.18";
 #ifdef WIN32
 static const char* PLATFORM_NAME = "windows";
 #elif __linux__

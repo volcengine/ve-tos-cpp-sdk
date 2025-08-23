@@ -29,6 +29,9 @@ struct ResourceManager {
 
 static void processHandler(const DataTransferStatusChange& handler, int64_t consumedBytes, int64_t totalBytes,
                            int64_t rwOnceBytes, DataTransferType type, void* userData) {
+    if (!handler){
+        return;
+    }
     DataTransferStatus dataTransferStatus{consumedBytes, totalBytes, rwOnceBytes, type, userData};
     auto data = std::make_shared<DataTransferStatus>(dataTransferStatus);
     handler(data);
@@ -38,9 +41,12 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
     auto* resourceMan = static_cast<ResourceManager*>(data);
 
     if (resourceMan == nullptr || resourceMan->httpReq == nullptr) {
-        resourceMan->dataTransferType = 4;
-        processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
-                       resourceMan->userData);
+        if (resourceMan != nullptr) {
+            resourceMan->dataTransferType = 4;
+            processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
+                           resourceMan->userData);
+        }
+
         return 0;
     }
     std::shared_ptr<std::iostream>& content = resourceMan->httpReq->Body();
@@ -95,6 +101,8 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
     auto* resourceMan = static_cast<ResourceManager*>(userdata);
     const size_t wanted = size * nmemb;
 
+    auto logger = LogUtils::GetLogger();
+
     // 第一次回调
     if (resourceMan->progress && resourceMan->dataTransferType == 1) {
         if (resourceMan->total == -1) {
@@ -117,9 +125,12 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
     }
 
     if (resourceMan == nullptr || resourceMan->httpResp == nullptr || wanted == 0) {
-        resourceMan->dataTransferType = 4;
-        processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
-                       resourceMan->userData);
+        if (resourceMan != nullptr) {
+            resourceMan->dataTransferType = 4;
+            processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
+                           resourceMan->userData);
+        }
+
         return -1;
     }
     // 第一次receive response body , 初始化state->resposne->body
@@ -136,6 +147,9 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
     }
     std::shared_ptr<std::iostream>& content = resourceMan->httpResp->Body();
     if (content == nullptr || content->fail()) {
+        if (logger != nullptr) {
+            logger->error("recvBody content init err");
+        }
         resourceMan->dataTransferType = 4;
         processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
                        resourceMan->userData);
@@ -147,6 +161,9 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
 //    }
 
     if (content->bad()) {
+        if (logger != nullptr) {
+            logger->error("recvBody content write err, please check disk space, file permission, network, etc.");
+        }
         resourceMan->dataTransferType = 4;
         processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
                        resourceMan->userData);

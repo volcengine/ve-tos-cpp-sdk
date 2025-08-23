@@ -1,5 +1,8 @@
 ## Release Note
 
+### 2025.8.23 Version 2.6.18
+- GetObjectToFile 接口稳定性加固
+
 ### 2025.8.4 Version 2.6.17
 - 支持 deleteObject 接口携带 if-match 
 - 支持事件通知回调
