@@ -7534,10 +7534,19 @@ bool TosClientImpl::checkShouldRetry(const std::shared_ptr<TosRequest>& request,
     if (resCode == 429 || resCode >= 500 || curlErrShouldRetry) {
         if (request->getMethod() == http::MethodGet || request->getMethod() == http::MethodHead) {
             if (request->getMethod() == http::MethodGet) {
-                auto content_ = request->getContent();
-                if (content_ != nullptr) {
+
+                if (auto content_ = request->getContent(); content_ != nullptr) {
                     int64_t contentLength_ = calContentLength(content_);
                     if (contentLength_ != 0) {
+                        return false;
+                    }
+                } else if (auto fileContent_ = request->getFileContent(); fileContent_ != nullptr) {
+                    // 重置流状态
+                    fileContent_->clear();
+                    // 重置写位置到开头
+                    fileContent_->seekp(0, std::ios::beg);
+
+                    if (fileContent_->bad() || fileContent_->fail()) {
                         return false;
                     }
                 }
