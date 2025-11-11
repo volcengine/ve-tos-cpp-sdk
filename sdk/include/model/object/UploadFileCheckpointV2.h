@@ -83,7 +83,14 @@ public:
         if (uploadID_.empty() || bucket_ != bucket || key_ != objectKey) {
             return false;
         }
-        return fileInfo_.getFileSize() == uploadFileSize && fileInfo_.getLastModified() == uploadFileLastModifiedTime;
+
+        int64_t total_part_size = 0;
+        for (int i = 0; i < partsInfo_.size(); i++) {
+            total_part_size += partsInfo_[i].getPartSize();
+        }
+
+        return fileInfo_.getFileSize() == uploadFileSize && uploadFileSize == total_part_size &&
+               fileInfo_.getLastModified() == uploadFileLastModifiedTime;
     }
 
 private:

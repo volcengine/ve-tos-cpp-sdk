@@ -43,8 +43,9 @@ TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& reg
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
 
-TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const FederationCredentials& cred) {
-    initWithoutConfig(endpoint,  region);
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
+                             const FederationCredentials& cred) {
+    initWithoutConfig(endpoint, region);
     credentials_ = std::make_shared<FederationCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
@@ -83,14 +84,14 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& control
     }
 }
 
-TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
-                             const StaticCredentials& cred, const ClientConfig& config) {
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const StaticCredentials& cred,
+                             const ClientConfig& config) {
     initWithConfig(endpoint, region, config);
     credentials_ = std::make_shared<StaticCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
 }
-TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region,
-                             const FederationCredentials& cred, const ClientConfig& config) {
+TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const FederationCredentials& cred,
+                             const ClientConfig& config) {
     initWithConfig(endpoint, region, config);
     credentials_ = std::make_shared<FederationCredentials>(cred);
     signer_ = std::make_shared<SignV4>(credentials_, region);
@@ -120,10 +121,11 @@ void TosClientImpl::initWithConfig(const std::string& endpoint, const std::strin
         tmpControlEndpoint = supportedRegionToControlEndpoint_[region];
     }
 
-    init(tmpEndpoint, tmpControlEndpoint,  region, config);
+    init(tmpEndpoint, tmpControlEndpoint, region, config);
 }
 
-void TosClientImpl::init(const std::string& endpoint, const std::string& controlEndpoint, const std::string& region, const ClientConfig& config) {
+void TosClientImpl::init(const std::string& endpoint, const std::string& controlEndpoint, const std::string& region,
+                         const ClientConfig& config) {
     TransportConfig conf;
     // 涉及到 HttpClient 的参数放到这里
     // 需要同步修改 DefaultTransport(const TransportConfig& config) 以传参给 HttpConfig
@@ -371,7 +373,7 @@ Outcome<TosError, CreateBucketOutput> TosClientImpl::createBucket(const CreateBu
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "",input);
+    auto rb = newBuilder(input.getBucket(), "", input);
     createBucketSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodPut, nullptr);
     auto tosRes = roundTrip(req, 200);
@@ -415,7 +417,7 @@ Outcome<TosError, CreateBucketV2Output> TosClientImpl::createBucket(const Create
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(input.getBucket(), "",input);
+    auto rb = newBuilder(input.getBucket(), "", input);
     createBucketSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodPut, nullptr);
     // 设置funcName
@@ -544,7 +546,7 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const DeleteBu
         res.setE(error);
         return res;
     }
-    auto req = newBuilder(input.getBucket(), "",input).Build(http::MethodDelete);
+    auto req = newBuilder(input.getBucket(), "", input).Build(http::MethodDelete);
     // 设置funcName
     req->setFuncName(__func__);
     auto tosRes = roundTrip(req, 204);
@@ -566,7 +568,7 @@ Outcome<TosError, DeleteBucketOutput> TosClientImpl::deleteBucket(const DeleteBu
 }
 Outcome<TosError, ListBucketsOutput> TosClientImpl::listBuckets(const ListBucketsInput& input) {
     Outcome<TosError, ListBucketsOutput> res;
-    auto rb = newBuilder("", "",input);
+    auto rb = newBuilder("", "", input);
     rb.withHeader(HEADER_BUCKET_TYPE, BucketTypetoString[input.getBucketType()]);
     auto req = rb.Build(http::MethodGet);
     auto tosRes = roundTrip(req, 200);
@@ -1365,13 +1367,13 @@ static void putObjectSetOptionHeader(RequestBuilder& rb, const PutObjectBasicInp
     rb.withHeader(HEADER_NOTIFY_CUSTOM_PARAM, basic_input.getNotificationCustomParameters());
 }
 
-//Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyObjectInput& input) {
-//    return modifyObject(input, "0", false);
-//}
+// Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyObjectInput& input) {
+//     return modifyObject(input, "0", false);
+// }
 
 Outcome<TosError, ModifyObjectOutput> TosClientImpl::modifyObject(const ModifyObjectInput& input,
                                                                   const std::string preHashCrc64ecma,
-                                                                bool enableCrcCheck) {
+                                                                  bool enableCrcCheck) {
     Outcome<TosError, ModifyObjectOutput> res;
     auto check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
@@ -1442,9 +1444,7 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
         res.setSuccess(false);
         return res;
     }
-    auto rb = newBuilder(putObjectBasicInput_.getBucket(),
-                         putObjectBasicInput_.getKey(),
-                         input);
+    auto rb = newBuilder(putObjectBasicInput_.getBucket(), putObjectBasicInput_.getKey(), input);
 
     if (config_.isAutoRecognizeContentType()) {
         setContentType(rb, putObjectBasicInput_.getKey());
@@ -1511,7 +1511,7 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     return res;
 }
 std::string isValidFilePath(const std::string& filePath) {
-    struct tos_stat ufs {};
+    struct tos_stat ufs{};
     if (tos_stat(filePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             return "invalid file path, the file does not exist";
@@ -1603,7 +1603,7 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
         ret << uploadFilePath << "." << base64md5Path << ".upload";
         return ret.str();
     } else {
-        struct tos_stat cfs {};
+        struct tos_stat cfs{};
         if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
@@ -1627,7 +1627,7 @@ Outcome<TosError, UploadFileInfo> getUploadFileInfo(const std::string& uploadFil
     Outcome<TosError, UploadFileInfo> ret;
     UploadFileInfo ufi;
     TosError e;
-    struct tos_stat ufs {};
+    struct tos_stat ufs{};
     if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
@@ -1658,7 +1658,7 @@ Outcome<TosError, UploadFileInfoV2> getUploadFileInfoV2(const std::string& uploa
     Outcome<TosError, UploadFileInfoV2> ret;
     UploadFileInfoV2 ufi;
     TosError e;
-    struct tos_stat ufs {};
+    struct tos_stat ufs{};
     if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
@@ -1701,12 +1701,26 @@ bool deleteCheckpointFile(const std::string& checkpointFilePath) {
 }
 Outcome<TosError, std::vector<UploadFilePartInfo>> getPartInfoFromFile(int64_t uploadFileSize, int64_t partSize) {
     Outcome<TosError, std::vector<UploadFilePartInfo>> ret;
+    if (uploadFileSize == 0) {
+        std::vector<UploadFilePartInfo> partInfoList;
+        UploadFilePartInfo info;
+        info.setOffset(0);
+        info.setPartSize(0);
+        info.setPartNum(0);
+        ret.setR(partInfoList);
+        ret.setSuccess(true);
+    }
+
     auto partNum = uploadFileSize / partSize;
     auto lastPartSize = uploadFileSize % partSize;
-    TosError error;
-    if (lastPartSize != 0)
+    if (lastPartSize != 0) {
         partNum++;
+    } else {
+        lastPartSize = partSize;  // 整除时最后分片大小应为完整分片
+    }
+
     if (partNum > 10000) {
+        TosError error;
         error.setMessage("The split file parts number is larger than 10000, please increase your part size");
         ret.setSuccess(false);
         ret.setE(error);
@@ -1717,25 +1731,27 @@ Outcome<TosError, std::vector<UploadFilePartInfo>> getPartInfoFromFile(int64_t u
         UploadFilePartInfo info;
         info.setPartNum(i + 1);
         info.setOffset(i * partSize);
-        if (i < partNum - 1) {
-            info.setPartSize(partSize);
-        } else {
-            info.setPartSize(lastPartSize);
-        }
+        int64_t currentPartSize = (i == partNum - 1) ? lastPartSize : partSize;
+        info.setPartSize(currentPartSize);
         partInfoList.emplace_back(info);
     }
     ret.setR(partInfoList);
     ret.setSuccess(true);
     return ret;
 }
+
 Outcome<TosError, std::vector<UploadFilePartInfoV2>> getPartInfoFromFileV2(int64_t uploadFileSize, int64_t partSize) {
     Outcome<TosError, std::vector<UploadFilePartInfoV2>> ret;
     auto partNum = uploadFileSize / partSize;
     auto lastPartSize = uploadFileSize % partSize;
-    TosError error;
-    if (lastPartSize != 0)
+    if (lastPartSize != 0) {
         partNum++;
+    } else {
+        lastPartSize = partSize;  // 整除时最后分片大小应为完整分片
+    }
+
     if (partNum > 10000) {
+        TosError error;
         error.setMessage("unsupported part number, the maximum is 10000");
         error.setIsClientError(true);
         ret.setSuccess(false);
@@ -1747,11 +1763,8 @@ Outcome<TosError, std::vector<UploadFilePartInfoV2>> getPartInfoFromFileV2(int64
         UploadFilePartInfoV2 info;
         info.setPartNum(i + 1);
         info.setOffset(i * partSize);
-        if (i < partNum - 1) {
-            info.setPartSize(partSize);
-        } else {
-            info.setPartSize(lastPartSize);
-        }
+        const int64_t currentPartSize = (i == partNum - 1) ? lastPartSize : partSize;
+        info.setPartSize(currentPartSize);
         partInfoList.emplace_back(info);
     }
 
@@ -1762,6 +1775,7 @@ Outcome<TosError, std::vector<UploadFilePartInfoV2>> getPartInfoFromFileV2(int64
         info.setPartSize(0);
         partInfoList.emplace_back(info);
     }
+
     ret.setR(partInfoList);
     ret.setSuccess(true);
     return ret;
@@ -2497,12 +2511,28 @@ void downloadEventRenameTempFileFailed(const std::shared_ptr<DownloadEvent>& eve
 
 Outcome<TosError, std::vector<DownloadFilePartInfo>> getDownloadFilePartsInfo(int64_t objectSize, int64_t partSize) {
     Outcome<TosError, std::vector<DownloadFilePartInfo>> ret;
+    if (objectSize == 0) {
+        DownloadFilePartInfo info;
+        info.setPartNum(1);
+        info.setRangeStart(0);
+        info.setRangeEnd(0);
+        std::vector<DownloadFilePartInfo> partInfoList;
+        partInfoList.emplace_back(info);
+        ret.setR(partInfoList);
+        ret.setSuccess(true);
+        return ret;
+    }
+
     auto partNum = objectSize / partSize;
     auto lastPartSize = objectSize % partSize;
-    TosError error;
-    if (lastPartSize != 0)
+    if (lastPartSize != 0) {
         partNum++;
+    } else {
+        lastPartSize = partSize;  // 整除时最后分片大小应为完整分片
+    }
+
     if (partNum > 10000) {
+        TosError error;
         error.setMessage("The split file parts number is larger than 10000, please increase your part size");
         ret.setSuccess(false);
         ret.setE(error);
@@ -2578,7 +2608,7 @@ std::string getDownloadCheckpointPath(const std::string& bucket, const std::stri
         ret << filePath << "." << base64md5Path << ".download";
         return ret.str();
     } else {
-        struct tos_stat cfs {};
+        struct tos_stat cfs{};
         if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
@@ -2651,7 +2681,7 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
 
     DownloadFileFileInfo fileinfo;
 
-    struct tos_stat dfs {};
+    struct tos_stat dfs{};
     std::string filePath = input.getFilePath();
     // 设置文件路径
     // 路径不存在，需要先创建路径
@@ -6016,12 +6046,28 @@ Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSign
 Outcome<TosError, std::vector<ResumableCopyPartInfo>> getResumableCopyPartInfoFromSrcObject(int64_t srcObjectSize,
                                                                                             int64_t partSize) {
     Outcome<TosError, std::vector<ResumableCopyPartInfo>> ret;
+    if (srcObjectSize == 0) {
+        ResumableCopyPartInfo info;
+        info.setPartNum(1);
+        info.setCopySourceRangeStart(0);
+        info.setCopySourceRangeEnd(0);
+        std::vector<ResumableCopyPartInfo> partInfoList;
+        partInfoList.emplace_back(info);
+        ret.setR(partInfoList);
+        ret.setSuccess(true);
+        return ret;
+    }
+
     auto partNum = srcObjectSize / partSize;
     auto lastPartSize = srcObjectSize % partSize;
-    TosError error;
-    if (lastPartSize != 0)
+    if (lastPartSize != 0) {
         partNum++;
+    } else {
+        lastPartSize = partSize;  // 整除时最后分片大小应为完整分片
+    }
+
     if (partNum > 10000) {
+        TosError error;
         error.setMessage("The split file parts number is larger than 10000, please increase your part size");
         ret.setSuccess(false);
         ret.setE(error);
@@ -6472,7 +6518,7 @@ std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
         ret << tmpPath << base64md5Path << ".copy";
         return ret.str();
     } else {
-        struct tos_stat cfs {};
+        struct tos_stat cfs{};
         if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
@@ -7895,11 +7941,12 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& accountID, const Gen
     return rb;
 }
 
-RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object, const GenericInput& genericInput) {
+RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object,
+                                         const GenericInput& genericInput) {
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> queries;
-    auto rb = RequestBuilder(signer_, scheme_, host_, "", "", bucket, object,
-                             urlMode_, headers, queries,config_.isCustomDomain());
+    auto rb = RequestBuilder(signer_, scheme_, host_, "", "", bucket, object, urlMode_, headers, queries,
+                             config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     rb.setRequestDate(genericInput.getRequestDate());
     rb.setRequestHeader(genericInput.getRequestHeader());
@@ -7909,14 +7956,15 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
 RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::string& object,
                                          const std::string& alternativeEndpoint,
                                          const std::map<std::string, std::string>& headers,
-                                         std::map<std::string, std::string>& queries, const GenericInput& genericInput) {
+                                         std::map<std::string, std::string>& queries,
+                                         const GenericInput& genericInput) {
     auto schemeHostParameter = initSchemeAndHost(alternativeEndpoint);
     std::string alternativeEndpoint_ = schemeHostParameter.host_;
     std::string host = alternativeEndpoint_.empty() ? host_ : alternativeEndpoint_;
     std::string scheme = alternativeEndpoint_.empty() ? scheme_ : schemeHostParameter.scheme_;
     int urlMode = alternativeEndpoint_.empty() ? urlMode_ : schemeHostParameter.urlMode_;
-    auto rb = RequestBuilder(signer_, scheme, host, "", "", bucket, object, urlMode, headers,
-                             queries, config_.isCustomDomain());
+    auto rb = RequestBuilder(signer_, scheme, host, "", "", bucket, object, urlMode, headers, queries,
+                             config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     rb.setRequestDate(genericInput.getRequestDate());
     rb.setRequestHeader(genericInput.getRequestHeader());
@@ -7926,8 +7974,8 @@ RequestBuilder TosClientImpl::newBuilder(const std::string& bucket, const std::s
                                          const RequestOptionBuilder& builder, const GenericInput& genericInput) {
     std::map<std::string, std::string> headers;
     std::map<std::string, std::string> queries;
-    auto rb = RequestBuilder(signer_, scheme_, host_,"","", bucket, object,
-                             urlMode_, headers, queries, config_.isCustomDomain());
+    auto rb = RequestBuilder(signer_, scheme_, host_, "", "", bucket, object, urlMode_, headers, queries,
+                             config_.isCustomDomain());
     rb.withHeader(http::HEADER_USER_AGENT, userAgent_);
     auto headerIter = builder.getHeaders().begin();
     for (; headerIter != builder.getHeaders().end(); ++headerIter) {
@@ -8353,7 +8401,7 @@ Outcome<TosError, BucketType> TosClientImpl::getBucketType(const std::string& bu
     auto it = bcl.bucketTypes_.find(bucketName);
     if (it != bcl.bucketTypes_.end() &&
         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() -
-                                                             it->second->lastUpdateTimeNanos_) < it->second->timeout_) {
+                                                         it->second->lastUpdateTimeNanos_) < it->second->timeout_) {
         ret.setSuccess(true);
         ret.setR(it->second->bucketType_);
         bcl.lock.unlock();
@@ -8379,7 +8427,7 @@ Outcome<TosError, BucketType> TosClientImpl::getBucketType(const std::string& bu
     return ret;
 }
 
-Outcome<TosError, PutQosPolicyOutput> TosClientImpl::putQosPolicy(const PutQosPolicyInput& input){
+Outcome<TosError, PutQosPolicyOutput> TosClientImpl::putQosPolicy(const PutQosPolicyInput& input) {
     Outcome<TosError, PutQosPolicyOutput> res;
     std::string check = isValidAccountID(input.getAccountID());
     if (!check.empty()) {
@@ -8429,7 +8477,7 @@ Outcome<TosError, PutQosPolicyOutput> TosClientImpl::putQosPolicy(const PutQosPo
     return res;
 }
 
-Outcome<TosError, GetQosPolicyOutput> TosClientImpl::getQosPolicy(const GetQosPolicyInput& input){
+Outcome<TosError, GetQosPolicyOutput> TosClientImpl::getQosPolicy(const GetQosPolicyInput& input) {
     Outcome<TosError, GetQosPolicyOutput> res;
     std::string check = isValidAccountID(input.getAccountID());
     if (!check.empty()) {
@@ -8473,7 +8521,7 @@ Outcome<TosError, GetQosPolicyOutput> TosClientImpl::getQosPolicy(const GetQosPo
     return res;
 }
 
-Outcome<TosError, DeleteQosPolicyOutput> TosClientImpl::deleteQosPolicy(const DeleteQosPolicyInput& input){
+Outcome<TosError, DeleteQosPolicyOutput> TosClientImpl::deleteQosPolicy(const DeleteQosPolicyInput& input) {
     Outcome<TosError, DeleteQosPolicyOutput> res;
     std::string check = isValidAccountID(input.getAccountID());
     if (!check.empty()) {
