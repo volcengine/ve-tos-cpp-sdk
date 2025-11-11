@@ -20,7 +20,7 @@ protected:
         conf.maxRetryCount = 0;
         conf.userAgentProductName = "tos";
         conf.userAgentSoftName="cxxSdk";
-        conf.userAgentSoftVersion = "2.6.18";
+        conf.userAgentSoftVersion = "2.6.19";
         conf.userAgentCustomizedKeyValues = {{"key1", "value1"}, {"key2", "value2"}};
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);

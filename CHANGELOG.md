@@ -1,5 +1,8 @@
 ## Release Note
 
+### 2025.8.23 Version 2.6.19
+- 修复part size与文件长度能整除情况下无法上传的问题
+
 ### 2025.8.23 Version 2.6.18
 - GetObjectToFile 接口稳定性加固
 
