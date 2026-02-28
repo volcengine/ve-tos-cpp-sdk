@@ -37,6 +37,7 @@ struct HttpConfig {
     int highLatencyLogThreshold;
     std::string clientCrt_;
     std::string clientKey_;
+    std::string netInterface_;
 };
 
 template< typename RESOURCE_TYPE>
@@ -238,5 +239,6 @@ protected:
     VolcengineTos::CurlContainer* curlContainer_{};
     std::string clientCrt_; // 客户端证书路径
     std::string clientKey_; // 客户端私钥路径
+    std::string netInterface_;
 };
 }  // namespace VolcengineTos

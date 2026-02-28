@@ -91,7 +91,7 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
                        resourceMan->userData);
     }
 
-    if (resourceMan->enableCrc64) {
+    if (got > 0 && resourceMan->enableCrc64) {
         resourceMan->sendCrc64Value = CRC64::CalcCRC(resourceMan->sendCrc64Value, (void*)ptr, got);
     }
     return got;
@@ -271,6 +271,7 @@ HttpClient::HttpClient(const HttpConfig& config) {
     caFile_ = config.caFile;
     clientCrt_ = config.clientCrt_;
     clientKey_ = config.clientKey_;
+    netInterface_ = config.netInterface_;
     highLatencyLogThreshold_ = config.highLatencyLogThreshold;
     if (dnsCacheTime_ > 0) {
         share_handle = curl_share_init();
@@ -334,6 +335,9 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     }
     if(!clientKey_.empty()){
         curl_easy_setopt(curl, CURLOPT_SSLKEY, clientKey_.c_str());
+    }
+    if(!netInterface_.empty()){
+        curl_easy_setopt(curl, CURLOPT_INTERFACE, netInterface_.c_str());
     }
     // set req specific params
     auto response = std::make_shared<HttpResponse>();

@@ -20,6 +20,7 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.highLatencyLogThreshold = config.getHighLatencyLogThreshold();
     conf.clientCrt_ = config.getClientCrt();
     conf.clientKey_ = config.getClientKey();
+    conf.netInterface_ = config.getNetInterface();
 
     client_ = std::make_shared<HttpClient>(conf);
 }

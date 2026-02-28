@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
+
 namespace VolcengineTos {
 class DownloadFileObjectInfo {
 public:

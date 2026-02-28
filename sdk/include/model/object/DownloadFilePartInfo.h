@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include "UploadPartOutput.h"
+
 namespace VolcengineTos {
 class DownloadFilePartInfo {
 public:
