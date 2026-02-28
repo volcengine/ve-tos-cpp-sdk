@@ -45,6 +45,7 @@ public:
     std::map<std::string,std::string> userAgentCustomizedKeyValues;
     std::string clientCrt;
     std::string clientKey;
+    std::string netInterface;
 
     // int MaxConnections;
     // int IdleConnectionTime;

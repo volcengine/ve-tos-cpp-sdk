@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstdint>
 #include "model/RequestInfo.h"
+
 namespace VolcengineTos {
 class CompleteMultipartUploadV2Output {
 public:

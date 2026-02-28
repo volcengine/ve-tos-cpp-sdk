@@ -143,6 +143,12 @@ public:
     void setClientKey(const std::string& clientKey) {
         clientKey_ = clientKey;
     }
+    const std::string& getNetInterface() const {
+        return netInterface_;
+    }
+    void setNetInterface(const std::string& netInterface) {
+        netInterface_ = netInterface;
+    }
 
 private:
     int maxIdleCount_ = 128;
@@ -168,5 +174,6 @@ private:
     int highLatencyLogThreshold_ = 100;
     std::string clientCrt_;
     std::string clientKey_;
+    std::string netInterface_;
 };
 }  // namespace VolcengineTos

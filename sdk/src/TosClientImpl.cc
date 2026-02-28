@@ -143,6 +143,7 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& control
     conf.setCaPath(config.caPath);
     conf.setClientCrt(config.clientCrt);
     conf.setClientKey(config.clientKey);
+    conf.setNetInterface(config.netInterface);
     conf.setHighLatencyLogThreshold(config.highLatencyLogThreshold);
 
     transport_ = std::make_shared<DefaultTransport>(conf);
