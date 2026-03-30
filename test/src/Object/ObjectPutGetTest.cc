@@ -20,7 +20,7 @@ protected:
         conf.maxRetryCount = 0;
         conf.userAgentProductName = "tos";
         conf.userAgentSoftName="cxxSdk";
-        conf.userAgentSoftVersion = "2.6.20";
+        conf.userAgentSoftVersion = "2.6.21";
         conf.userAgentCustomizedKeyValues = {{"key1", "value1"}, {"key2", "value2"}};
         cliV2 = std::make_shared<TosClientV2>(TestConfig::Region, TestConfig::Ak, TestConfig::Sk, conf);
         bkt_name = TestUtils::GetBucketName(TestConfig::TestPrefix);
@@ -141,10 +141,12 @@ TEST_F(ObjectPutGetTest, PutGetFileStatusTestHNS) {
     auto getFileStatusInput = GetFileStatusInput(bkt_name_hns, obj_key);
     auto getFileStatusOutput = cliV2->getFileStatus(getFileStatusInput);
     EXPECT_EQ(getFileStatusOutput.isSuccess(), true);
+    EXPECT_EQ(getFileStatusOutput.result().getETag(), output_obj_put.result().getETag());
 
     getFileStatusInput = GetFileStatusInput(bkt_name_hns, obj_key);
     getFileStatusOutput = cliV2->getFileStatus(getFileStatusInput);
     EXPECT_EQ(getFileStatusOutput.isSuccess(), true);
+    EXPECT_EQ(getFileStatusOutput.result().getETag(), output_obj_put.result().getETag());
 }
 TEST_F(ObjectPutGetTest, PutGetFileStatusTestFNS) {
     std::string obj_key = "cxx/sdk/test"+TestUtils::GetObjectKey(TestConfig::TestPrefix);

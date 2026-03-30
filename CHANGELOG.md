@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2026.3.30 Version 2.6.21
+- createPart 在关闭自动识别 content-type 时默认使用 binary 类型
+- 修复 HNS 桶 getFileStatus 接口缺失 etag 问题
+
 ### 2026.2.28 Version 2.6.20
 - 支持选定源网卡或ip
 - 优化编译
