@@ -10,6 +10,9 @@ void VolcengineTos::GetFileStatusOutput::fromJsonString(const std::string& input
     if (data.contains("Size")) {
         size_ = data["Size"].get<int64_t>();
     }
+    if (data.contains("ETag")) {
+        eTag_ = data["ETag"].get<std::string>();
+    }
     if (data.contains("LastModified")) {
         lastModified_ = TimeUtils::transLastModifiedStringToTime(data["LastModified"].get<std::string>());
     }

@@ -23,6 +23,12 @@ public:
     void setSize(int64_t size) {
         size_ = size;
     }
+    const std::string& getETag() const {
+        return eTag_;
+    }
+    void setETag(const std::string& eTag) {
+        eTag_ = eTag;
+    }
     std::time_t getLastModified() const {
         return lastModified_;
     }
@@ -47,6 +53,7 @@ private:
     RequestInfo requestInfo_;
     std::string key_;
     int64_t size_;
+    std::string eTag_;
     std::time_t lastModified_;
     std::string crc32_;
     std::string crc64_;

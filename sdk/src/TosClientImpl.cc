@@ -313,12 +313,14 @@ void setContentType(RequestBuilder& rb, const std::string& objectKey) {
     std::string contentType = rb.findHeader(http::HEADER_CONTENT_TYPE);
     if (contentType.empty()) {
         // request does not attach content-type
-        // auto recognize default, check if user disable it by withAutoRecognizeContentType(false)
+        // auto recognize is enabled: infer by object key suffix
+        // auto recognize is disabled: fallback to binary type to avoid libcurl default form content type
         if (rb.isAutoRecognizeContentType()) {
-            // set content type before upload
             contentType = MimeType::getMimetypeByObjectKey(objectKey);
-            rb.withHeader(http::HEADER_CONTENT_TYPE, contentType);
+        } else {
+            contentType = DEFAULT_MIMETYPE;
         }
+        rb.withHeader(http::HEADER_CONTENT_TYPE, contentType);
     }
 }
 int expectedCode(const RequestBuilder& rb) {
@@ -976,6 +978,7 @@ Outcome<TosError, GetFileStatusOutput> TosClientImpl::getFileStatus(const GetFil
         output.setRequestInfo(headObjectV2Output.result().getRequestInfo());
         output.setKey(headObjectV2Input.getKey());
         output.setSize(headObjectV2Output.result().getContentLength());
+        output.setETag(headObjectV2Output.result().getETag());
         output.setCrc64(std::to_string(headObjectV2Output.result().getHashCrc64Ecma()));
         output.setLastModified(headObjectV2Output.result().getLastModified());
         if (headObjectV2Output.result().getRequestInfo().getHeaders().count(HEADER_CRC32) != 0) {
@@ -4196,6 +4199,9 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
     }
 
     createMultipartUploadSetOptionHeader(rb, input);
+    if (rb.findHeader(http::HEADER_CONTENT_TYPE).empty()) {
+        rb.withHeader(http::HEADER_CONTENT_TYPE, "binary/octet-stream");
+    }
     auto req = rb.Build(http::MethodPost, nullptr);
     // 设置funcName
     req->setFuncName(__func__);
