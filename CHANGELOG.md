@@ -1,5 +1,10 @@
 ## Release Note
 
+### 2026.4.16 Version 2.6.22
+- feat: GetObject 接口新增支持传入外部 iostream 作为下载目标流
+- feat: 增加 PutSymlink/GetSymlink 示例和相关能力
+- fix: 若干 GetObject/CRC64 及 Symlink 相关细节问题修复
+
 ### 2026.3.30 Version 2.6.21
 - createPart 在关闭自动识别 content-type 时默认使用 binary 类型
 - 修复 HNS 桶 getFileStatus 接口缺失 etag 问题

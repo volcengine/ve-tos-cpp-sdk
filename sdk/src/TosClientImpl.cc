@@ -857,6 +857,8 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
     if (hashCrc64ecma != nullptr) {
         req->setCheckCrc64(true);
     }
+    // 注意：只有当确定有content length时才计算crc64
+    // 但这里我们还没有收到响应，所以先设置checkCrc64，在校验的时候再检查content length
     if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0) {
         req->setCheckCrc64(true);
     }
@@ -878,7 +880,7 @@ Outcome<TosError, GetObjectV2Output> TosClientImpl::getObject(const GetObjectV2I
         *hashCrc64ecma = tosRes.result()->getHashCrc64Result();
     }
     // crc64校验
-    if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0) {
+    if (config_.isEnableCrc() && rb.getHeaders().count("Range") == 0 && tosRes.result()->getContentLength() > 0) {
         auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
         if (!hashCrc64String.empty()) {
             uint64_t hashcrc64 = 0;
@@ -1455,6 +1457,10 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     }
 
     putObjectSetOptionHeader(rb, putObjectBasicInput_);
+    int64_t contentLength = putObjectBasicInput_.getContentLength();
+    if (contentLength > 0) {
+        rb.setContentLength(contentLength);
+    }
     auto req = rb.Build(http::MethodPut, input.getContent());
     // 设置回调
     auto handler = putObjectBasicInput_.getDataTransferListener();
@@ -8563,6 +8569,146 @@ Outcome<TosError, DeleteQosPolicyOutput> TosClientImpl::deleteQosPolicy(const De
         return res;
     }
     DeleteQosPolicyOutput output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, PutSymlinkV2Output> TosClientImpl::putSymlink(const PutSymlinkV2Input& input) {
+    Outcome<TosError, PutSymlinkV2Output> res;
+    const auto& putObjectBasicInput_ = input.getPutObjectBasicInput();
+    std::string check =
+            isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()}, config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    check = isValidSSEC(putObjectBasicInput_.getSsecAlgorithm(), putObjectBasicInput_.getSsecKey(),
+                        putObjectBasicInput_.getSsecKeyMd5());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(putObjectBasicInput_.getBucket(), putObjectBasicInput_.getKey(), input);
+
+    if (config_.isAutoRecognizeContentType()) {
+        setContentType(rb, putObjectBasicInput_.getKey());
+    }
+
+    putObjectSetOptionHeader(rb, putObjectBasicInput_);
+    
+    // 设置 symlink 相关参数
+    rb.withQuery("symlink", "");
+    rb.withHeader(HEADER_SYMLINK_TARGET, CryptoUtils::UrlEncodeChinese(input.getSymlinkTarget()));
+    if (!input.getSymlinkTargetBucket().empty()) {
+        rb.withHeader(HEADER_SYMLINK_BUCKET, input.getSymlinkTargetBucket());
+    }
+    if (input.isForbidOverwrite()) {
+        rb.withHeader(HEADER_FORBID_OVERWRITE, "true");
+    }
+    if (!input.getTagging().empty()) {
+        rb.withHeader("X-Tos-Tagging", input.getTagging());
+    }
+    
+    auto req = rb.Build(http::MethodPut, nullptr);
+    // 设置内容长度为 0
+    req->setContentLength(0);
+    // 设置回调
+    auto handler = putObjectBasicInput_.getDataTransferListener();
+    auto limiter = putObjectBasicInput_.getRateLimiter();
+    SetProcessHandlerToReq(req, handler);
+    SetRateLimiterToReq(req, limiter);
+    // 设置funcName
+    req->setFuncName(__func__);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+
+        PutSymlinkV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
+        return res;
+    }
+    PutSymlinkV2Output output;
+    output.setRequestInfo(tosRes.result()->GetRequestInfo());
+    output.setETag(tosRes.result()->findHeader(http::HEADER_ETAG));
+    output.setSsecAlgorithm(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_ALGORITHM));
+    output.setSsecKeyMd5(tosRes.result()->findHeader(HEADER_SSE_CUSTOMER_KEY_MD5));
+    output.setVersionId(tosRes.result()->findHeader(HEADER_VERSIONID));
+    auto hashCrc64String = tosRes.result()->findHeader(HEADER_CRC64);
+    uint64_t hashCrc64 = 0;
+    if (!hashCrc64String.empty()) {
+        hashCrc64 = std::stoull(hashCrc64String);
+    }
+    output.setHashCrc64ecma(hashCrc64);
+    if (!input.getCallBack().empty() && tosRes.result()->getContent() != nullptr) {
+        std::stringstream ss_;
+        ss_ << tosRes.result()->getContent()->rdbuf();
+        if (!input.getCallBack().empty()) {
+            output.setCallbackResult(ss_.str());
+        }
+    }
+    res.setSuccess(true);
+    res.setR(output);
+    return res;
+}
+
+Outcome<TosError, GetSymlinkV2Output> TosClientImpl::getSymlink(const GetSymlinkV2Input& input) {
+    Outcome<TosError, GetSymlinkV2Output> res;
+    std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    check = isValidSSEC(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5());
+    if (!check.empty()) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(check);
+        res.setE(error);
+        res.setSuccess(false);
+        return res;
+    }
+    auto rb = newBuilder(input.getBucket(), input.getKey(), input);
+    rb.withHeader(http::HEADER_IF_MATCH, input.getIfMatch());
+    rb.withHeader(http::HEADER_IF_MODIFIED_SINCE, TimeUtils::transTimeToGmtTime(input.getIfModifiedSince()));
+    rb.withHeader(http::HEADER_IF_NONE_MATCH, input.getIfNoneMatch());
+    rb.withHeader(http::HEADER_IF_UNMODIFIED_SINCE, TimeUtils::transTimeToGmtTime(input.getIfUnmodifiedSince()));
+    setSSECHeader(input.getSsecAlgorithm(), input.getSsecKey(), input.getSsecKeyMd5(), rb);
+    rb.withQueryCheckEmpty("versionId", input.getVersionId());
+    
+    // 设置 symlink 查询参数
+    rb.withQuery("symlink", "");
+    
+    auto req = rb.Build(http::MethodGet, nullptr);
+    auto tosRes = roundTrip(req, 200);
+    if (!tosRes.isSuccess()) {
+        res.setE(tosRes.error());
+        res.setSuccess(false);
+
+        GetSymlinkV2Output output;
+        output.setRequestInfo(tosRes.result()->GetRequestInfo());
+        res.setR(output);
+
+        return res;
+    }
+    GetSymlinkV2Output output;
+    output.fromResponse(*tosRes.result());
     output.setRequestInfo(tosRes.result()->GetRequestInfo());
     res.setSuccess(true);
     res.setR(output);

@@ -1,4 +1,4 @@
-#include "model/object/HeadObjectV2Output.h"
+#include "model/object/GetSymlinkV2Output.h"
 #include "utils/BaseUtils.h"
 #include <cstring>
 static std::map<std::string, std::string> userMeta(const std::map<std::string, std::string>& headers) {
@@ -13,19 +13,19 @@ static std::map<std::string, std::string> userMeta(const std::map<std::string, s
     }
     return meta;
 }
-void VolcengineTos::HeadObjectV2Output::fromResponse(TosResponse& res) {
+void VolcengineTos::GetSymlinkV2Output::fromResponse(TosResponse& res) {
     eTag_ = res.findHeader(http::HEADER_ETAG);
     lastModified_ = TimeUtils::transGMTFormatStringToTime(res.findHeader(http::HEADER_LAST_MODIFIED));
     deleteMarker_ = res.findHeader(HEADER_DELETE_MARKER) == "true";
     ssecAlgorithm_ = res.findHeader(HEADER_SSE_CUSTOMER_ALGORITHM);
     ssecKeyMD5_ = res.findHeader(HEADER_SSE_CUSTOMER_KEY_MD5);
     versionID_ = res.findHeader(HEADER_VERSIONID);
-    websiteRedirectLocation_ = res.findHeader(HEADER_WEBSITE_REDIRECT_LOCATION);
-    objectType_ = res.findHeader(HEADER_OBJECT_TYPE);
-    storageClass_ = StringtoStorageClassType[res.findHeader(HEADER_STORAGE_CLASS)];
+    symlinkTarget_ = CryptoUtils::UrlDecodeChinese(res.findHeader(HEADER_SYMLINK_TARGET));
+    symlinkTargetBucket_ = res.findHeader(HEADER_SYMLINK_BUCKET);
     if (!res.findHeader(HEADER_SYMLINK_TARGET_SIZE).empty()) {
         symlinkTargetSize_ = stoll(res.findHeader(HEADER_SYMLINK_TARGET_SIZE));
     }
+    storageClass_ = StringtoStorageClassType[res.findHeader(HEADER_STORAGE_CLASS)];
 
     if (!res.findHeader(HEADER_CRC64).empty()) {
         hashCrc64ecma_ = stoull(res.findHeader(HEADER_CRC64));
@@ -39,5 +39,5 @@ void VolcengineTos::HeadObjectV2Output::fromResponse(TosResponse& res) {
     contentEncoding_ = res.findHeader(http::HEADER_CONTENT_ENCODING);
     contentLanguage_ = res.findHeader(http::HEADER_CONTENT_LANGUAGE);
     expires_ = TimeUtils::transGMTFormatStringToTime(res.findHeader(http::HEADER_EXPIRES));
-    isDirectory_ = res.findHeader(HEADER_DIRECTORY) == "true";
+    contentMD5_ = res.findHeader(http::HEADER_CONTENT_MD5);
 }

@@ -1,6 +1,8 @@
 #include "TosClientV2.h"
 // #include "../src/utils/LogUtils.h"
 
+#include <cstdlib>
+
 using namespace VolcengineTos;
 
 void creatBucket(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName) {
@@ -136,12 +138,26 @@ void putObjectFromFile(const std::shared_ptr<TosClientV2>& client, const std::st
 void getObject(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName,
                const std::string& objectkey) {
     GetObjectV2Input input(bucketName, objectkey);
+    // 使用 SDK 内部创建的流下载对象
     auto output = client->getObject(input);
     if (!output.isSuccess()) {
         std::cout << output.error().String() << std::endl;
         return;
     }
-    std::cout << output.result().getGetObjectBasicOutput().getETags() << std::endl;
+
+    std::cout << "getObject with internal stream, etag: "
+              << output.result().getGetObjectBasicOutput().getETags() << std::endl;
+
+    // 使用调用方提供的 iostream 作为下载目标流
+    auto externalStream = std::make_shared<std::stringstream>();
+    auto outputWithExternalStream = client->getObject(input, externalStream);
+    if (!outputWithExternalStream.isSuccess()) {
+        std::cout << outputWithExternalStream.error().String() << std::endl;
+        return;
+    }
+    std::cout << "getObject with external stream, etag: "
+              << outputWithExternalStream.result().getGetObjectBasicOutput().getETags() << std::endl;
+    std::cout << "content from external stream: " << externalStream->str() << std::endl;
 }
 
 void getObjectToFile(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName,
@@ -721,13 +737,20 @@ void CleanBucket(const std::shared_ptr<TosClientV2>& client, const std::string& 
 }
 
 int main() {
-    // 设置初始化参数，对象名和桶名
-    std::string endpoint("your Endpoint");
-    std::string region("your region");
-    std::string ak("Your Access Key");
-    std::string sk("Your Secret Key");
-    std::string bucket("your bucket");
-    std::string key("your object key");
+    // 设置初始化参数，对象名和桶名，优先从环境变量读取
+    const char* endpointEnv = std::getenv("TOS_ENDPOINT");
+    const char* regionEnv = std::getenv("TOS_REGION");
+    const char* akEnv = std::getenv("TOS_ACCESS_KEY_ID");
+    const char* skEnv = std::getenv("TOS_SECRET_ACCESS_KEY");
+    const char* bucketEnv = std::getenv("TOS_BUCKET");
+    const char* keyEnv = std::getenv("TOS_OBJECT_KEY");
+
+    std::string endpoint = endpointEnv != nullptr ? std::string(endpointEnv) : std::string("your Endpoint");
+    std::string region = regionEnv != nullptr ? std::string(regionEnv) : std::string("your region");
+    std::string ak = akEnv != nullptr ? std::string(akEnv) : std::string("Your Access Key");
+    std::string sk = skEnv != nullptr ? std::string(skEnv) : std::string("Your Secret Key");
+    std::string bucket = bucketEnv != nullptr ? std::string(bucketEnv) : std::string("your bucket");
+    std::string key = keyEnv != nullptr ? std::string(keyEnv) : std::string("your object key");
     std::string fileName("Your File Path");
     std::string logFilePath("Your Log File Path");
 

@@ -4,8 +4,10 @@
 #include <map>
 #include "TosResponse.h"
 #include "Type.h"
+#include "model/RequestInfo.h"
+
 namespace VolcengineTos {
-class HeadObjectV2Output {
+class GetSymlinkV2Output {
 public:
     const RequestInfo& getRequestInfo() const {
         return requestInfo_;
@@ -55,29 +57,35 @@ public:
     void setVersionId(const std::string& versionid) {
         versionID_ = versionid;
     }
-    const std::string& getWebsiteRedirectLocation() const {
-        return websiteRedirectLocation_;
+    const std::string& getSymlinkTarget() const {
+        return symlinkTarget_;
     }
-    void setWebsiteRedirectLocation(const std::string& websiteredirectlocation) {
-        websiteRedirectLocation_ = websiteredirectlocation;
+    void setSymlinkTarget(const std::string& symlinkTarget) {
+        symlinkTarget_ = symlinkTarget;
     }
-    const std::string& getObjectType() const {
-        return objectType_;
+    const std::string& getSymlinkTargetKey() const {
+        return symlinkTarget_;
     }
-    void setObjectType(const std::string& objecttype) {
-        objectType_ = objecttype;
+    void setSymlinkTargetKey(const std::string& symlinkTargetKey) {
+        symlinkTarget_ = symlinkTargetKey;
     }
-    int64_t getSymlinkTargetSize() const {
-        return symlinkTargetSize_;
+    const std::string& getSymlinkTargetBucket() const {
+        return symlinkTargetBucket_;
     }
-    void setSymlinkTargetSize(int64_t symlinkTargetSize) {
-        symlinkTargetSize_ = symlinkTargetSize;
+    void setSymlinkTargetBucket(const std::string& symlinkTargetBucket) {
+        symlinkTargetBucket_ = symlinkTargetBucket;
     }
     uint64_t getHashCrc64Ecma() const {
         return hashCrc64ecma_;
     }
     void setHashCrc64Ecma(uint64_t hashcrc64ecma) {
         hashCrc64ecma_ = hashcrc64ecma;
+    }
+    int64_t getSymlinkTargetSize() const {
+        return symlinkTargetSize_;
+    }
+    void setSymlinkTargetSize(int64_t symlinkTargetSize) {
+        symlinkTargetSize_ = symlinkTargetSize;
     }
     StorageClassType getStorageClass() const {
         return storageClass_;
@@ -144,23 +152,17 @@ public:
     const std::string& getStringFormatStorageClass() const {
         return StorageClassTypetoString[storageClass_];
     }
-    bool isDirectory() const {
-        return isDirectory_;
-    }
-    void setIsDirectory(bool isdirectory) {
-        isDirectory_ = isdirectory;
-    }
 
 private:
     RequestInfo requestInfo_;
     std::string eTag_;
     std::time_t lastModified_ = 0;
-    bool deleteMarker_;
+    bool deleteMarker_ = false;
     std::string ssecAlgorithm_;
     std::string ssecKeyMD5_;
     std::string versionID_;
-    std::string websiteRedirectLocation_;
-    std::string objectType_;
+    std::string symlinkTarget_;
+    std::string symlinkTargetBucket_;
     uint64_t hashCrc64ecma_ = 0;
     int64_t symlinkTargetSize_ = 0;
     StorageClassType storageClass_ = StorageClassType::NotSet;
@@ -174,6 +176,5 @@ private:
     std::string contentLanguage_;
     std::time_t expires_ = 0;
     std::string contentMD5_;
-    bool isDirectory_;
 };
 }  // namespace VolcengineTos
