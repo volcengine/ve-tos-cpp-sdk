@@ -72,6 +72,11 @@ Outcome<TosError, GetObjectV2Output> TosClientV2::getObject(const GetObjectV2Inp
     return tosClientImpl_->getObject(input, nullptr, nullptr);
 }
 
+Outcome<TosError, GetObjectV2Output> TosClientV2::getObject(const GetObjectV2Input& input,
+                                                            const std::shared_ptr<std::iostream>& content) const {
+    return tosClientImpl_->getObject(input, nullptr, content);
+}
+
 Outcome<TosError, GetObjectToFileOutput> TosClientV2::getObjectToFile(const GetObjectToFileInput& input) const {
     return tosClientImpl_->getObjectToFile(input);
 }
@@ -326,7 +331,7 @@ Outcome<TosError, GetFileStatusOutput> TosClientV2::getFileStatus(const GetFileS
 //    return tosClientImpl_->modifyObject(input);
 //}
 
-Outcome<TosError, PutQosPolicyOutput> TosClientV2::putQosPolicy(const PutQosPolicyInput& input) {
+    Outcome<TosError, PutQosPolicyOutput> TosClientV2::putQosPolicy(const PutQosPolicyInput& input) {
     return tosClientImpl_->putQosPolicy(input);
 }
 Outcome<TosError, GetQosPolicyOutput> TosClientV2::getQosPolicy(const GetQosPolicyInput& input) {
@@ -334,4 +339,10 @@ Outcome<TosError, GetQosPolicyOutput> TosClientV2::getQosPolicy(const GetQosPoli
 }
 Outcome<TosError, DeleteQosPolicyOutput> TosClientV2::deleteQosPolicy(const DeleteQosPolicyInput& input) {
     return tosClientImpl_->deleteQosPolicy(input);
+}
+Outcome<TosError, PutSymlinkV2Output> TosClientV2::putSymlink(const PutSymlinkV2Input& input) const {
+    return tosClientImpl_->putSymlink(input);
+}
+Outcome<TosError, GetSymlinkV2Output> TosClientV2::getSymlink(const GetSymlinkV2Input& input) const {
+    return tosClientImpl_->getSymlink(input);
 }

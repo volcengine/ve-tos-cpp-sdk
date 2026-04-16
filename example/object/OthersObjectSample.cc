@@ -1059,3 +1059,91 @@ int OthersObjectSample::RestoreObject() {
     CloseClient();
     return 0;
 }
+
+int OthersObjectSample::PutSymlink() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+    // 填写Object完整路径，完整路径中不能包含Bucket名称，例如exampledir/exampleobject.txt。
+    std::string objectName = "exampledir/exampleobject.txt";
+    std::string symlinkName = "exampledir/symlink-object.txt";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    // 先上传一个目标对象
+    std::string data("Object data to be uploaded");
+    auto ss = std::make_shared<std::stringstream>(data);
+    PutObjectV2Input putInput(bucketName, objectName, ss);
+    auto putOutput = client.putObject(putInput);
+    if (!putOutput.isSuccess()) {
+        std::cout << "PutObject failed." << putOutput.error().String() << std::endl;
+        CloseClient();
+        return -1;
+    }
+    std::cout << "PutObject success. the object etag:" << putOutput.result().getETag() << std::endl;
+
+    // 创建符号链接
+    PutSymlinkV2Input symlinkInput(bucketName, symlinkName, objectName);
+    auto symlinkOutput = client.putSymlink(symlinkInput);
+    if (!symlinkOutput.isSuccess()) {
+        std::cout << "PutSymlink failed." << symlinkOutput.error().String() << std::endl;
+        CloseClient();
+        return -1;
+    }
+
+    std::cout << "PutSymlink success." << std::endl;
+    if (!symlinkOutput.result().getVersionId().empty()) {
+        std::cout << "VersionId:" << symlinkOutput.result().getVersionId() << std::endl;
+    }
+
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}
+
+int OthersObjectSample::GetSymlink() {
+    // 初始化 TOS 账号信息
+    // Your Region 填写 Bucket 所在 Region
+    std::string region = "Your Region";
+    std::string accessKey = "Your Access Key";
+    std::string secretKey = "Your Secret Key";
+    // 填写 Bucket 名称，例如 examplebucket
+    std::string bucketName = "examplebucket";
+    // 填写Object完整路径，完整路径中不能包含Bucket名称，例如exampledir/exampleobject.txt。
+    std::string symlinkName = "exampledir/symlink-object.txt";
+
+    // 初始化网络等资源
+    InitializeClient();
+    // 创建交互的 client
+    TosClientV2 client(region, accessKey, secretKey);
+
+    // 获取符号链接
+    GetSymlinkV2Input getInput(bucketName, symlinkName);
+    auto getOutput = client.getSymlink(getInput);
+    if (!getOutput.isSuccess()) {
+        std::cout << "GetSymlink failed." << getOutput.error().String() << std::endl;
+        CloseClient();
+        return -1;
+    }
+
+    std::cout << "GetSymlink success." << std::endl;
+    std::cout << "SymlinkTarget:" << getOutput.result().getSymlinkTarget() << std::endl;
+    if (!getOutput.result().getSymlinkTargetBucket().empty()) {
+        std::cout << "SymlinkTargetBucket:" << getOutput.result().getSymlinkTargetBucket() << std::endl;
+    }
+    if (!getOutput.result().getVersionId().empty()) {
+        std::cout << "VersionId:" << getOutput.result().getVersionId() << std::endl;
+    }
+    std::cout << "LastModified:" << getOutput.result().getLastModified() << std::endl;
+
+    // 释放网络等资源
+    CloseClient();
+    return 0;
+}

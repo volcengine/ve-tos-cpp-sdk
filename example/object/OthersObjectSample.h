@@ -45,4 +45,8 @@ public:
 
     // 解冻对象
     int RestoreObject();
+
+    // 符号链接
+    int PutSymlink();
+    int GetSymlink();
 };

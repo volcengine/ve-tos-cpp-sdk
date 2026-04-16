@@ -193,6 +193,10 @@
 #include "model/control/GetQosPolicyOutput.h"
 #include "model/control/DeleteQosPolicyInput.h"
 #include "model/control/DeleteQosPolicyOutput.h"
+#include "model/object/PutSymlinkV2Input.h"
+#include "model/object/PutSymlinkV2Output.h"
+#include "model/object/GetSymlinkV2Input.h"
+#include "model/object/GetSymlinkV2Output.h"
 #include "model/GenericInput.h"
 
 namespace VolcengineTos {
@@ -391,6 +395,8 @@ public:
     Outcome<TosError, PutQosPolicyOutput> putQosPolicy(const PutQosPolicyInput& input);
     Outcome<TosError, GetQosPolicyOutput> getQosPolicy(const GetQosPolicyInput& input);
     Outcome<TosError, DeleteQosPolicyOutput> deleteQosPolicy(const DeleteQosPolicyInput& input);
+    Outcome<TosError, PutSymlinkV2Output> putSymlink(const PutSymlinkV2Input& input);
+    Outcome<TosError, GetSymlinkV2Output> getSymlink(const GetSymlinkV2Input& input);
 
     void setMaxRetryCount(int maxretrycount);
     void setCredential(const std::string& accessKeyId, const std::string& secretKeyId);

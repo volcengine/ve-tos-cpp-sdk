@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.21
+        VERSION 2.6.22
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -254,6 +254,10 @@ set(SDK_HEADER
         include/model/control/GetQosPolicyOutput.h
         include/model/control/DeleteQosPolicyInput.h
         include/model/control/DeleteQosPolicyOutput.h
+        include/model/object/PutSymlinkV2Input.h
+        include/model/object/PutSymlinkV2Output.h
+        include/model/object/GetSymlinkV2Input.h
+        include/model/object/GetSymlinkV2Output.h
         )
 set(SDK_LIB
         src/transport/http/HttpClient.cc
@@ -364,6 +368,7 @@ set(SDK_LIB
         src/model/bucket/PutBucketRenameInput.cc
         src/model/bucket/GetBucketRenameOutput.cc
         src/model/object/GetFileStatusOutput.cc
+        src/model/object/GetSymlinkV2Output.cc
         )
 
 # add spdlog

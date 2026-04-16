@@ -103,6 +103,9 @@ static const char* HEADER_CRC32 = "x-tos-hash-crc32c";
 static const char* HEADER_NEXT_MODIFY_OFFSET = "x-tos-next-modify-offset";
 static const char* HEADER_FORBID_OVERWRITE = "x-tos-forbid-overwrite";
 static const char* HEADER_RECURSIVE_MKDIR = "x-tos-recursive-mkdir";
+static const char* HEADER_SYMLINK_TARGET = "X-Tos-Symlink-Target";
+static const char* HEADER_SYMLINK_BUCKET = "X-Tos-Symlink-Bucket";
+static const char* HEADER_SYMLINK_TARGET_SIZE = "X-Tos-Symlink-Target-Size";
 
 
 /**

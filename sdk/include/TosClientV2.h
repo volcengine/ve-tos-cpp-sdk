@@ -196,6 +196,10 @@
 #include "model/control/GetQosPolicyOutput.h"
 #include "model/control/DeleteQosPolicyInput.h"
 #include "model/control/DeleteQosPolicyOutput.h"
+#include "model/object/PutSymlinkV2Input.h"
+#include "model/object/PutSymlinkV2Output.h"
+#include "model/object/GetSymlinkV2Input.h"
+#include "model/object/GetSymlinkV2Output.h"
 
 namespace VolcengineTos {
 
@@ -258,6 +262,9 @@ public:
     Outcome<TosError, DeleteBucketOutput> deleteBucket(const DeleteBucketInput& input) const;
 
     Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input) const;
+    // 使用调用方提供的 iostream 作为下载目标流
+    Outcome<TosError, GetObjectV2Output> getObject(const GetObjectV2Input& input,
+                                                   const std::shared_ptr<std::iostream>& content) const;
 
     Outcome<TosError, GetObjectToFileOutput> getObjectToFile(const GetObjectToFileInput& input) const;
 
@@ -370,6 +377,8 @@ public:
     Outcome<TosError, PutQosPolicyOutput> putQosPolicy(const PutQosPolicyInput& input);
     Outcome<TosError, GetQosPolicyOutput> getQosPolicy(const GetQosPolicyInput& input);
     Outcome<TosError, DeleteQosPolicyOutput> deleteQosPolicy(const DeleteQosPolicyInput& input);
+    Outcome<TosError, PutSymlinkV2Output> putSymlink(const PutSymlinkV2Input& input) const;
+    Outcome<TosError, GetSymlinkV2Output> getSymlink(const GetSymlinkV2Input& input) const;
 
 private:
     std::shared_ptr<TosClientImpl> tosClientImpl_;
