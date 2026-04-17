@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2026.4.17 Version 2.6.23
+- feat: 支持通过外部动态库注入 SSL_CTX callback，用于扩展 TLS 证书校验逻辑
+- refactor: 优化 Linux example 中 external_ssl_callback 场景分发，并补充 SSL_CTX 观测示例
+
 ### 2026.4.16 Version 2.6.22
 - feat: GetObject 接口新增支持传入外部 iostream 作为下载目标流
 - feat: 增加 PutSymlink/GetSymlink 示例和相关能力

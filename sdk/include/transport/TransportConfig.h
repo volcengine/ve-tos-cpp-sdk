@@ -3,154 +3,67 @@
 #include <string>
 
 namespace VolcengineTos {
-class TransportConfig {
-public:
-    int getMaxIdleCount() const {
-        return maxIdleCount_;
-    }
-    void setMaxIdleCount(int maxIdleCount) {
-        maxIdleCount_ = maxIdleCount;
-    }
-    int getRequestTimeout() const {
-        return requestTimeout_;
-    }
-    void setRequestTimeout(int requestTimeout) {
-        requestTimeout_ = requestTimeout;
-    }
-    int getDialTimeout() const {
-        return dialTimeout_;
-    }
-    void setDialTimeout(int dialTimeout) {
-        dialTimeout_ = dialTimeout;
-    }
-    int getKeepAlive() const {
-        return keepAlive_;
-    }
-    void setKeepAlive(int keepAlive) {
-        keepAlive_ = keepAlive;
-    }
-    int getConnectTimeout() const {
-        return connectTimeout_;
-    }
-    void setConnectTimeout(int connectTimeout) {
-        connectTimeout_ = connectTimeout;
-    }
-    int getTlsHandshakeTimeout() const {
-        return tlsHandshakeTimeout_;
-    }
-    void setTlsHandshakeTimeout(int tlsHandshakeTimeout) {
-        tlsHandshakeTimeout_ = tlsHandshakeTimeout;
-    }
-    int getResponseHeaderTimeout() const {
-        return responseHeaderTimeout_;
-    }
-    void setResponseHeaderTimeout(int responseHeaderTimeout) {
-        responseHeaderTimeout_ = responseHeaderTimeout;
-    }
-    int getExpectContinueTimeout() const {
-        return expectContinueTimeout_;
-    }
-    void setExpectContinueTimeout(int expectContinueTimeout) {
-        expectContinueTimeout_ = expectContinueTimeout;
-    }
-    int getReadTimeout() const {
-        return readTimeout_;
-    }
-    void setReadTimeout(int readTimeout) {
-        readTimeout_ = readTimeout;
-    }
-    int getWriteTimeout() const {
-        return writeTimeout_;
-    }
-    void setWriteTimeout(int writeTimeout) {
-        writeTimeout_ = writeTimeout;
-    }
-    bool isEnableVerifySsl() const {
-        return enableVerifySSL_;
-    }
-    void setEnableVerifySsl(bool enableVerifySsl) {
-        enableVerifySSL_ = enableVerifySsl;
-    }
-    const std::string& getProxyHost() const {
-        return proxyHost_;
-    }
-    void setProxyHost(const std::string& proxyHost) {
-        proxyHost_ = proxyHost;
-    }
-    int getProxyPort() const {
-        return proxyPort_;
-    }
-    void setProxyPort(int proxyPort) {
-        proxyPort_ = proxyPort;
-    }
-    const std::string& getProxyUsername() const {
-        return proxyUsername_;
-    }
-    void setProxyUsername(const std::string& proxyUsername) {
-        proxyUsername_ = proxyUsername;
-    }
-    const std::string& getProxyPassword() const {
-        return proxyPassword_;
-    }
-    void setProxyPassword(const std::string& proxyPassword) {
-        proxyPassword_ = proxyPassword;
-    }
-    int getDnsCacheTime() const {
-        return dnsCacheTime_;
-    }
-    void setDnsCacheTime(int dnsCacheTime) {
-        dnsCacheTime_ = dnsCacheTime;
-    }
-    int getMaxConnections() const {
-        return maxConnections_;
-    }
-    void setMaxConnections(int maxConnections) {
-        maxConnections_ = maxConnections;
-    }
-    int getSocketTimeout() const {
-        return socketTimeout_;
-    }
-    void setSocketTimeout(int socketTimeout) {
-        socketTimeout_ = socketTimeout;
-    }
-    const std::string& getCaPath() const {
-        return caPath_;
-    }
-    void setCaPath(const std::string& caPath) {
-        caPath_ = caPath;
-    }
-    const std::string& getCaFile() const {
-        return caFile_;
-    }
-    void setCaFile(const std::string& caFile) {
-        caFile_ = caFile;
-    }
-    int getHighLatencyLogThreshold() const {
-        return highLatencyLogThreshold_;
-    }
-    void setHighLatencyLogThreshold(int highLatencyLogThreshold) {
-        highLatencyLogThreshold_ = highLatencyLogThreshold;
-    }
-    const std::string& getClientCrt() const {
-        return clientCrt_;
-    }
-    void setClientCrt(const std::string& clientCrt) {
-        clientCrt_ = clientCrt;
-    }
-    const std::string& getClientKey() const {
-        return clientKey_;
-    }
-    void setClientKey(const std::string& clientKey) {
-        clientKey_ = clientKey;
-    }
-    const std::string& getNetInterface() const {
-        return netInterface_;
-    }
-    void setNetInterface(const std::string& netInterface) {
-        netInterface_ = netInterface;
-    }
+#ifndef VOLCENGINE_TOS_SSL_CTX_CALLBACK_DEFINED
+#define VOLCENGINE_TOS_SSL_CTX_CALLBACK_DEFINED
+using SslCtxCallback = int (*)(void* sslCtx, void* userData);
+#endif
 
-private:
+class TransportConfig {
+   public:
+    int getMaxIdleCount() const { return maxIdleCount_; }
+    void setMaxIdleCount(int maxIdleCount) { maxIdleCount_ = maxIdleCount; }
+    int getRequestTimeout() const { return requestTimeout_; }
+    void setRequestTimeout(int requestTimeout) { requestTimeout_ = requestTimeout; }
+    int getDialTimeout() const { return dialTimeout_; }
+    void setDialTimeout(int dialTimeout) { dialTimeout_ = dialTimeout; }
+    int getKeepAlive() const { return keepAlive_; }
+    void setKeepAlive(int keepAlive) { keepAlive_ = keepAlive; }
+    int getConnectTimeout() const { return connectTimeout_; }
+    void setConnectTimeout(int connectTimeout) { connectTimeout_ = connectTimeout; }
+    int getTlsHandshakeTimeout() const { return tlsHandshakeTimeout_; }
+    void setTlsHandshakeTimeout(int tlsHandshakeTimeout) { tlsHandshakeTimeout_ = tlsHandshakeTimeout; }
+    int getResponseHeaderTimeout() const { return responseHeaderTimeout_; }
+    void setResponseHeaderTimeout(int responseHeaderTimeout) { responseHeaderTimeout_ = responseHeaderTimeout; }
+    int getExpectContinueTimeout() const { return expectContinueTimeout_; }
+    void setExpectContinueTimeout(int expectContinueTimeout) { expectContinueTimeout_ = expectContinueTimeout; }
+    int getReadTimeout() const { return readTimeout_; }
+    void setReadTimeout(int readTimeout) { readTimeout_ = readTimeout; }
+    int getWriteTimeout() const { return writeTimeout_; }
+    void setWriteTimeout(int writeTimeout) { writeTimeout_ = writeTimeout; }
+    bool isEnableVerifySsl() const { return enableVerifySSL_; }
+    void setEnableVerifySsl(bool enableVerifySsl) { enableVerifySSL_ = enableVerifySsl; }
+    const std::string& getProxyHost() const { return proxyHost_; }
+    void setProxyHost(const std::string& proxyHost) { proxyHost_ = proxyHost; }
+    int getProxyPort() const { return proxyPort_; }
+    void setProxyPort(int proxyPort) { proxyPort_ = proxyPort; }
+    const std::string& getProxyUsername() const { return proxyUsername_; }
+    void setProxyUsername(const std::string& proxyUsername) { proxyUsername_ = proxyUsername; }
+    const std::string& getProxyPassword() const { return proxyPassword_; }
+    void setProxyPassword(const std::string& proxyPassword) { proxyPassword_ = proxyPassword; }
+    int getDnsCacheTime() const { return dnsCacheTime_; }
+    void setDnsCacheTime(int dnsCacheTime) { dnsCacheTime_ = dnsCacheTime; }
+    int getMaxConnections() const { return maxConnections_; }
+    void setMaxConnections(int maxConnections) { maxConnections_ = maxConnections; }
+    int getSocketTimeout() const { return socketTimeout_; }
+    void setSocketTimeout(int socketTimeout) { socketTimeout_ = socketTimeout; }
+    const std::string& getCaPath() const { return caPath_; }
+    void setCaPath(const std::string& caPath) { caPath_ = caPath; }
+    const std::string& getCaFile() const { return caFile_; }
+    void setCaFile(const std::string& caFile) { caFile_ = caFile; }
+    int getHighLatencyLogThreshold() const { return highLatencyLogThreshold_; }
+    void setHighLatencyLogThreshold(int highLatencyLogThreshold) { highLatencyLogThreshold_ = highLatencyLogThreshold; }
+    const std::string& getClientCrt() const { return clientCrt_; }
+    void setClientCrt(const std::string& clientCrt) { clientCrt_ = clientCrt; }
+    const std::string& getClientKey() const { return clientKey_; }
+    void setClientKey(const std::string& clientKey) { clientKey_ = clientKey; }
+    const std::string& getNetInterface() const { return netInterface_; }
+    void setNetInterface(const std::string& netInterface) { netInterface_ = netInterface; }
+    SslCtxCallback getSslCtxCallback() const { return sslCtxCallback_; }
+    void setSslCtxCallback(SslCtxCallback sslCtxCallback) { sslCtxCallback_ = sslCtxCallback; }
+    void* getSslCtxCallbackUserData() const { return sslCtxCallbackUserData_; }
+    void setSslCtxCallbackUserData(void* sslCtxCallbackUserData) { sslCtxCallbackUserData_ = sslCtxCallbackUserData; }
+
+   private:
     int maxIdleCount_ = 128;
     int requestTimeout_ = 30000;
     int dialTimeout_ = 10;
@@ -175,5 +88,7 @@ private:
     std::string clientCrt_;
     std::string clientKey_;
     std::string netInterface_;
+    SslCtxCallback sslCtxCallback_ = nullptr;
+    void* sslCtxCallbackUserData_ = nullptr;
 };
 }  // namespace VolcengineTos

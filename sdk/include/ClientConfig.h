@@ -3,21 +3,22 @@
 #include <string>
 namespace VolcengineTos {
 class ClientConfig {
-public:
+   public:
     ClientConfig()
-            : autoRecognizeContentType(true),
-              maxRetryCount(3),
-              connectionTimeout(10000),
-              requestTimeout(0),
-              proxyHost(http::SchemeHTTP),
-              proxyPort(-1),
-              enableCRC(true),
-              enableVerifySSL(true),
-              dnsCacheTime(0),
-              socketTimeout(30000),
-              maxConnections(25),
-              highLatencyLogThreshold(100) {
-    }
+        : autoRecognizeContentType(true),
+          maxRetryCount(3),
+          connectionTimeout(10000),
+          requestTimeout(0),
+          proxyHost(http::SchemeHTTP),
+          proxyPort(-1),
+          enableCRC(true),
+          enableVerifySSL(true),
+          dnsCacheTime(0),
+          socketTimeout(30000),
+          maxConnections(25),
+          sslCtxCallback(nullptr),
+          sslCtxCallbackUserData(nullptr),
+          highLatencyLogThreshold(100) {}
     ~ClientConfig() = default;
 
     std::string endPoint;
@@ -42,10 +43,12 @@ public:
     std::string userAgentProductName;
     std::string userAgentSoftName;
     std::string userAgentSoftVersion;
-    std::map<std::string,std::string> userAgentCustomizedKeyValues;
+    std::map<std::string, std::string> userAgentCustomizedKeyValues;
     std::string clientCrt;
     std::string clientKey;
     std::string netInterface;
+    SslCtxCallback sslCtxCallback;
+    void* sslCtxCallbackUserData;
 
     // int MaxConnections;
     // int IdleConnectionTime;

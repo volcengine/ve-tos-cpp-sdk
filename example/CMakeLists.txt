@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.6.22
+        VERSION 2.6.23
         LANGUAGES CXX)
 
 add_executable(${PROJECT_NAME} example.cc)
@@ -15,6 +15,10 @@ target_link_libraries(${PROJECT_NAME}${STATIC_LIB_SUFFIX} ve-tos-cpp-sdk-lib)
 
 target_link_libraries(${PROJECT_NAME} ${CLIENT_SSL_LIBS})
 target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
+
+if (UNIX AND NOT APPLE)
+    target_link_libraries(${PROJECT_NAME} ${CMAKE_DL_LIBS})
+endif ()
 
 #target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
 

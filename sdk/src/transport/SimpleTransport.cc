@@ -10,6 +10,12 @@ SimpleTransport::SimpleTransport(const TransportConfig& config) {
     conf.dialTimeout = config.getDialTimeout();
     conf.tcpKeepAlive = config.getKeepAlive();
     conf.enableVerifySSL = config.isEnableVerifySsl();
+    conf.caPath = config.getCaPath();
+    conf.caFile = config.getCaFile();
+    conf.clientCrt_ = config.getClientCrt();
+    conf.clientKey_ = config.getClientKey();
+    conf.sslCtxCallback = config.getSslCtxCallback();
+    conf.sslCtxCallbackUserData = config.getSslCtxCallbackUserData();
 
     client_ = std::make_shared<HttpClient>(conf);
 }

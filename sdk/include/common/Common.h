@@ -5,6 +5,13 @@
 #include <vector>
 
 namespace VolcengineTos {
+#ifndef VOLCENGINE_TOS_SSL_CTX_CALLBACK_DEFINED
+#define VOLCENGINE_TOS_SSL_CTX_CALLBACK_DEFINED
+// `sslCtx` 在 OpenSSL-compatible libcurl backend 下通常可按 `SSL_CTX*` 解释；
+// `userData` 为调用方通过 ClientConfig 传入的透传上下文。
+using SslCtxCallback = int (*)(void* sslCtx, void* userData);
+#endif
+
 namespace http {
 static const char* MethodGet = "GET";
 static const char* MethodHead = "HEAD";
@@ -81,10 +88,10 @@ static const char* HEADER_Trash_Path = "x-tos-trash-path";
 static const char* HEADER_EC_CODE = "X-Tos-Ec";
 
 static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_ALGORITHM =
-        "X-Tos-Copy-Source-Server-Side-Encryption-Customer-Algorithm";
+    "X-Tos-Copy-Source-Server-Side-Encryption-Customer-Algorithm";
 static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_KEY = "X-Tos-Copy-Source-Server-Side-Encryption-Customer-key";
 static const char* HEADER_COPY_SOURCE_SSE_CUSTOMER_KEY_MD5 =
-        "X-Tos-Copy-Source-Server-Side-Encryption-Customer-key-MD5";
+    "X-Tos-Copy-Source-Server-Side-Encryption-Customer-key-MD5";
 
 static const char* HEADER_COPY_SOURCE_RANGE = "X-Tos-Copy-Source-Range";
 static const char* HEADER_COPY_SOURCE_VERSION_ID = "X-Tos-Copy-Source-Version-Id";
@@ -106,7 +113,6 @@ static const char* HEADER_RECURSIVE_MKDIR = "x-tos-recursive-mkdir";
 static const char* HEADER_SYMLINK_TARGET = "X-Tos-Symlink-Target";
 static const char* HEADER_SYMLINK_BUCKET = "X-Tos-Symlink-Bucket";
 static const char* HEADER_SYMLINK_TARGET_SIZE = "X-Tos-Symlink-Target-Size";
-
 
 /**
  * replace source object metadata when calling copyObject
