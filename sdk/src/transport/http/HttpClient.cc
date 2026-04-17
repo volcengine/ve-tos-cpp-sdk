@@ -27,9 +27,28 @@ struct ResourceManager {
     //    std::shared_ptr<DataConsumeCallBack> callBack;
 };
 
+static bool isOpenSslCompatibleBackend() {
+    auto* versionInfo = curl_version_info(CURLVERSION_NOW);
+    if (versionInfo == nullptr || versionInfo->ssl_version == nullptr) {
+        return false;
+    }
+    std::string sslVersion(versionInfo->ssl_version);
+    return sslVersion.find("OpenSSL") != std::string::npos || sslVersion.find("BoringSSL") != std::string::npos ||
+           sslVersion.find("LibreSSL") != std::string::npos;
+}
+
+static CURLcode curlSslCtxCallbackBridge(CURL* curl, void* sslCtx, void* userData) {
+    auto* client = static_cast<HttpClient*>(userData);
+    if (client == nullptr) {
+        return CURLE_OK;
+    }
+    (void)curl;
+    return client->invokeSslCtxCallback(sslCtx);
+}
+
 static void processHandler(const DataTransferStatusChange& handler, int64_t consumedBytes, int64_t totalBytes,
                            int64_t rwOnceBytes, DataTransferType type, void* userData) {
-    if (!handler){
+    if (!handler) {
         return;
     }
     DataTransferStatus dataTransferStatus{consumedBytes, totalBytes, rwOnceBytes, type, userData};
@@ -43,8 +62,8 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
     if (resourceMan == nullptr || resourceMan->httpReq == nullptr) {
         if (resourceMan != nullptr) {
             resourceMan->dataTransferType = 4;
-            processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
-                           resourceMan->userData);
+            processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0,
+                           resourceMan->dataTransferType, resourceMan->userData);
         }
 
         return 0;
@@ -127,8 +146,8 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
     if (resourceMan == nullptr || resourceMan->httpResp == nullptr || wanted == 0) {
         if (resourceMan != nullptr) {
             resourceMan->dataTransferType = 4;
-            processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0, resourceMan->dataTransferType,
-                           resourceMan->userData);
+            processHandler(resourceMan->progress, resourceMan->send, resourceMan->total, 0,
+                           resourceMan->dataTransferType, resourceMan->userData);
         }
 
         return -1;
@@ -156,9 +175,9 @@ static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
         return -2;
     }
     content->write(ptr, static_cast<std::streamsize>(wanted));
-//    if (resourceMan->callBack != nullptr) {
-//        resourceMan->callBack->Consume(wanted);
-//    }
+    //    if (resourceMan->callBack != nullptr) {
+    //        resourceMan->callBack->Consume(wanted);
+    //    }
 
     if (content->bad()) {
         if (logger != nullptr) {
@@ -219,8 +238,7 @@ void HttpClient::initGlobalState() {
     // init twice here, check why
 }
 
-void HttpClient::cleanupGlobalState() {
-}
+void HttpClient::cleanupGlobalState() {}
 
 #ifdef _WIN32
 size_t acquire_lock(void* clientp, curl_lock_data data, curl_lock_access access, void* userp) {
@@ -228,16 +246,12 @@ size_t acquire_lock(void* clientp, curl_lock_data data, curl_lock_access access,
     EnterCriticalSection(&curlShareLock);
     return 0;
 }
-void release_lock(void* clientp, curl_lock_data data, void* userp) {
-    LeaveCriticalSection(&curlShareLock);
-}
+void release_lock(void* clientp, curl_lock_data data, void* userp) { LeaveCriticalSection(&curlShareLock); }
 #else
 void acquire_lock(CURL* handle, curl_lock_data data, curl_lock_access access, void* userptr) {
     pthread_mutex_lock(&curlShareLock);
 }
-void release_lock(CURL* handle, curl_lock_data data, void* userptr) {
-    pthread_mutex_unlock(&curlShareLock);
-}
+void release_lock(CURL* handle, curl_lock_data data, void* userptr) { pthread_mutex_unlock(&curlShareLock); }
 #endif
 
 HttpClient::HttpClient() {
@@ -252,7 +266,7 @@ HttpClient::HttpClient() {
 }
 
 HttpClient::HttpClient(const HttpConfig& config) {
-    curlContainer_ = new CurlContainer(config.maxConnections,config.socketTimeout,config.connectTimeout);
+    curlContainer_ = new CurlContainer(config.maxConnections, config.socketTimeout, config.connectTimeout);
     tcpKeepAlive_ = config.tcpKeepAlive;
     dialTimeout_ = config.dialTimeout;
     requestTimeout_ = config.requestTimeout;
@@ -272,6 +286,8 @@ HttpClient::HttpClient(const HttpConfig& config) {
     clientCrt_ = config.clientCrt_;
     clientKey_ = config.clientKey_;
     netInterface_ = config.netInterface_;
+    sslCtxCallback_ = config.sslCtxCallback;
+    sslCtxCallbackUserData_ = config.sslCtxCallbackUserData;
     highLatencyLogThreshold_ = config.highLatencyLogThreshold;
     if (dnsCacheTime_ > 0) {
         share_handle = curl_share_init();
@@ -280,6 +296,14 @@ HttpClient::HttpClient(const HttpConfig& config) {
         curl_share_setopt(share_handle, CURLSHOPT_LOCKFUNC, acquire_lock);
         curl_share_setopt(share_handle, CURLSHOPT_UNLOCKFUNC, release_lock);
     }
+}
+
+CURLcode HttpClient::invokeSslCtxCallback(void* sslCtx) const {
+    if (sslCtxCallback_ == nullptr) {
+        return CURLE_OK;
+    }
+    int ret = sslCtxCallback_(sslCtx, sslCtxCallbackUserData_);
+    return ret == 0 ? CURLE_OK : CURLE_SSL_CERTPROBLEM;
 }
 
 void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
@@ -302,11 +326,11 @@ void HttpClient::removeDNS(void* curl, const std::shared_ptr<HttpRequest>& reque
 
 std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRequest>& request) {
     // init curl for this request
-    CURL * curl = curlContainer_->Acquire();
+    CURL* curl = curlContainer_->Acquire();
+    auto response = std::make_shared<HttpResponse>();
     if (requestTimeout_ != 0) {
         curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_);
     }
-
 
     if (proxyPort_ != -1 && !proxyHost_.empty()) {
         std::string proxy = proxyHost_ + ":" + std::to_string(proxyPort_);
@@ -324,27 +348,49 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     }
-    if(!caPath_.empty()) {
+    if (!caPath_.empty()) {
         curl_easy_setopt(curl, CURLOPT_CAPATH, caPath_.c_str());
     }
-    if(!caFile_.empty()){
+    if (!caFile_.empty()) {
         curl_easy_setopt(curl, CURLOPT_CAINFO, caFile_.c_str());
     }
-    if(!clientCrt_.empty()){
+    if (!clientCrt_.empty()) {
         curl_easy_setopt(curl, CURLOPT_SSLCERT, clientCrt_.c_str());
     }
-    if(!clientKey_.empty()){
+    if (!clientKey_.empty()) {
         curl_easy_setopt(curl, CURLOPT_SSLKEY, clientKey_.c_str());
     }
-    if(!netInterface_.empty()){
+    if (sslCtxCallback_ != nullptr) {
+        if (!isOpenSslCompatibleBackend()) {
+            response->setStatus(http::otherErr);
+            response->setStatusCode(http::otherErr);
+            response->setStatusMsg(std::string("curlCode: ") + std::to_string(CURLE_NOT_BUILT_IN) +
+                                   ", ssl ctx callback requires OpenSSL-compatible libcurl backend");
+            response->setCurlErrCode(CURLE_NOT_BUILT_IN);
+            curlContainer_->Release(curl, false);
+            return response;
+        }
+        auto res = curl_easy_setopt(curl, CURLOPT_SSL_CTX_FUNCTION, curlSslCtxCallbackBridge);
+        if (res == CURLE_OK) {
+            res = curl_easy_setopt(curl, CURLOPT_SSL_CTX_DATA, this);
+        }
+        if (res != CURLE_OK) {
+            response->setStatus(http::otherErr);
+            response->setStatusCode(http::otherErr);
+            response->setStatusMsg(std::string("curlCode: ") + std::to_string(res) + ", " + curl_easy_strerror(res));
+            response->setCurlErrCode(res);
+            curlContainer_->Release(curl, false);
+            return response;
+        }
+    }
+    if (!netInterface_.empty()) {
         curl_easy_setopt(curl, CURLOPT_INTERFACE, netInterface_.c_str());
     }
     // set req specific params
-    auto response = std::make_shared<HttpResponse>();
     auto processHandler = request->getDataTransferListener().dataTransferStatusChange_;
     auto userData = request->getDataTransferListener().userData_ == nullptr
-                            ? nullptr
-                            : request->getDataTransferListener().userData_;
+                        ? nullptr
+                        : request->getDataTransferListener().userData_;
 
     auto rateLimiter = request->getRateLimiter();
     bool checkCrc64 = request->isCheckCrc64();
@@ -382,8 +428,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
 
     auto& headers = request->Headers();
     for (const auto& p : headers) {
-        if (p.second.empty())
-            continue;
+        if (p.second.empty()) continue;
         std::string str(p.first);
         str.append(":").append(p.second);
         list = curl_slist_append(list, str.c_str());
@@ -454,16 +499,20 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         auto logger = LogUtils::GetLogger();
         if (isHighLatencyReq) {
             logger->warn(
-                    "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
-                    request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
-                    (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
-                    (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
+                "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, "
+                "TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
+                "time:{} ms",
+                request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
+                (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
+                (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
         } else {
             logger->debug(
-                    "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request time:{} ms",
-                    request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
-                    (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
-                    (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
+                "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, "
+                "TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
+                "time:{} ms",
+                request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
+                (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
+                (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
         }
     } else if (isHighLatencyReq) {
         std::ostringstream ss;

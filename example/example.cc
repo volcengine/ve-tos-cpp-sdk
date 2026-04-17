@@ -2,8 +2,110 @@
 // #include "../src/utils/LogUtils.h"
 
 #include <cstdlib>
+#include <memory>
+#include <stdexcept>
+#include <string>
+
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
 
 using namespace VolcengineTos;
+
+namespace {
+
+std::string getEnvOrDefault(const char* key, const std::string& defaultValue) {
+    const char* value = std::getenv(key);
+    return value != nullptr ? std::string(value) : defaultValue;
+}
+
+#ifndef _WIN32
+class SharedLibraryHandle {
+   public:
+    explicit SharedLibraryHandle(const std::string& libraryPath) {
+        handle_ = dlopen(libraryPath.c_str(), RTLD_NOW | RTLD_LOCAL);
+        if (handle_ == nullptr) {
+            throw std::runtime_error(std::string("dlopen failed: ") + dlerror());
+        }
+    }
+
+    ~SharedLibraryHandle() {
+        if (handle_ != nullptr) {
+            dlclose(handle_);
+        }
+    }
+
+    void* resolve(const std::string& symbolName) {
+        dlerror();
+        void* symbol = dlsym(handle_, symbolName.c_str());
+        const char* err = dlerror();
+        if (err != nullptr) {
+            throw std::runtime_error(std::string("dlsym failed: ") + err);
+        }
+        return symbol;
+    }
+
+   private:
+    void* handle_ = nullptr;
+};
+
+int runExternalSslCallbackExample(const std::string& endpoint, const std::string& region, const std::string& bucket,
+                                  const std::string& accessKey, const std::string& secretKey) {
+    std::string callbackLib = getEnvOrDefault("TOS_SSL_CALLBACK_LIB", "");
+    std::string callbackSymbol = getEnvOrDefault("TOS_SSL_CALLBACK_SYMBOL", "sslCallbackFunction");
+
+    if (accessKey.empty() || secretKey.empty()) {
+        std::cerr << "Please set TOS_ACCESS_KEY_ID and TOS_SECRET_ACCESS_KEY before running external SSL callback example"
+                  << std::endl;
+        return 1;
+    }
+    if (callbackLib.empty()) {
+        std::cerr << "Please set TOS_SSL_CALLBACK_LIB before running external SSL callback example" << std::endl;
+        return 1;
+    }
+
+    try {
+        SharedLibraryHandle library(callbackLib);
+        auto callback = reinterpret_cast<SslCtxCallback>(library.resolve(callbackSymbol));
+        int callbackInvokeCount = 0;
+
+        ClientConfig conf;
+        conf.endPoint = endpoint;
+        conf.enableCRC = true;
+        conf.enableVerifySSL = true;
+        conf.sslCtxCallback = callback;
+        conf.sslCtxCallbackUserData = &callbackInvokeCount;
+
+        InitializeClient();
+        {
+            TosClientV2 client(region, accessKey, secretKey, conf);
+            HeadBucketV2Input input(bucket);
+            auto output = client.headBucket(input);
+            if (!output.isSuccess()) {
+                std::cerr << "headBucket failed: " << output.error().String() << std::endl;
+                CloseClient();
+                return 2;
+            }
+
+            std::cout << "external ssl callback example success, request id: "
+                      << output.result().getRequestInfo().getRequestId() << std::endl;
+            std::cout << "external ssl callback invoke count: " << callbackInvokeCount << std::endl;
+            if (callbackInvokeCount <= 0) {
+                std::cerr << "ssl callback was not invoked" << std::endl;
+                CloseClient();
+                return 3;
+            }
+        }
+        CloseClient();
+        return 0;
+    } catch (const std::exception& ex) {
+        std::cerr << "external ssl callback example failed: " << ex.what() << std::endl;
+        return 4;
+    }
+}
+#endif
+
+}  // namespace
 
 void creatBucket(const std::shared_ptr<TosClientV2>& client, const std::string& bucketName) {
     CreateBucketV2Input input(bucketName);
@@ -753,6 +855,14 @@ int main() {
     std::string key = keyEnv != nullptr ? std::string(keyEnv) : std::string("your object key");
     std::string fileName("Your File Path");
     std::string logFilePath("Your Log File Path");
+    std::string scenario = getEnvOrDefault("TOS_EXAMPLE_SCENARIO", "");
+
+#ifndef _WIN32
+    // Linux 示例：通过 dlopen 加载 SDK 外部动态库提供的 SSL_CTX callback。
+    if (scenario == "external_ssl_callback") {
+        return runExternalSslCallbackExample(endpoint, region, bucket, ak, sk);
+    }
+#endif
 
     // 日志支持
     //    LogUtils::SetLogger(logFilePath, "tos-cpp-sdk", LogLevel::LogDebug);

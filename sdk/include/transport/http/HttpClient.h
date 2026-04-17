@@ -38,19 +38,18 @@ struct HttpConfig {
     std::string clientCrt_;
     std::string clientKey_;
     std::string netInterface_;
+    SslCtxCallback sslCtxCallback;
+    void* sslCtxCallbackUserData;
 };
 
-template< typename RESOURCE_TYPE>
-class ResourceManager_
-{
-public:
+template <typename RESOURCE_TYPE>
+class ResourceManager_ {
+   public:
     ResourceManager_() : m_shutdown(false) {}
-    RESOURCE_TYPE Acquire()
-    {
+    RESOURCE_TYPE Acquire() {
         std::unique_lock<std::mutex> locker(m_queueLock);
-        while(!m_shutdown.load() && m_resources.size() == 0)
-        {
-            m_semaphore.wait(locker, [&](){ return m_shutdown.load() || m_resources.size() > 0; });
+        while (!m_shutdown.load() && m_resources.size() == 0) {
+            m_semaphore.wait(locker, [&]() { return m_shutdown.load() || m_resources.size() > 0; });
         }
 
         assert(!m_shutdown.load());
@@ -61,32 +60,25 @@ public:
         return resource;
     }
 
-    bool HasResourcesAvailable()
-    {
+    bool HasResourcesAvailable() {
         std::lock_guard<std::mutex> locker(m_queueLock);
         return m_resources.size() > 0 && !m_shutdown.load();
     }
 
-    void Release(RESOURCE_TYPE resource)
-    {
+    void Release(RESOURCE_TYPE resource) {
         std::unique_lock<std::mutex> locker(m_queueLock);
         m_resources.push_back(resource);
         locker.unlock();
         m_semaphore.notify_one();
     }
 
-    void PutResource(RESOURCE_TYPE resource)
-    {
-        m_resources.push_back(resource);
-    }
+    void PutResource(RESOURCE_TYPE resource) { m_resources.push_back(resource); }
 
-    std::vector<RESOURCE_TYPE> ShutdownAndWait(size_t resourceCount)
-    {
+    std::vector<RESOURCE_TYPE> ShutdownAndWait(size_t resourceCount) {
         std::vector<RESOURCE_TYPE> resources;
         std::unique_lock<std::mutex> locker(m_queueLock);
         m_shutdown = true;
-        while (m_resources.size() < resourceCount)
-        {
+        while (m_resources.size() < resourceCount) {
             m_semaphore.wait(locker, [&]() { return m_resources.size() == resourceCount; });
         }
         resources = m_resources;
@@ -94,43 +86,33 @@ public:
         return resources;
     }
 
-private:
+   private:
     std::vector<RESOURCE_TYPE> m_resources;
     std::mutex m_queueLock;
     std::condition_variable m_semaphore;
     std::atomic<bool> m_shutdown;
 };
 
+class CurlContainer {
+   public:
+    explicit CurlContainer(unsigned maxSize = 25, long socketTimeout = 30000, long connectTimeout = 10000)
+        : maxPoolSize_(maxSize), socketTimeout_(socketTimeout), connectTimeout_(connectTimeout), poolSize_(0) {}
 
-class CurlContainer
-{
-public:
-    explicit CurlContainer(unsigned maxSize = 25, long socketTimeout = 30000, long connectTimeout = 10000):
-              maxPoolSize_(maxSize),
-              socketTimeout_(socketTimeout),
-              connectTimeout_(connectTimeout),
-              poolSize_(0)
-    {
-    }
-
-    ~CurlContainer()
-    {
+    ~CurlContainer() {
         for (CURL* handle : handleContainer_.ShutdownAndWait(poolSize_)) {
             curl_easy_cleanup(handle);
         }
     }
 
-    CURL* Acquire()
-    {
-        if(!handleContainer_.HasResourcesAvailable()) {
+    CURL* Acquire() {
+        if (!handleContainer_.HasResourcesAvailable()) {
             growPool();
         }
         CURL* handle = handleContainer_.Acquire();
         return handle;
     }
 
-    void Release(CURL* handle, bool force)
-    {
+    void Release(CURL* handle, bool force) {
         if (handle) {
             curl_easy_reset(handle);
             if (force) {
@@ -145,8 +127,7 @@ public:
         }
     }
 
-    static void SetDefaultOptions(CURL* curl, unsigned long connectTimeout, unsigned long socketTimeout)
-    {
+    static void SetDefaultOptions(CURL* curl, unsigned long connectTimeout, unsigned long socketTimeout) {
         curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
         curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1);
         curl_easy_setopt(curl, CURLOPT_NETRC, CURL_NETRC_IGNORED);
@@ -160,14 +141,13 @@ public:
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     }
 
-private:
+   private:
     CurlContainer(const CurlContainer&) = delete;
-    const CurlContainer& operator = (const CurlContainer&) = delete;
+    const CurlContainer& operator=(const CurlContainer&) = delete;
     CurlContainer(const CurlContainer&&) = delete;
-    const CurlContainer& operator = (const CurlContainer&&) = delete;
+    const CurlContainer& operator=(const CurlContainer&&) = delete;
 
-    bool growPool()
-    {
+    bool growPool() {
         std::lock_guard<std::mutex> locker(containerLock_);
         if (poolSize_ < maxPoolSize_) {
             unsigned multiplier = poolSize_ > 0 ? poolSize_ : 1;
@@ -190,7 +170,7 @@ private:
         return false;
     }
 
-private:
+   private:
     ResourceManager_<CURL*> handleContainer_;
     unsigned maxPoolSize_;
     unsigned long socketTimeout_;
@@ -200,7 +180,7 @@ private:
 };
 
 class HttpClient {
-public:
+   public:
     HttpClient();
 
     explicit HttpClient(const HttpConfig& config);
@@ -214,13 +194,14 @@ public:
     static void cleanupGlobalState();
 
     std::shared_ptr<HttpResponse> doRequest(const std::shared_ptr<HttpRequest>& request);
+    CURLcode invokeSslCtxCallback(void* sslCtx) const;
 
-protected:
+   protected:
     void setShareHandle(void* curl_handle, int cacheTime);
     void removeDNS(void* curl_handle, const std::shared_ptr<HttpRequest>& request);
     CURLSH* share_handle = nullptr;
 
-protected:
+   protected:
     int requestTimeout_ = 0;
     int socketTimeout_ = 30000;
     int dialTimeout_{};
@@ -237,8 +218,10 @@ protected:
     int highLatencyLogThreshold_ = 100;
     std::mutex mu_;
     VolcengineTos::CurlContainer* curlContainer_{};
-    std::string clientCrt_; // 客户端证书路径
-    std::string clientKey_; // 客户端私钥路径
+    std::string clientCrt_;  // 客户端证书路径
+    std::string clientKey_;  // 客户端私钥路径
     std::string netInterface_;
+    SslCtxCallback sslCtxCallback_ = nullptr;
+    void* sslCtxCallbackUserData_ = nullptr;
 };
 }  // namespace VolcengineTos

@@ -21,6 +21,8 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.clientCrt_ = config.getClientCrt();
     conf.clientKey_ = config.getClientKey();
     conf.netInterface_ = config.getNetInterface();
+    conf.sslCtxCallback = config.getSslCtxCallback();
+    conf.sslCtxCallbackUserData = config.getSslCtxCallbackUserData();
 
     client_ = std::make_shared<HttpClient>(conf);
 }
