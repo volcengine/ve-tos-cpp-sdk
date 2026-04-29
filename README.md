@@ -40,10 +40,12 @@ please make sure that you have installed curl and openssl in your platform.
 Install libcurl and openssl libraries through the following command.
 
 ```bash
-$ (Ubuntu/Debian)
-$ sudo apt-get install libcurl4-openssl-dev libssl-dev
-$ (Redhat/Fedora)
-$ sudo dnf install libcurl-devel openssl-devel
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y libcurl4-openssl-dev libssl-dev
+
+# Redhat/Fedora
+sudo dnf install -y libcurl-devel openssl-devel
 ```
 
 Run the following commands to build and install.
@@ -208,6 +210,11 @@ if (!output.isSuccess()){
 }
 std::cout << output.result().getRequestInfo().getRequestId() << std::endl;
 ```
+
+## Security and privacy
+
+This project takes security seriously.
+For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md)
 
 ## License
 

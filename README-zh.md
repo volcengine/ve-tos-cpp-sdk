@@ -16,8 +16,8 @@ TOS C++ SDK为C++开发者提供了访问火山引擎对象存储服务TOS（Tin
 
 1. 下载源码
 
-- 直接下载 [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.2.1.zip)
-- 通过git克隆到本地
+- 直接下载 [release](https://github.com/volcengine/ve-tos-cpp-sdk/archive/refs/tags/0.2.1.zip )
+- 通过git克隆到本地。
 
 ```bash
 git clone https://github.com/volcengine/ve-tos-cpp-sdk
@@ -38,10 +38,12 @@ SDK 依赖 libcurl 和 openssl 两个库. 请在构建 SDK 之前确保已安装
 运行以下命令安装 libcurl 和 openssl
 
 ```bash
-$ (Ubuntu/Debian)
-$ sudo apt-get install libcurl4-openssl-dev libssl-dev
-$ (Redhat/Fedora)
-$ sudo dnf install libcurl-devel openssl-devel
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y libcurl4-openssl-dev libssl-dev
+
+# Redhat/Fedora
+sudo dnf install -y libcurl-devel openssl-devel
 ```
 
 运行以下命令进行编译及安装
@@ -199,6 +201,11 @@ if (!output.isSuccess()){
 }
 std::cout << output.result().getRequestInfo().getRequestId() << std::endl;
 ```
+
+## Security and privacy
+
+This project takes security seriously.
+For vulnerability reporting and supported versions, see [SECURITY.md](SECURITY.md)
 
 ## License
 
