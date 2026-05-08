@@ -289,6 +289,8 @@ public:
         int64_t tokenIncreaseAmount = duration * rate_/1000;
         int64_t tokenAmountMax = tokenIncreaseAmount + currentAmount_;
         currentAmount_ = tokenAmountMax > capacity_ ? capacity_ : tokenAmountMax;
+        // 避免 Acquire 失败场景，因lastTokenGiven_未更新导致 currentAmount_ 重复添加令牌
+        lastTokenGiven_ = currentTime;
         // 极端情况下，want > 总容量，直接放过
         if (want > capacity_) {
             std::pair<bool, std::time_t> res(true, 0);
@@ -300,7 +302,6 @@ public:
             std::pair<bool, std::time_t> res(false, timeToWait);
             return res;
         }
-        lastTokenGiven_ = std::chrono::steady_clock::now();
         currentAmount_ = currentAmount_ - want;
         std::pair<bool, std::time_t> res(true, 0);
         return res;
