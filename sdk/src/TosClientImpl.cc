@@ -213,18 +213,19 @@ SchemeHostParameter TosClientImpl::initSchemeAndHost(const std::string& endpoint
     SchemeHostParameter schemeHostParameter;
     if (StringUtils::startsWithIgnoreCase(endpoint, http::SchemeHTTPS)) {
         schemeHostParameter.scheme_ = http::SchemeHTTPS;
-        schemeHostParameter.host_ =
-            endpoint.substr(std::strlen(http::SchemeHTTPS) + 3, endpoint.length() - std::strlen(http::SchemeHTTPS) - 3);
+        schemeHostParameter.host_ = endpoint.substr(std::strlen(http::SchemeHTTPS) + 3,
+                                                    endpoint.length() - std::strlen(http::SchemeHTTPS) - 3);
     } else if (StringUtils::startsWithIgnoreCase(endpoint, http::SchemeHTTP)) {
         schemeHostParameter.scheme_ = http::SchemeHTTP;
-        schemeHostParameter.host_ =
-            endpoint.substr(std::strlen(http::SchemeHTTP) + 3, endpoint.length() - std::strlen(http::SchemeHTTP) - 3);
+        schemeHostParameter.host_ = endpoint.substr(std::strlen(http::SchemeHTTP) + 3,
+                                                    endpoint.length() - std::strlen(http::SchemeHTTP) - 3);
     } else {
         schemeHostParameter.scheme_ = http::SchemeHTTPS;
         schemeHostParameter.host_ = endpoint;
     }
 
-    if (userAgent_.empty()) userAgent_ = DefaultUserAgent();
+    if (userAgent_.empty())
+        userAgent_ = DefaultUserAgent();
     schemeHostParameter.urlMode_ = URL_MODE_DEFAULT;
     return schemeHostParameter;
 }
@@ -324,7 +325,9 @@ void setContentType(RequestBuilder& rb, const std::string& objectKey) {
         rb.withHeader(http::HEADER_CONTENT_TYPE, contentType);
     }
 }
-int expectedCode(const RequestBuilder& rb) { return rb.getRange().isNull() ? 200 : 206; }
+int expectedCode(const RequestBuilder& rb) {
+    return rb.getRange().isNull() ? 200 : 206;
+}
 int expectedCodeV2(const RequestBuilder& rb) {
     const auto& header_ = rb.getHeaders();
     bool exit_range_header = header_.count("Range") || header_.count("X-Tos-Copy-Source-Range");
@@ -349,7 +352,9 @@ void TosClientImpl::SetRateLimiterToReq(const std::shared_ptr<TosRequest>& req,
         req->setRataLimiter(limiter);
     }
 }
-RequestBuilder TosClientImpl::ParamFromConfToRb(RequestBuilder& rb) { return rb; }
+RequestBuilder TosClientImpl::ParamFromConfToRb(RequestBuilder& rb) {
+    return rb;
+}
 
 // 各个接口具体实现
 static void createBucketSetOptionHeader(RequestBuilder& rb, const CreateBucketInput& input) {
@@ -920,7 +925,7 @@ Outcome<TosError, GetObjectToFileOutput> TosClientImpl::getObjectToFile(const Ge
         return res;
     }
     auto fileContent = std::make_shared<std::fstream>(
-        input.getFilePath(), std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
+            input.getFilePath(), std::ios_base::out | std::ios_base::in | std::ios_base::trunc | std::ios_base::binary);
     if (!fileContent->good()) {
         TosError error;
         error.setIsClientError(true);
@@ -1428,7 +1433,7 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     Outcome<TosError, PutObjectV2Output> res;
     const auto& putObjectBasicInput_ = input.getPutObjectBasicInput();
     std::string check =
-        isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()}, config_.isCustomDomain());
+            isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -1518,7 +1523,7 @@ Outcome<TosError, PutObjectV2Output> TosClientImpl::putObject(const PutObjectV2I
     return res;
 }
 std::string isValidFilePath(const std::string& filePath) {
-    struct tos_stat ufs {};
+    struct tos_stat ufs{};
     if (tos_stat(filePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             return "invalid file path, the file does not exist";
@@ -1590,8 +1595,10 @@ Outcome<TosError, int> validateInput(const std::string& bucket, const std::strin
         return ret;
     }
     int taskNum_ = taskNum;
-    if (taskNum_ > 1000) taskNum_ = 1000;
-    if (taskNum_ < 1) taskNum_ = 1;
+    if (taskNum_ > 1000)
+        taskNum_ = 1000;
+    if (taskNum_ < 1)
+        taskNum_ = 1;
     ret.setR(taskNum_);
     ret.setSuccess(true);
     return ret;
@@ -1608,7 +1615,7 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
         ret << uploadFilePath << "." << base64md5Path << ".upload";
         return ret.str();
     } else {
-        struct tos_stat cfs {};
+        struct tos_stat cfs{};
         if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
@@ -1632,7 +1639,7 @@ Outcome<TosError, UploadFileInfo> getUploadFileInfo(const std::string& uploadFil
     Outcome<TosError, UploadFileInfo> ret;
     UploadFileInfo ufi;
     TosError e;
-    struct tos_stat ufs {};
+    struct tos_stat ufs{};
     if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
@@ -1663,7 +1670,7 @@ Outcome<TosError, UploadFileInfoV2> getUploadFileInfoV2(const std::string& uploa
     Outcome<TosError, UploadFileInfoV2> ret;
     UploadFileInfoV2 ufi;
     TosError e;
-    struct tos_stat ufs {};
+    struct tos_stat ufs{};
     if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
@@ -1701,7 +1708,9 @@ UploadFileCheckpointV2 loadCheckpointV2FromFile(const std::string& checkpointFil
     ufc.load(checkpointFilePath);
     return ufc;
 }
-bool deleteCheckpointFile(const std::string& checkpointFilePath) { return remove(checkpointFilePath.c_str()); }
+bool deleteCheckpointFile(const std::string& checkpointFilePath) {
+    return remove(checkpointFilePath.c_str());
+}
 Outcome<TosError, std::vector<UploadFilePartInfo>> getPartInfoFromFile(int64_t uploadFileSize, int64_t partSize) {
     Outcome<TosError, std::vector<UploadFilePartInfo>> ret;
     if (uploadFileSize == 0) {
@@ -1894,8 +1903,8 @@ void uploadEventCompleteMultipartUploadFailed(const std::shared_ptr<UploadEvent>
     }
 }
 Outcome<TosError, UploadFileCheckpointV2> TosClientImpl::initCheckpoint(
-    const std::string& bucket, const std::string& key, const UploadFileV2Input& input, const UploadFileInfoV2& info,
-    const std::string& checkpointFilePath, const std::shared_ptr<UploadEvent>& event) {
+        const std::string& bucket, const std::string& key, const UploadFileV2Input& input, const UploadFileInfoV2& info,
+        const std::string& checkpointFilePath, const std::shared_ptr<UploadEvent>& event) {
     Outcome<TosError, UploadFileCheckpointV2> ret;
     TosError error;
 
@@ -1976,7 +1985,8 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadPartConcurrent(const Up
                 UploadFilePartInfo part;
                 {
                     std::lock_guard<std::mutex> lck(lock_);
-                    if (toUpload.empty()) break;
+                    if (toUpload.empty())
+                        break;
                     part = toUpload.front();
                     toUpload.erase(toUpload.begin());
                 }
@@ -2067,8 +2077,8 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadFile(const std::string&
                                                               const RequestOptionBuilder& builder) {
     Outcome<TosError, UploadFileOutput> res;
     TosError error;
-    auto check =
-        validateInput(bucket, input.getObjectKey(), input.getPartSize(), input.getTaskNum(), config_.isCustomDomain());
+    auto check = validateInput(bucket, input.getObjectKey(), input.getPartSize(), input.getTaskNum(),
+                               config_.isCustomDomain());
     if (!check.isSuccess()) {
         error.setMessage(check.error().getMessage());
         res.setE(error);
@@ -2078,7 +2088,7 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadFile(const std::string&
     std::string checkpointFilePath;
     if (input.isEnableCheckpoint()) {
         checkpointFilePath =
-            getCheckpointPath(bucket, input.getObjectKey(), input.getCheckpointFile(), input.getUploadFilePath());
+                getCheckpointPath(bucket, input.getObjectKey(), input.getCheckpointFile(), input.getUploadFilePath());
         if (checkpointFilePath.empty()) {
             error.setMessage("The file is not found in the specific path " + input.getCheckpointFile());
             res.setE(error);
@@ -2179,7 +2189,8 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                 UploadFilePartInfoV2 part;
                 {
                     std::lock_guard<std::mutex> lck(lock_);
-                    if (toUpload.empty()) break;
+                    if (toUpload.empty())
+                        break;
                     part = toUpload.front();
                     toUpload.erase(toUpload.begin());
                 }
@@ -2357,7 +2368,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
     uint64_t localCRC64 = uploadedParts[0].getHashCrc64Result();
     for (size_t i = 1; i < uploadedParts.size(); i++) {
         localCRC64 =
-            CRC64::CombineCRC(localCRC64, uploadedParts[i].getHashCrc64Result(), uploadedParts[i].getPartSize());
+                CRC64::CombineCRC(localCRC64, uploadedParts[i].getHashCrc64Result(), uploadedParts[i].getPartSize());
     }
 
     uint64_t resCrc64 = output.result().getHashCrc64ecma();
@@ -2609,7 +2620,7 @@ std::string getDownloadCheckpointPath(const std::string& bucket, const std::stri
         ret << filePath << "." << base64md5Path << ".download";
         return ret.str();
     } else {
-        struct tos_stat cfs {};
+        struct tos_stat cfs{};
         if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
@@ -2682,8 +2693,15 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
 
     DownloadFileFileInfo fileinfo;
 
-    struct tos_stat dfs {};
+    struct tos_stat dfs{};
     std::string filePath = input.getFilePath();
+    if (filePath.empty()) {
+        error.setMessage("The file path is empty");
+        error.setIsClientError(true);
+        ret.setE(error);
+        ret.setSuccess(false);
+        return ret;
+    }
     // 设置文件路径
     // 路径不存在，需要先创建路径
     if (tos_stat(filePath.c_str(), &dfs) != 0) {
@@ -2767,8 +2785,8 @@ Outcome<TosError, DownloadFileFileInfo> getDownloadFileFileInfo(const DownloadFi
 }
 
 Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
-    const DownloadFileInput& input, const HeadObjectV2Output& headOutput, DownloadFileCheckpoint checkpoint,
-    const std::string& checkpointPath, const DownloadFileFileInfo& dfi, std::shared_ptr<DownloadEvent> event) {
+        const DownloadFileInput& input, const HeadObjectV2Output& headOutput, DownloadFileCheckpoint checkpoint,
+        const std::string& checkpointPath, const DownloadFileFileInfo& dfi, std::shared_ptr<DownloadEvent> event) {
     Outcome<TosError, DownloadFileOutput> ret;
     TosError error;
     std::vector<DownloadFilePartInfo> toDownload = checkpoint.getPartsInfo();
@@ -2781,6 +2799,11 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
     std::atomic<bool> isAbort(false);
     std::atomic<bool> isSuccess(true);
     auto logger = LogUtils::GetLogger();
+    int taskNum = input.getTaskNum();
+    if (taskNum > 10000)
+        taskNum = 10000;
+    if (taskNum < 1)
+        taskNum = 1;
     // 进度条相关参数
     UploadDownloadFileProcessStat processStat;
     auto pProcessStat = &processStat;
@@ -2800,123 +2823,153 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
         }
         pProcessStat->userData = (void*)pProcessStat;
     }
-    for (int i = 0; i < input.getTaskNum(); i++) {
-        auto res = std::thread([&]() {
-            while (true) {
-                // 开始时检查是否需要中断任务
-                if (cancel != nullptr) {
-                    if (cancel->isCancel()) {
-                        break;
-                    }
-                }
-                // 发生严重错误，中断任务
-                if (isAbort) {
-                    break;
-                }
-                // 任务队列中取part
-                DownloadFilePartInfo part;
-                {
-                    std::lock_guard<std::mutex> lck(lock_);
-                    if (toDownload.empty()) break;
-                    part = toDownload.front();
-                    toDownload.erase(toDownload.begin());
-                }
-                if (part.isCompleted()) {
-                    continue;
-                }
-                // 发送 GetObject 请求数据
-                GetObjectV2Input input_obj_get;
-                input_obj_get.setBucket(input.getHeadObjectV2Input().getBucket());
-                input_obj_get.setKey(input.getHeadObjectV2Input().getKey());
-                input_obj_get.setRangeStart(part.getRangeStart());
-                input_obj_get.setRangeEnd(part.getRangeEnd());
-                input_obj_get.setTrafficLimit(input.getTrafficLimit());
-                // 同步参数到 input_obj_get 中
-                input_obj_get.setVersionId(input.getHeadObjectV2Input().getVersionId());
-                input_obj_get.setIfMatch(input.getHeadObjectV2Input().getIfMatch());
-                input_obj_get.setIfModifiedSince(input.getHeadObjectV2Input().getIfModifiedSince());
-                input_obj_get.setIfNoneMatch(input.getHeadObjectV2Input().getIfNoneMatch());
-                input_obj_get.setIfUnmodifiedSince(input.getHeadObjectV2Input().getIfUnmodifiedSince());
-                input_obj_get.setSsecKeyMd5(input.getHeadObjectV2Input().getSsecKeyMd5());
-                input_obj_get.setSsecKey(input.getHeadObjectV2Input().getSsecKey());
-                input_obj_get.setSsecAlgorithm(input.getHeadObjectV2Input().getSsecAlgorithm());
+    try {
+        for (int i = 0; i < taskNum; i++) {
+            auto res = std::thread([&]() {
+                try {
+                    while (true) {
+                        // 开始时检查是否需要中断任务
+                        if (cancel != nullptr) {
+                            if (cancel->isCancel()) {
+                                break;
+                            }
+                        }
+                        // 发生严重错误，中断任务
+                        if (isAbort) {
+                            break;
+                        }
+                        // 任务队列中取part
+                        DownloadFilePartInfo part;
+                        {
+                            std::lock_guard<std::mutex> lck(lock_);
+                            if (toDownload.empty())
+                                break;
+                            part = toDownload.front();
+                            toDownload.erase(toDownload.begin());
+                        }
+                        if (part.isCompleted()) {
+                            continue;
+                        }
+                        // 发送 GetObject 请求数据
+                        GetObjectV2Input input_obj_get;
+                        input_obj_get.setBucket(input.getHeadObjectV2Input().getBucket());
+                        input_obj_get.setKey(input.getHeadObjectV2Input().getKey());
+                        input_obj_get.setRangeStart(part.getRangeStart());
+                        input_obj_get.setRangeEnd(part.getRangeEnd());
+                        input_obj_get.setTrafficLimit(input.getTrafficLimit());
+                        // 同步参数到 input_obj_get 中
+                        input_obj_get.setVersionId(input.getHeadObjectV2Input().getVersionId());
+                        input_obj_get.setIfMatch(input.getHeadObjectV2Input().getIfMatch());
+                        input_obj_get.setIfModifiedSince(input.getHeadObjectV2Input().getIfModifiedSince());
+                        input_obj_get.setIfNoneMatch(input.getHeadObjectV2Input().getIfNoneMatch());
+                        input_obj_get.setIfUnmodifiedSince(input.getHeadObjectV2Input().getIfUnmodifiedSince());
+                        input_obj_get.setSsecKeyMd5(input.getHeadObjectV2Input().getSsecKeyMd5());
+                        input_obj_get.setSsecKey(input.getHeadObjectV2Input().getSsecKey());
+                        input_obj_get.setSsecAlgorithm(input.getHeadObjectV2Input().getSsecAlgorithm());
 
-                // 设置限流
-                input_obj_get.setRateLimiter(input.getRateLimiter());
-                // 设置回调
-                if (process.dataTransferStatusChange_ != nullptr) {
-                    input_obj_get.setDataTransferListener({UploadDownloadFileProcessCallback, (void*)pProcessStat});
-                }
-                auto partHashCrc64ecma = std::make_shared<uint64_t>(0);
-                auto res = this->getObject(input_obj_get, partHashCrc64ecma, nullptr);
+                        // 设置限流
+                        input_obj_get.setRateLimiter(input.getRateLimiter());
+                        // 设置回调
+                        if (process.dataTransferStatusChange_ != nullptr) {
+                            input_obj_get.setDataTransferListener(
+                                    {UploadDownloadFileProcessCallback, (void*)pProcessStat});
+                        }
+                        auto partHashCrc64ecma = std::make_shared<uint64_t>(0);
+                        auto res = this->getObject(input_obj_get, partHashCrc64ecma, nullptr);
 
-                // 下载后检查是否需要中断任务
-                if (cancel != nullptr) {
-                    if (cancel->isCancel()) {
-                        break;
-                    }
-                }
-                if (res.isSuccess()) {
-                    // 成功则写入数据到文件
-                    {
-                        std::lock_guard<std::mutex> lck(lock_);
-                        std::fstream tempFile;
-                        tempFile.open(tempFilePath, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
-                        if (tempFile) {
-                            auto currentPos = partSize_ * (part.getPartNum() - 1);
-                            tempFile.seekp(currentPos, tempFile.beg);
-                            tempFile << res.result().getContent()->rdbuf();
-                            // 读流失败
-                            if (tempFile.bad() || tempFile.fail()) {
+                        // 下载后检查是否需要中断任务
+                        if (cancel != nullptr) {
+                            if (cancel->isCancel()) {
+                                break;
+                            }
+                        }
+                        if (res.isSuccess()) {
+                            // 成功则写入数据到文件
+                            auto content = res.result().getContent();
+                            if (content == nullptr) {
                                 DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
                                 downloadEventDownloadPartAborted(event, eventChange, partInfo);
                                 if (logger != nullptr) {
-                                    logger->info("failed to write stream to file");
+                                    logger->info("getContent is null for downloaded part");
                                 }
                                 isAbort = true;
                             } else {
-                                // 下载段成功
-                                DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
-                                downloadEventDownloadPartSucceed(event, eventChange, partInfo);
-                            }
-                            tempFile.close();
+                                {
+                                    std::lock_guard<std::mutex> lck(lock_);
+                                    std::fstream tempFile;
+                                    tempFile.open(tempFilePath,
+                                                  std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+                                    if (tempFile) {
+                                        auto currentPos = partSize_ * (part.getPartNum() - 1);
+                                        tempFile.seekp(currentPos, tempFile.beg);
+                                        tempFile << content->rdbuf();
+                                        // 读流失败
+                                        if (tempFile.bad() || tempFile.fail()) {
+                                            DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(),
+                                                                      part.getRangeEnd()};
+                                            downloadEventDownloadPartAborted(event, eventChange, partInfo);
+                                            if (logger != nullptr) {
+                                                logger->info("failed to write stream to file");
+                                            }
+                                            isAbort = true;
+                                        } else {
+                                            // 下载段成功
+                                            DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(),
+                                                                      part.getRangeEnd()};
+                                            downloadEventDownloadPartSucceed(event, eventChange, partInfo);
+                                        }
+                                        tempFile.close();
+                                    } else {
+                                        // 打开文件失败
+                                        DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(),
+                                                                  part.getRangeEnd()};
+                                        downloadEventDownloadPartFailed(event, eventChange, partInfo);
+                                        isSuccess = false;
+                                    }
+                                }
+                                // 更新 checkpoint 信息, 把更新后的 part 放到 checkpoint 的 vector 中，赋值并发安全
+                                part.setIsCompleted(true);
+                                part.setHashCrc64Ecma(*partHashCrc64ecma);
+                                checkpoint.setDownloadFilePartInfoByIdx(part, part.getPartNum() - 1);
+                                if (input.isEnableCheckpoint()) {
+                                    {
+                                        // 更新 checkpoint 文件
+                                        std::lock_guard<std::mutex> lck(lock_);
+                                        checkpoint.dump(checkpointPath);
+                                    }
+                                }
+                            }  // else (content != nullptr)
                         } else {
-                            // 打开文件失败
+                            // 下载段失败
+                            auto statusCode = res.error().getStatusCode();
+                            if (statusCode == 403 || statusCode == 404 || statusCode == 405) {
+                                std::lock_guard<std::mutex> lck(lock_);
+                                DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
+                                downloadEventDownloadPartAborted(event, eventChange, partInfo);
+                                // 出现 403、404、405 错误需要中断整个断点续传任务
+                                isAbort = true;
+                                break;
+                            }
+                            std::lock_guard<std::mutex> lck(lock_);
                             DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
                             downloadEventDownloadPartFailed(event, eventChange, partInfo);
                             isSuccess = false;
                         }
                     }
-                    // 更新 checkpoint 信息, 把更新后的 part 放到 checkpoint 的 vector 中，赋值并发安全
-                    part.setIsCompleted(true);
-                    part.setHashCrc64Ecma(*partHashCrc64ecma);
-                    checkpoint.setDownloadFilePartInfoByIdx(part, part.getPartNum() - 1);
-                    if (input.isEnableCheckpoint()) {
-                        {
-                            // 更新 checkpoint 文件
-                            std::lock_guard<std::mutex> lck(lock_);
-                            checkpoint.dump(checkpointPath);
-                        }
+                } catch (const std::exception& e) {
+                    if (logger != nullptr) {
+                        logger->info("download worker thread exception: {}", e.what());
                     }
-                } else {
-                    // 下载段失败
-                    auto statusCode = res.error().getStatusCode();
-                    if (statusCode == 403 || statusCode == 404 || statusCode == 405) {
-                        std::lock_guard<std::mutex> lck(lock_);
-                        DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
-                        downloadEventDownloadPartAborted(event, eventChange, partInfo);
-                        // 出现 403、404、405 错误需要中断整个断点续传任务
-                        isAbort = true;
-                        break;
-                    }
-                    std::lock_guard<std::mutex> lck(lock_);
-                    DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
-                    downloadEventDownloadPartFailed(event, eventChange, partInfo);
-                    isSuccess = false;
+                    isAbort = true;
                 }
-            }
-        });
-        threadPool.emplace_back(std::move(res));
+            });
+            threadPool.emplace_back(std::move(res));
+        }
+    } catch (const std::exception& e) {
+        if (logger != nullptr) {
+            logger->info("failed to create download worker thread: {}", e.what());
+        }
+        isAbort = true;
     }
     for (auto& worker : threadPool) {
         if (worker.joinable()) {
@@ -3053,8 +3106,8 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     std::string checkpointFilePath;
     if (input.isEnableCheckpoint()) {
         checkpointFilePath = getDownloadCheckpointPath(
-            input.getHeadObjectV2Input().getBucket(), input.getHeadObjectV2Input().getKey(),
-            input.getHeadObjectV2Input().getVersionId(), input.getCheckpointFile(), dfi.result().getFilePath());
+                input.getHeadObjectV2Input().getBucket(), input.getHeadObjectV2Input().getKey(),
+                input.getHeadObjectV2Input().getVersionId(), input.getCheckpointFile(), dfi.result().getFilePath());
         if (checkpointFilePath.empty()) {
             error.setIsClientError(true);
             error.setMessage("The folder created fail in the specific path " + input.getCheckpointFile());
@@ -3447,7 +3500,7 @@ Outcome<TosError, ListObjectVersionsOutput> TosClientImpl::listObjectVersions(co
     return res;
 }
 Outcome<TosError, ListObjectVersionsV2Output> TosClientImpl::listObjectVersions(
-    const ListObjectVersionsV2Input& input) {
+        const ListObjectVersionsV2Input& input) {
     Outcome<TosError, ListObjectVersionsV2Output> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -3932,12 +3985,18 @@ Outcome<TosError, UploadPartCopyV2Output> TosClientImpl::uploadPartCopy(const Up
 
 void setAclGrant(const PutObjectAclInput& input, RequestBuilder& rb) {
     const auto& grant = input.getAclGrant();
-    if (!grant.getAcl().empty()) rb.withHeader(HEADER_ACL, grant.getAcl());
-    if (!grant.getGrantFullControl().empty()) rb.withHeader(HEADER_GRANT_FULL_CONTROL, grant.getGrantFullControl());
-    if (!grant.getGrantRead().empty()) rb.withHeader(HEADER_GRANT_READ, grant.getGrantRead());
-    if (!grant.getGrantReadAcp().empty()) rb.withHeader(HEADER_GRANT_READ_ACP, grant.getGrantReadAcp());
-    if (!grant.getGrantWrite().empty()) rb.withHeader(HEADER_GRANT_WRITE, grant.getGrantWrite());
-    if (!grant.getGrantWriteAcp().empty()) rb.withHeader(HEADER_GRANT_WRITE_ACP, grant.getGrantWriteAcp());
+    if (!grant.getAcl().empty())
+        rb.withHeader(HEADER_ACL, grant.getAcl());
+    if (!grant.getGrantFullControl().empty())
+        rb.withHeader(HEADER_GRANT_FULL_CONTROL, grant.getGrantFullControl());
+    if (!grant.getGrantRead().empty())
+        rb.withHeader(HEADER_GRANT_READ, grant.getGrantRead());
+    if (!grant.getGrantReadAcp().empty())
+        rb.withHeader(HEADER_GRANT_READ_ACP, grant.getGrantReadAcp());
+    if (!grant.getGrantWrite().empty())
+        rb.withHeader(HEADER_GRANT_WRITE, grant.getGrantWrite());
+    if (!grant.getGrantWriteAcp().empty())
+        rb.withHeader(HEADER_GRANT_WRITE_ACP, grant.getGrantWriteAcp());
 }
 Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::string& bucket,
                                                                   const PutObjectAclInput& input) {
@@ -3980,11 +4039,16 @@ Outcome<TosError, PutObjectAclOutput> TosClientImpl::putObjectAcl(const std::str
 }
 
 void setAclGrant(const PutObjectAclV2Input& input, RequestBuilder& rb) {
-    if (input.getAcl() != ACLType::NotSet) rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
-    if (!input.getGrantFullControl().empty()) rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
-    if (!input.getGrantRead().empty()) rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
-    if (!input.getGrantReadAcp().empty()) rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
-    if (!input.getGrantWriteAcp().empty()) rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+    if (input.getAcl() != ACLType::NotSet)
+        rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    if (!input.getGrantFullControl().empty())
+        rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+    if (!input.getGrantRead().empty())
+        rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+    if (!input.getGrantReadAcp().empty())
+        rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+    if (!input.getGrantWriteAcp().empty())
+        rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
 }
 Outcome<TosError, PutObjectAclV2Output> TosClientImpl::putObjectAcl(const PutObjectAclV2Input& input) {
     Outcome<TosError, PutObjectAclV2Output> res;
@@ -4114,7 +4178,7 @@ Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpl
     return res;
 }
 Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpload(
-    const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder) {
+        const std::string& bucket, const std::string& objectKey, const RequestOptionBuilder& builder) {
     Outcome<TosError, CreateMultipartUploadOutput> res;
     std::string check = isValidNames(bucket, {objectKey}, config_.isCustomDomain());
     if (!check.empty()) {
@@ -4156,7 +4220,7 @@ static void createMultipartUploadSetOptionHeader(RequestBuilder& rb, const Creat
 }
 
 Outcome<TosError, CreateMultipartUploadOutput> TosClientImpl::createMultipartUpload(
-    const CreateMultipartUploadInput& input) {
+        const CreateMultipartUploadInput& input) {
     Outcome<TosError, CreateMultipartUploadOutput> res;
     std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
@@ -4285,7 +4349,7 @@ Outcome<TosError, UploadPartV2Output> TosClientImpl::uploadPart(const UploadPart
     Outcome<TosError, UploadPartV2Output> res;
     const UploadPartBasicInput& uploadPartBasicInput_ = input.getUploadPartBasicInput();
     std::string check =
-        isValidNames(uploadPartBasicInput_.getBucket(), {uploadPartBasicInput_.getKey()}, config_.isCustomDomain());
+            isValidNames(uploadPartBasicInput_.getBucket(), {uploadPartBasicInput_.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);
@@ -4438,7 +4502,7 @@ Outcome<TosError, UploadPartFromFileOutput> TosClientImpl::uploadPartFromFile(co
     return res;
 }
 Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipartUpload(
-    const std::string& bucket, CompleteMultipartUploadInput& input) {
+        const std::string& bucket, CompleteMultipartUploadInput& input) {
     Outcome<TosError, CompleteMultipartUploadOutput> res;
 
     std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
@@ -4499,7 +4563,7 @@ Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipar
     return res;
 }
 Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipartUpload(
-    const std::string& bucket, CompleteMultipartCopyUploadInput& input) {
+        const std::string& bucket, CompleteMultipartCopyUploadInput& input) {
     Outcome<TosError, CompleteMultipartUploadOutput> res;
     int partsNum = input.getUploadedPartsLength();
     inner::InnerCompleteMultipartUploadInput multipart(partsNum);
@@ -4532,7 +4596,7 @@ Outcome<TosError, CompleteMultipartUploadOutput> TosClientImpl::completeMultipar
     return res;
 }
 Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultipartUpload(
-    const CompleteMultipartUploadV2Input& input) {
+        const CompleteMultipartUploadV2Input& input) {
     Outcome<TosError, CompleteMultipartUploadV2Output> res;
 
     std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
@@ -4629,7 +4693,7 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
     return res;
 }
 Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUpload(
-    const std::string& bucket, const AbortMultipartUploadInput& input) {
+        const std::string& bucket, const AbortMultipartUploadInput& input) {
     Outcome<TosError, AbortMultipartUploadOutput> res;
     std::string check = isValidNames(bucket, {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
@@ -4669,7 +4733,7 @@ Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUploa
     return res;
 }
 Outcome<TosError, AbortMultipartUploadOutput> TosClientImpl::abortMultipartUpload(
-    const AbortMultipartUploadInput& input) {
+        const AbortMultipartUploadInput& input) {
     Outcome<TosError, AbortMultipartUploadOutput> res;
     std::string check = isValidNames(input.getBucket(), {input.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
@@ -4796,7 +4860,7 @@ Outcome<TosError, ListPartsOutput> TosClientImpl::listParts(const ListPartsInput
 }
 
 Outcome<TosError, ListMultipartUploadsOutput> TosClientImpl::listMultipartUploads(
-    const std::string& bucket, const ListMultipartUploadsInput& input) {
+        const std::string& bucket, const ListMultipartUploadsInput& input) {
     Outcome<TosError, ListMultipartUploadsOutput> res;
     auto rb = newBuilder(bucket, "", input);
     rb.withQuery("uploads", "");
@@ -4841,7 +4905,7 @@ static void listMultipartUploadsSetOptionHeader(RequestBuilder& rb, const ListMu
 }
 
 Outcome<TosError, ListMultipartUploadsV2Output> TosClientImpl::listMultipartUploads(
-    const ListMultipartUploadsV2Input& input) {
+        const ListMultipartUploadsV2Input& input) {
     Outcome<TosError, ListMultipartUploadsV2Output> res;
     auto rb = newBuilder(input.getBucket(), "", input);
     rb.withQuery("uploads", "");
@@ -5127,7 +5191,7 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
         // 第一次请求获取的结果
         bool isTruncated = output.isTruncated();
         int number =
-            static_cast<int>(output.getContents().size()) + static_cast<int>(output.getCommonPrefixes().size());
+                static_cast<int>(output.getContents().size()) + static_cast<int>(output.getCommonPrefixes().size());
         int newMaxKey = input.getMaxKeys() - number;
         auto content = output.getContents();
         auto commonPrefixes = output.getCommonPrefixes();
@@ -5178,7 +5242,7 @@ Outcome<TosError, ListObjectsType2Output> TosClientImpl::listObjectsType2(const 
 }
 
 Outcome<TosError, PutBucketStorageClassOutput> TosClientImpl::putBucketStorageClass(
-    const PutBucketStorageClassInput& input) {
+        const PutBucketStorageClassInput& input) {
     Outcome<TosError, PutBucketStorageClassOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -5331,7 +5395,7 @@ Outcome<TosError, GetBucketLifecycleOutput> TosClientImpl::getBucketLifecycle(co
     return res;
 }
 Outcome<TosError, DeleteBucketLifecycleOutput> TosClientImpl::deleteBucketLifecycle(
-    const DeleteBucketLifecycleInput& input) {
+        const DeleteBucketLifecycleInput& input) {
     Outcome<TosError, DeleteBucketLifecycleOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -5557,7 +5621,7 @@ Outcome<TosError, GetBucketMirrorBackOutput> TosClientImpl::getBucketMirrorBack(
     return res;
 }
 Outcome<TosError, DeleteBucketMirrorBackOutput> TosClientImpl::deleteBucketMirrorBack(
-    const DeleteBucketMirrorBackInput& input) {
+        const DeleteBucketMirrorBackInput& input) {
     Outcome<TosError, DeleteBucketMirrorBackOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -5710,12 +5774,18 @@ Outcome<TosError, DeleteObjectTaggingOutput> TosClientImpl::deleteObjectTagging(
 }
 
 void setAclGrant(const PutBucketAclInput& input, RequestBuilder& rb) {
-    if (input.getAcl() != ACLType::NotSet) rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
-    if (!input.getGrantFullControl().empty()) rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
-    if (!input.getGrantRead().empty()) rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
-    if (!input.getGrantReadAcp().empty()) rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
-    if (!input.getGrantWrite().empty()) rb.withHeader(HEADER_GRANT_WRITE, input.getGrantWrite());
-    if (!input.getGrantWriteAcp().empty()) rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
+    if (input.getAcl() != ACLType::NotSet)
+        rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
+    if (!input.getGrantFullControl().empty())
+        rb.withHeader(HEADER_GRANT_FULL_CONTROL, input.getGrantFullControl());
+    if (!input.getGrantRead().empty())
+        rb.withHeader(HEADER_GRANT_READ, input.getGrantRead());
+    if (!input.getGrantReadAcp().empty())
+        rb.withHeader(HEADER_GRANT_READ_ACP, input.getGrantReadAcp());
+    if (!input.getGrantWrite().empty())
+        rb.withHeader(HEADER_GRANT_WRITE, input.getGrantWrite());
+    if (!input.getGrantWriteAcp().empty())
+        rb.withHeader(HEADER_GRANT_WRITE_ACP, input.getGrantWriteAcp());
 }
 
 Outcome<TosError, PutBucketAclOutput> TosClientImpl::putBucketAcl(const PutBucketAclInput& input) {
@@ -5946,7 +6016,7 @@ Outcome<TosError, PutFetchTaskOutput> TosClientImpl::putFetchTask(const PutFetch
     return res;
 }
 Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSignature(
-    const PreSignedPostSignatureInput& input) {
+        const PreSignedPostSignatureInput& input) {
     Outcome<TosError, PreSignedPostSignatureOutput> res;
     if (connectWithS3EndPoint_) {
         TosError se;
@@ -5972,11 +6042,11 @@ Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSign
     std::string credential;
     std::string region_ = config_.getRegion();
     credential = credential.append(cred_.getAccessKeyId())
-                     .append("/")
-                     .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
-                     .append("/")
-                     .append(region_)
-                     .append("/tos/request");
+                         .append("/")
+                         .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
+                         .append("/")
+                         .append(region_)
+                         .append("/tos/request");
     conditions_.emplace_back("x-tos-credential", credential);
     // SecurityToken
     if (!cred_.getSecurityToken().empty()) {
@@ -6019,7 +6089,7 @@ Outcome<TosError, PreSignedPostSignatureOutput> TosClientImpl::preSignedPostSign
     }
     // base64 encode policy
     std::string jsonCondition_ = CryptoUtils::base64Encode(
-        reinterpret_cast<const unsigned char*>(jsonCondition.c_str()), jsonCondition.length());
+            reinterpret_cast<const unsigned char*>(jsonCondition.c_str()), jsonCondition.length());
     std::string date_ = TimeUtils::transTimeToFormat(now, yyyyMMdd);
     std::string signture = SignV4::signingKey(SignKeyInfo(date_, region_, cred_), jsonCondition_);
     PreSignedPostSignatureOutput output(jsonCondition, jsonCondition_, "TOS4-HMAC-SHA256", credential, date, signture);
@@ -6265,8 +6335,8 @@ Outcome<TosError, ResumableCopyCheckpoint> TosClientImpl::getCheckpoint(const Re
 }
 
 Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurrent(
-    const ResumableCopyObjectInput& input, ResumableCopyCheckpoint checkpoint, const std::string& checkpointFilePath,
-    std::shared_ptr<CopyEvent> event) {
+        const ResumableCopyObjectInput& input, ResumableCopyCheckpoint checkpoint,
+        const std::string& checkpointFilePath, std::shared_ptr<CopyEvent> event) {
     Outcome<TosError, ResumableCopyObjectOutput> ret;
     TosError error;
     std::vector<ResumableCopyPartInfo> toCopy = checkpoint.getPartsInfo();
@@ -6296,7 +6366,8 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
                 ResumableCopyPartInfo part;
                 {
                     std::lock_guard<std::mutex> lck(lock_);
-                    if (toCopy.empty()) break;
+                    if (toCopy.empty())
+                        break;
                     part = toCopy.front();
                     toCopy.erase(toCopy.begin());
                 }
@@ -6503,7 +6574,7 @@ std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
         ret << tmpPath << base64md5Path << ".copy";
         return ret.str();
     } else {
-        struct tos_stat cfs {};
+        struct tos_stat cfs{};
         if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
             bool res = FileUtils::CreateDir(checkPointFile, true);
             if (!res) {
@@ -6562,7 +6633,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
     }
 
     auto rcpi =
-        getResumableCopyPartInfoFromSrcObject(checkObjectExists.result().getContentLength(), input.getPartSize());
+            getResumableCopyPartInfoFromSrcObject(checkObjectExists.result().getContentLength(), input.getPartSize());
     if (!rcpi.isSuccess()) {
         error.setMessage(rcpi.error().getMessage());
         error.setIsClientError(true);
@@ -6632,11 +6703,11 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(co
     std::string credential;
     std::string region_ = config_.getRegion();
     credential = credential.append(cred_.getAccessKeyId())
-                     .append("/")
-                     .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
-                     .append("/")
-                     .append(region_)
-                     .append("/tos/request");
+                         .append("/")
+                         .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
+                         .append("/")
+                         .append(region_)
+                         .append("/tos/request");
     query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Credential", credential});
 
     // SecurityToken
@@ -6666,7 +6737,7 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(co
     }
     // base64 encode policy
     std::string jsonCondition_ = CryptoUtils::base64Encode(
-        reinterpret_cast<const unsigned char*>(jsonCondition.c_str()), jsonCondition.length());
+            reinterpret_cast<const unsigned char*>(jsonCondition.c_str()), jsonCondition.length());
     query_.emplace_back(std::pair<std::string, std::string>{"X-Tos-Policy", jsonCondition_});
 
     // 签名部分
@@ -6702,7 +6773,7 @@ Outcome<TosError, PreSignedPolicyURLOutput> TosClientImpl::preSignedPolicyURL(co
     return res;
 }
 Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplication(
-    const PutBucketReplicationInput& input) {
+        const PutBucketReplicationInput& input) {
     Outcome<TosError, PutBucketReplicationOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -6759,7 +6830,7 @@ Outcome<TosError, PutBucketReplicationOutput> TosClientImpl::putBucketReplicatio
 }
 
 Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplication(
-    const GetBucketReplicationInput& input) {
+        const GetBucketReplicationInput& input) {
     Outcome<TosError, GetBucketReplicationOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -6797,7 +6868,7 @@ Outcome<TosError, GetBucketReplicationOutput> TosClientImpl::getBucketReplicatio
     return res;
 }
 Outcome<TosError, DeleteBucketReplicationOutput> TosClientImpl::deleteBucketReplication(
-    const DeleteBucketReplicationInput& input) {
+        const DeleteBucketReplicationInput& input) {
     Outcome<TosError, DeleteBucketReplicationOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7015,7 +7086,7 @@ Outcome<TosError, DeleteBucketWebsiteOutput> TosClientImpl::deleteBucketWebsite(
 }
 
 Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotification(
-    const PutBucketNotificationInput& input) {
+        const PutBucketNotificationInput& input) {
     Outcome<TosError, PutBucketNotificationOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7057,7 +7128,7 @@ Outcome<TosError, PutBucketNotificationOutput> TosClientImpl::putBucketNotificat
 }
 
 Outcome<TosError, GetBucketNotificationOutput> TosClientImpl::getBucketNotification(
-    const GetBucketNotificationInput& input) {
+        const GetBucketNotificationInput& input) {
     Outcome<TosError, GetBucketNotificationOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7093,7 +7164,7 @@ Outcome<TosError, GetBucketNotificationOutput> TosClientImpl::getBucketNotificat
 }
 
 Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDomain(
-    const PutBucketCustomDomainInput& input) {
+        const PutBucketCustomDomainInput& input) {
     Outcome<TosError, PutBucketCustomDomainOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7135,7 +7206,7 @@ Outcome<TosError, PutBucketCustomDomainOutput> TosClientImpl::putBucketCustomDom
 }
 
 Outcome<TosError, ListBucketCustomDomainOutput> TosClientImpl::listBucketCustomDomain(
-    const ListBucketCustomDomainInput& input) {
+        const ListBucketCustomDomainInput& input) {
     Outcome<TosError, ListBucketCustomDomainOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7170,7 +7241,7 @@ Outcome<TosError, ListBucketCustomDomainOutput> TosClientImpl::listBucketCustomD
     return res;
 }
 Outcome<TosError, DeleteBucketCustomDomainOutput> TosClientImpl::deleteBucketCustomDomain(
-    const DeleteBucketCustomDomainInput& input) {
+        const DeleteBucketCustomDomainInput& input) {
     Outcome<TosError, DeleteBucketCustomDomainOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7204,7 +7275,7 @@ Outcome<TosError, DeleteBucketCustomDomainOutput> TosClientImpl::deleteBucketCus
 }
 
 Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLog(
-    const PutBucketRealTimeLogInput& input) {
+        const PutBucketRealTimeLogInput& input) {
     Outcome<TosError, PutBucketRealTimeLogOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7245,7 +7316,7 @@ Outcome<TosError, PutBucketRealTimeLogOutput> TosClientImpl::putBucketRealTimeLo
 }
 
 Outcome<TosError, GetBucketRealTimeLogOutput> TosClientImpl::getBucketRealTimeLog(
-    const GetBucketRealTimeLogInput& input) {
+        const GetBucketRealTimeLogInput& input) {
     Outcome<TosError, GetBucketRealTimeLogOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7280,7 +7351,7 @@ Outcome<TosError, GetBucketRealTimeLogOutput> TosClientImpl::getBucketRealTimeLo
     return res;
 }
 Outcome<TosError, DeleteBucketRealTimeLogOutput> TosClientImpl::deleteBucketRealTimeLog(
-    const DeleteBucketRealTimeLogInput& input) {
+        const DeleteBucketRealTimeLogInput& input) {
     Outcome<TosError, DeleteBucketRealTimeLogOutput> res;
     std::string check = isValidBucketName(input.getBucket(), config_.isCustomDomain());
     if (!check.empty()) {
@@ -7604,7 +7675,9 @@ bool TosClientImpl::checkExpectedCode(int statusCode, std::vector<int> expectedC
     return std::find(expectedCode.begin(), expectedCode.end(), statusCode) != expectedCode.end();
 }
 
-bool TosClientImpl::checkExpectedCode(int statusCode, int expectedCode) { return statusCode == expectedCode; }
+bool TosClientImpl::checkExpectedCode(int statusCode, int expectedCode) {
+    return statusCode == expectedCode;
+}
 
 void logErrRes(int statusCode, std::string code, bool isHighLatencyReq, const std::shared_ptr<spdlog::logger>& logger) {
     if (logger != nullptr) {
@@ -7908,7 +7981,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
     }
 }
 
-bool TosClientImpl::controlHostEmpty() { return controlHost_.empty(); }
+bool TosClientImpl::controlHostEmpty() {
+    return controlHost_.empty();
+}
 
 RequestBuilder TosClientImpl::newBuilder(const std::string& accountID, const GenericInput& genericInput) {
     std::map<std::string, std::string> headers;
@@ -8315,7 +8390,9 @@ void TosClientImpl::preSignedURL(RequestBuilder& rb, const std::string& method, 
 }
 
 // 动态参数
-void TosClientImpl::setMaxRetryCount(int maxretrycount) { config_.setMaxRetryCount(maxretrycount); }
+void TosClientImpl::setMaxRetryCount(int maxretrycount) {
+    config_.setMaxRetryCount(maxretrycount);
+}
 void TosClientImpl::setCredential(const std::string& accessKeyId, const std::string& secretKeyId) {
     auto cred = StaticCredentials(accessKeyId, secretKeyId);
     credentials_ = std::make_shared<StaticCredentials>(cred);
@@ -8325,13 +8402,25 @@ void TosClientImpl::setCredential(const std::string& accessKeyId, const std::str
     auto cred = StaticCredentials(accessKeyId, secretKeyId, securityToken);
     credentials_ = std::make_shared<StaticCredentials>(cred);
 }
-const std::string& TosClientImpl::getAK() const { return credentials_->credential().getAccessKeyId(); }
-const std::string& TosClientImpl::getSK() const { return credentials_->credential().getAccessKeySecret(); }
-const std::string& TosClientImpl::getSecurityToken() const { return credentials_->credential().getSecurityToken(); }
-const std::string& TosClientImpl::getRegion() const { return config_.getRegion(); }
-const std::string& TosClientImpl::getEndpoint() const { return config_.getEndpoint(); }
+const std::string& TosClientImpl::getAK() const {
+    return credentials_->credential().getAccessKeyId();
+}
+const std::string& TosClientImpl::getSK() const {
+    return credentials_->credential().getAccessKeySecret();
+}
+const std::string& TosClientImpl::getSecurityToken() const {
+    return credentials_->credential().getSecurityToken();
+}
+const std::string& TosClientImpl::getRegion() const {
+    return config_.getRegion();
+}
+const std::string& TosClientImpl::getEndpoint() const {
+    return config_.getEndpoint();
+}
 
-void TosClientImpl::setRegion(const std::string& region) { initRegionEndpoint(supportedRegion_[region], region); }
+void TosClientImpl::setRegion(const std::string& region) {
+    initRegionEndpoint(supportedRegion_[region], region);
+}
 void TosClientImpl::setRegionEndpoint(const std::string& region, const std::string& endpoint) {
     if (endpoint.empty()) {
         if (supportedRegion_.count(region) != 0) {
@@ -8532,7 +8621,7 @@ Outcome<TosError, PutSymlinkV2Output> TosClientImpl::putSymlink(const PutSymlink
     Outcome<TosError, PutSymlinkV2Output> res;
     const auto& putObjectBasicInput_ = input.getPutObjectBasicInput();
     std::string check =
-        isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()}, config_.isCustomDomain());
+            isValidNames(putObjectBasicInput_.getBucket(), {putObjectBasicInput_.getKey()}, config_.isCustomDomain());
     if (!check.empty()) {
         TosError error;
         error.setIsClientError(true);

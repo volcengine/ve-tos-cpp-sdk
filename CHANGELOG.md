@@ -1,5 +1,9 @@
 ## Release Note
 
+### 2026.5.8 Version 2.6.24
+- fix: 修复 MyRateLimiter Acquire 失败时未更新 lastTokenGiven_ 导致流控不准的问题
+- fix: 修复 downloadPartConcurrent 中线程创建失败、getContent 为空等场景可能导致 core dump 的问题
+
 ### 2026.4.17 Version 2.6.23
 - feat: 支持通过外部动态库注入 SSL_CTX callback，用于扩展 TLS 证书校验逻辑
 - refactor: 优化 Linux example 中 external_ssl_callback 场景分发，并补充 SSL_CTX 观测示例
