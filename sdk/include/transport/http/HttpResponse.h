@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CurlStats.h"
+
 #include <memory>
 #include <string>
 
@@ -61,7 +63,7 @@ public:
         status_ = status;
     }
 
-    int status() {
+    int status() const {
         return status_;
     }
 
@@ -72,7 +74,7 @@ public:
         Id2_ = id2;
     }
 
-    size_t getBodySize();
+    size_t getBodySize() const;
 
     uint64_t getHashCrc64Result() const {
         return hashCrc64Result_;
@@ -92,6 +94,15 @@ public:
     void setIsHighLatencyReq(bool isHighLatencyReq) {
         isHighLatencyReq_ = isHighLatencyReq;
     }
+    void setCurlStats(const CurlStats& curlStats) {
+        curlStats_ = curlStats;
+    }
+    CurlStats& getCurlStats() {
+        return curlStats_;
+    }
+    const CurlStats& getCurlStats() const {
+        return curlStats_;
+    }
 
 private:
     int status_;  // succ, refused, otherErr
@@ -104,5 +115,6 @@ private:
     uint64_t hashCrc64Result_ = 0;
     int curlErrCode_ = 0;
     bool isHighLatencyReq_ = false;
+    CurlStats curlStats_;
 };
 }  // namespace VolcengineTos

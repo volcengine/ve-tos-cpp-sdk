@@ -1,23 +1,34 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.6.24
+        VERSION 2.6.26
         LANGUAGES CXX)
 
+function(ve_tos_link_example target)
+    target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include)
+    target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src/external)
+    target_link_libraries(${target} ve-tos-cpp-sdk-lib)
+    target_link_libraries(${target} ${CLIENT_SSL_LIBS})
+    target_link_libraries(${target} ${CLIENT_CURL_LIBS})
+    if (ASYNC_IO_URING_LIBS)
+        target_link_libraries(${target} ${ASYNC_IO_URING_LIBS})
+    endif ()
+    if (UNIX AND NOT APPLE)
+        target_link_libraries(${target} ${CMAKE_DL_LIBS})
+    endif ()
+endfunction()
+
 add_executable(${PROJECT_NAME} example.cc)
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include)
-# 依赖的日志库，需要引入该搜索目录
-#target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src/external)
+ve_tos_link_example(${PROJECT_NAME})
 
-# 链接静态编译的 libve-tos-cpp-sdk-lib.a 静态库
-target_link_libraries(${PROJECT_NAME}${STATIC_LIB_SUFFIX} ve-tos-cpp-sdk-lib)
-# 如果想要使用动态库，linux 用以下语句替换上面链接静态库的语句:
-# target_link_libraries(${PROJECT_NAME} ve-tos-cpp-sdk-lib.so)
+if (BUILD_ASYNC_SDK)
+    add_executable(ve-tos-cpp-sdk-async-file-transfer-benchmark async_file_transfer_benchmark.cc)
+    ve_tos_link_example(ve-tos-cpp-sdk-async-file-transfer-benchmark)
 
-target_link_libraries(${PROJECT_NAME} ${CLIENT_SSL_LIBS})
-target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
+    add_executable(ve-tos-cpp-sdk-async-example async_example.cc)
+    ve_tos_link_example(ve-tos-cpp-sdk-async-example)
 
-if (UNIX AND NOT APPLE)
-    target_link_libraries(${PROJECT_NAME} ${CMAKE_DL_LIBS})
+    add_executable(ve-tos-cpp-sdk-async-api-smoke async_example.cc)
+    ve_tos_link_example(ve-tos-cpp-sdk-async-api-smoke)
 endif ()
 
 #target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")

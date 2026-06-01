@@ -1,10 +1,9 @@
 #pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-#include <string>
 #include "transport/TransportConfig.h"
+
+#include <string>
+
 namespace VolcengineTos {
 class Config {
 public:
@@ -69,6 +68,12 @@ public:
     void setIsCustomDomain(bool isCustomDomain) {
         isCustomDomain_ = isCustomDomain;
     }
+    bool tosStatFallback() const {
+        return tosStatFallback_;
+    }
+    void setTosStatFallback(bool tosStatFallback) {
+        tosStatFallback_ = tosStatFallback;
+    }
 
 private:
     std::string endpoint_;
@@ -80,9 +85,6 @@ private:
     TransportConfig transportConfig_;
     long retrySleepScale = 100;
     bool isCustomDomain_ = false;
+    bool tosStatFallback_ = false;
 };
 }  // namespace VolcengineTos
-
-#ifdef __cplusplus
-}
-#endif

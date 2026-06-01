@@ -34,6 +34,9 @@ public:
         else
             return {};
     }
+    std::map<std::string, std::string>& Headers() {
+        return headers_;
+    }
     const std::map<std::string, std::string>& Headers() const {
         return headers_;
     }
@@ -109,6 +112,36 @@ public:
     void setCheckHighLatency(bool checkHighLatency) {
         checkHighLatency_ = checkHighLatency;
     }
+    const std::string& userName() const {
+        return user_name_;
+    }
+    void setUserName(const std::string& user_name) {
+        user_name_ = user_name;
+    }
+    int64_t realStartTimeMs() const {
+        return real_start_time_ms_;
+    }
+    void setRealStartTimeMs(const int64_t real_start_time_ms) {
+        real_start_time_ms_ = real_start_time_ms;
+    }
+    int64_t notSendUtilMs() const {
+        return not_send_util_ms_;
+    }
+    void setNotSendUtilMs(const int64_t value) {
+        not_send_util_ms_ = value;
+    }
+    std::time_t getRequestDate() const {
+        return requestDate_;
+    }
+    void setRequestDate(std::time_t requestDate) {
+        requestDate_ = requestDate;
+    }
+    bool isChunked() const {
+        return isChunked_;
+    }
+    void setIsChunked(bool value) {
+        isChunked_ = value;
+    }
 
 private:
     std::string method_;
@@ -123,5 +156,10 @@ private:
     bool checkCrc64 = false;
     uint64_t preHashCrc64ecma_ = 0;
     bool checkHighLatency_ = false;
+    std::string user_name_;
+    int64_t real_start_time_ms_ = 0;
+    int64_t not_send_util_ms_ = 0;
+    time_t requestDate_ = 0;
+    bool isChunked_ = false;
 };
 }  // namespace VolcengineTos

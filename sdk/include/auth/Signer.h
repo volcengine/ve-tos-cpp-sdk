@@ -7,12 +7,15 @@
 #include <chrono>
 
 namespace VolcengineTos {
+class HttpRequest;
+
 class Signer {
 public:
     Signer();
     Signer(const std::shared_ptr<Credentials>& credentials, const std::string& region);
     virtual ~Signer();
     virtual std::map<std::string, std::string> signHeader(const std::shared_ptr<TosRequest>& req);
+    virtual void signHeader(const std::shared_ptr<HttpRequest>& req);
     virtual std::map<std::string, std::string> signQuery(const std::shared_ptr<TosRequest>& req,
                                                          std::chrono::duration<int> ttl);
 };

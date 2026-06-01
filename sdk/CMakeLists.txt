@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-lib
-        VERSION 2.6.24
+        VERSION 2.6.26
         LANGUAGES CXX)
 set(SDK_HEADER
         include/auth/Credential.h
@@ -371,6 +371,45 @@ set(SDK_LIB
         src/model/object/GetSymlinkV2Output.cc
         )
 
+list(APPEND SDK_HEADER
+        include/AsyncEvent.h
+        include/AsyncTransportMode.h
+        include/tos_async/AsyncDataSource.h
+        include/transport/http/CurlStats.h
+        )
+
+if (BUILD_ASYNC_SDK)
+    file(GLOB_RECURSE SDK_ASYNC_HEADER
+            "include/executor/*.h"
+            "include/logger/*.h"
+            "include/model/async/*.h"
+            "include/tos_async/*.h")
+    list(APPEND SDK_HEADER
+        include/TosAsyncClient.h
+        include/transport/CurlStatsCollector.h
+        include/utils/CachedQueue.h
+        include/utils/ConcurrentCachedBlockQueue.h
+        include/utils/LinkedBufferQueue.h
+        include/utils/LockFreeCacheMap.h
+        include/utils/LockFreeQueue.h
+        include/model/object/SetObjectTimeInput.h
+        include/model/object/SetObjectTimeOutput.h
+        ${SDK_ASYNC_HEADER}
+        )
+
+    file(GLOB_RECURSE SDK_ASYNC_LIB
+            "src/executor/*.cpp"
+            "src/logger/*.cpp"
+            "src/tos_async/*.cpp"
+            "src/transport/http/async/*.cpp")
+    list(APPEND SDK_LIB
+            src/TosAsyncClient.cpp
+            src/TosClientBase.cpp
+            src/TosClientBase.h
+            ${SDK_ASYNC_LIB}
+            )
+endif ()
+
 # add spdlog
 include_directories(./src/external)
 file(GLOB spdlogh "src/external/spdlog/*.h")
@@ -394,7 +433,15 @@ set_target_properties(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PROPERTIES
         OUTPUT_NAME ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         )
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE include)
+target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE src)
 target_include_directories(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
+if (BUILD_ASYNC_SDK)
+    target_compile_definitions(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE
+            VOLCENGINE_TOS_ASYNC_HAS_IO_URING=${VOLCENGINE_TOS_ASYNC_HAS_IO_URING})
+    if (ASYNC_IO_URING_LIBS)
+        target_link_libraries(${PROJECT_NAME}${STATIC_LIB_SUFFIX} ${ASYNC_IO_URING_LIBS})
+    endif ()
+endif ()
 
 if (${OS_PLATFORM} STREQUAL "WINDOWS")
     target_compile_options(${PROJECT_NAME}${STATIC_LIB_SUFFIX} PRIVATE "${SDK_COMPILER_FLAGS}")
@@ -409,9 +456,17 @@ if (BUILD_SHARED_LIB)
             OUTPUT_NAME ${PROJECT_NAME}
             )
     target_include_directories(${PROJECT_NAME} PUBLIC include)
+    target_include_directories(${PROJECT_NAME} PRIVATE src)
     target_include_directories(${PROJECT_NAME} PRIVATE ${CLIENT_SSL_INCLUDE_DIRS} PRIVATE ${CLIENT_CURL_INCLUDE_DIRS})
+    if (BUILD_ASYNC_SDK)
+        target_compile_definitions(${PROJECT_NAME} PRIVATE
+                VOLCENGINE_TOS_ASYNC_HAS_IO_URING=${VOLCENGINE_TOS_ASYNC_HAS_IO_URING})
+    endif ()
     target_link_libraries(${PROJECT_NAME} ${CLIENT_SSL_LIBS})
     target_link_libraries(${PROJECT_NAME} ${CLIENT_CURL_LIBS})
+    if (BUILD_ASYNC_SDK AND ASYNC_IO_URING_LIBS)
+        target_link_libraries(${PROJECT_NAME} ${ASYNC_IO_URING_LIBS})
+    endif ()
     if (${OS_PLATFORM} STREQUAL "WINDOWS")
         target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
     endif ()
@@ -423,7 +478,28 @@ install(TARGETS ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+if (BUILD_ASYNC_SDK)
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+            PATTERN "executor" EXCLUDE
+            PATTERN "c_api" EXCLUDE
+            PATTERN "tos_sdk" EXCLUDE)
+else ()
+    install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+            PATTERN "TosAsyncClient.h" EXCLUDE
+            PATTERN "executor" EXCLUDE
+            PATTERN "logger" EXCLUDE
+            PATTERN "model/async" EXCLUDE
+            PATTERN "tos_async/FileTransfer.h" EXCLUDE
+            PATTERN "transport/CurlStatsCollector.h" EXCLUDE
+            PATTERN "external" EXCLUDE
+            PATTERN "utils/CachedQueue.h" EXCLUDE
+            PATTERN "utils/ConcurrentCachedBlockQueue.h" EXCLUDE
+            PATTERN "utils/LinkedBufferQueue.h" EXCLUDE
+            PATTERN "utils/LockFreeCacheMap.h" EXCLUDE
+            PATTERN "utils/LockFreeQueue.h" EXCLUDE
+            PATTERN "c_api" EXCLUDE
+            PATTERN "tos_sdk" EXCLUDE)
+endif ()
 
 if (BUILD_SHARED_LIB)
     install(TARGETS ${PROJECT_NAME}

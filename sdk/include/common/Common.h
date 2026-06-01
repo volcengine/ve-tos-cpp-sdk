@@ -35,6 +35,7 @@ static const char* HEADER_CONTENT_TYPE = "Content-Type";
 static const char* HEADER_CONTENT_MD5 = "Content-MD5";
 static const char* HEADER_CONTENT_LANGUAGE = "Content-Language";
 static const char* HEADER_CONTENT_ENCODING = "Content-Encoding";
+static const char* HEADER_TRANSFER_ENCODING = "Transfer-Encoding";
 static const char* HEADER_CONTENT_DISPOSITION = "Content-Disposition";
 static const char* HEADER_LAST_MODIFIED = "Last-Modified";
 static const char* HEADER_CACHE_CONTROL = "Cache-Control";
@@ -103,6 +104,9 @@ static const char* HEADER_COMPLETE_ALL = "X-Tos-Complete-All";
 static const char* HEADER_CALLBACK = "X-Tos-Callback";
 static const char* HEADER_CALLBACK_VAR = "X-Tos-Callback-Var";
 static const char* HEADER_NOTIFY_CUSTOM_PARAM = "X-Tos-Notification-Custom-Parameters";
+static const char* HEADER_MODIFY_TIMESTAMP = "X-Tos-Modify-Timestamp";
+static const char* HEADER_MODIFY_TIMESTAMP_NS = "X-Tos-Modify-Timestamp-Ns";
+static const char* HEADER_TAGGING = "X-Tos-Tagging";
 // HNS
 static const char* HEADER_DIRECTORY = "X-Tos-Directory";
 static const char* HEADER_BUCKET_TYPE = "X-Tos-Bucket-Type";

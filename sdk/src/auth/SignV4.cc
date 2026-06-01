@@ -2,6 +2,7 @@
 #include "auth/Credentials.h"
 #include "utils/BaseUtils.h"
 #include "../utils/LogUtils.h"
+#include "transport/http/HttpRequest.h"
 
 #include <ctime>
 #include <utility>
@@ -92,6 +93,54 @@ std::map<std::string, std::string> SignV4::signHeader(const std::shared_ptr<TosR
     signedRes[authorization] = auth.str();
 
     return signedRes;
+}
+
+void SignV4::signHeader(const std::shared_ptr<HttpRequest>& req) {
+    auto& header = req->Headers();
+
+    auto signedHeader = this->signedHeader(header, false);
+    std::time_t now;
+    if (req->getRequestDate() != 0) {
+        now = req->getRequestDate();
+    } else {
+        now = utcTimeNow();
+    }
+
+    const std::string& date = TimeUtils::transTimeToFormat(now, iso8601Layout);
+    signedHeader.emplace_back(StringUtils::toLower(v4Date), date);
+    signedHeader.emplace_back("date", date);
+    header[v4Date] = date;
+    header["Date"] = date;
+
+    signedHeader.emplace_back("host", req->url().host());
+
+    Credential cred = credentials_->credential();
+    if (!cred.getSecurityToken().empty()) {
+        signedHeader.emplace_back(StringUtils::toLower(v4SecurityToken), cred.getSecurityToken());
+        header[v4SecurityToken] = cred.getSecurityToken();
+    }
+    std::sort(signedHeader.begin(), signedHeader.end(), compareByPairKey);
+
+    std::map<std::string, std::string> extra;
+    auto signedQuery = this->signedQuery(req->url().query(), extra);
+    std::string contentSha256;
+    if (req->Headers().count(v4ContentSHA256)) {
+        contentSha256 = req->Headers().find(v4ContentSHA256)->second;
+    }
+    std::string sig = this->doSign(req->method(), req->url().path(), false, contentSha256, signedHeader, signedQuery,
+                                   now, cred);
+    std::string credential;
+    credential.append(cred.getAccessKeyId())
+            .append("/")
+            .append(TimeUtils::transTimeToFormat(now, yyyyMMdd))
+            .append("/")
+            .append(region_)
+            .append("/tos/request");
+    auto keys = joinMapToString(signedHeader);
+
+    std::stringstream auth;
+    auth << "TOS4-HMAC-SHA256 Credential=" << credential << ",SignedHeaders=" << keys << ",Signature=" << sig;
+    header[authorization] = auth.str();
 }
 
 std::map<std::string, std::string> SignV4::signQuery(const std::shared_ptr<TosRequest>& req,
@@ -276,10 +325,17 @@ std::string SignV4::canonicalRequest(const std::string& method, const std::strin
                                      const std::string& contentSha256,
                                      std::vector<std::pair<std::string, std::string>> header,
                                      std::vector<std::pair<std::string, std::string>> query) {
+    return canonicalRequest(method, path, true, contentSha256, std::move(header), std::move(query));
+}
+
+std::string SignV4::canonicalRequest(const std::string& method, const std::string& path, bool pathEncode,
+                                     const std::string& contentSha256,
+                                     std::vector<std::pair<std::string, std::string>> header,
+                                     std::vector<std::pair<std::string, std::string>> query) {
     auto split = "\n";
     std::string buf;
 
-    buf.append(method).append(split).append(encodePath(path)).append(split);
+    buf.append(method).append(split).append(pathEncode ? encodePath(path) : path).append(split);
 
     buf.append(encodeQuery(std::move(query))).append(split);
 
@@ -318,10 +374,18 @@ std::string SignV4::doSign(const std::string& method, const std::string& path, c
                            const std::vector<std::pair<std::string, std::string>>& header,
                            const std::vector<std::pair<std::string, std::string>>& query, std::time_t now,
                            const Credential& cred) {
+    return doSign(method, path, true, contentSha256, header, query, now, cred);
+}
+
+std::string SignV4::doSign(const std::string& method, const std::string& path, bool pathEncode,
+                           const std::string& contentSha256,
+                           const std::vector<std::pair<std::string, std::string>>& header,
+                           const std::vector<std::pair<std::string, std::string>>& query, std::time_t now,
+                           const Credential& cred) {
     std::string split = "\n";
     std::string buf;
 
-    std::string req = this->canonicalRequest(method, path, contentSha256, header, query);
+    std::string req = this->canonicalRequest(method, path, pathEncode, contentSha256, header, query);
     std::string canonicalRequest = "canonicalRequest: " + req;
     auto l = LogUtils::GetLogger();
     if (l != nullptr) {

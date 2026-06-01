@@ -37,6 +37,18 @@ public:
     void setOwner(const Owner& owner) {
         owner_ = owner;
     }
+    const std::string& getObjectType() const {
+        return objectType_;
+    }
+    void setObjectType(const std::string& objectType) {
+        objectType_ = objectType;
+    }
+    const std::map<std::string, std::string>& getMeta() const {
+        return meta_;
+    }
+    void setMeta(const std::map<std::string, std::string>& meta) {
+        meta_ = meta;
+    }
     StorageClassType getStorageClass() const {
         return storageClass_;
     }
@@ -65,6 +77,8 @@ private:
     std::string eTag_;
     int64_t size_ = 0;
     Owner owner_;
+    std::string objectType_;
+    std::map<std::string, std::string> meta_;
     StorageClassType storageClass_ = StorageClassType::NotSet;
     uint64_t hashCrc64ecma_ = 0;
 };

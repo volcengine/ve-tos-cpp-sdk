@@ -1,5 +1,10 @@
 ## Release Note
 
+### 2026.6.1 Version 2.6.26
+- feat: 支持异步 SDK 源码引入及可选编译
+- feat: 异步文件传输支持 posix、mmap、io_uring backend
+- test: 补充异步接口、io_uring pause/resume、CRC64 端到端覆盖
+
 ### 2026.5.8 Version 2.6.24
 - fix: 修复 MyRateLimiter Acquire 失败时未更新 lastTokenGiven_ 导致流控不准的问题
 - fix: 修复 downloadPartConcurrent 中线程创建失败、getContent 为空等场景可能导致 core dump 的问题

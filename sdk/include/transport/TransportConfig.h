@@ -1,5 +1,7 @@
 #pragma once
 
+#include "AsyncTransportMode.h"
+
 #include <string>
 
 namespace VolcengineTos {
@@ -62,6 +64,24 @@ class TransportConfig {
     void setSslCtxCallback(SslCtxCallback sslCtxCallback) { sslCtxCallback_ = sslCtxCallback; }
     void* getSslCtxCallbackUserData() const { return sslCtxCallbackUserData_; }
     void setSslCtxCallbackUserData(void* sslCtxCallbackUserData) { sslCtxCallbackUserData_ = sslCtxCallbackUserData; }
+    void setEventThreadCount(const int count) { event_thread_count_ = count; }
+    int getEventThreadCount() const { return event_thread_count_; }
+    void setMaxRequestQueue(const int size) { max_request_queue_ = size; }
+    int getMaxRequestQueue() const { return max_request_queue_; }
+    bool isConnectionReuse() const { return connection_reuse_; }
+    void setConnectionReuse(const bool connection_reuse) { connection_reuse_ = connection_reuse; }
+    bool isDetailLog() const { return detail_log_; }
+    void setDetailLog(const bool detail_log) { detail_log_ = detail_log; }
+    int getDetailLogInterval() const { return detail_log_interval_s_; }
+    void setDetailLogInterval(const int value) { detail_log_interval_s_ = value; }
+    int getCurlMultiWaitTimeoutMs() const { return curlMultiWaitTimeoutMs_; }
+    void setCurlMultiWaitTimeoutMs(const int timeout_ms) {
+        if (timeout_ms > 0) {
+            curlMultiWaitTimeoutMs_ = timeout_ms;
+        }
+    }
+    AsyncTransportMode getAsyncTransportMode() const { return asyncTransportMode_; }
+    void setAsyncTransportMode(const AsyncTransportMode mode) { asyncTransportMode_ = mode; }
 
    private:
     int maxIdleCount_ = 128;
@@ -90,5 +110,12 @@ class TransportConfig {
     std::string netInterface_;
     SslCtxCallback sslCtxCallback_ = nullptr;
     void* sslCtxCallbackUserData_ = nullptr;
+    int event_thread_count_ = 0;
+    int max_request_queue_ = 0;
+    bool connection_reuse_ = true;
+    bool detail_log_ = true;
+    int detail_log_interval_s_ = 60;
+    int curlMultiWaitTimeoutMs_ = 10;
+    AsyncTransportMode asyncTransportMode_ = AsyncTransportMode::Isolated;
 };
 }  // namespace VolcengineTos

@@ -4,6 +4,7 @@
 #include <utility>
 #include "auth/Signer.h"
 #include "common/Common.h"
+#include "transport/http/HttpRequest.h"
 namespace VolcengineTos {
 class HttpRange {
 public:
@@ -123,12 +124,14 @@ public:
     }
 
     std::shared_ptr<TosRequest> Build(const std::string& method);
+    std::shared_ptr<HttpRequest> buildHttpRequest(const std::string& method);
     std::shared_ptr<TosRequest> BuildControlRequest(const std::string& method);
     std::shared_ptr<TosRequest> Build(const std::string& method, std::shared_ptr<std::iostream> content);
     std::shared_ptr<TosRequest> BuildControlRequest(const std::string& method, std::shared_ptr<std::iostream> content);
     std::shared_ptr<TosRequest> BuildWithCopySource(const std::string& method, const std::string& srcBucket,
                                                     const std::string& srcObject);
     std::shared_ptr<TosRequest> build(const std::string& method);
+    std::shared_ptr<HttpRequest> toBuild(const std::string& method) const;
     std::shared_ptr<TosRequest> buildControlRequest(const std::string& method);
     std::shared_ptr<TosRequest> buildSignedURL(const std::string& method);
 
