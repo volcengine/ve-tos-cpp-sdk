@@ -10,7 +10,7 @@ class TosError {
 public:
     void fromJsonString(const std::string& error);
 
-    std::string String() {
+    std::string String() const {
         std::ostringstream ss;
         if (isClientError_) {
             ss << "TosClientError: {message=" << message_ << "}";
@@ -44,6 +44,12 @@ public:
     void setMessage(const std::string& message) {
         message_ = message;
     }
+    const std::string& getCondition() const {
+        return condition_;
+    }
+    void setCondition(const std::string& condition) {
+        condition_ = condition;
+    }
     const std::string& getRequestId() const {
         return requestID_;
     }
@@ -61,6 +67,12 @@ public:
     }
     void setIsClientError(bool isClientError) {
         isClientError_ = isClientError;
+    }
+    bool IsTosHandlerError() const {
+        return isTosHandlerError_;
+    }
+    void setIsTosHandlerError(bool isTosHandlerError) {
+        isTosHandlerError_ = isTosHandlerError;
     }
     const std::string& getResource() const {
         return resource_;
@@ -95,12 +107,14 @@ public:
 
 private:
     bool isClientError_ = false;
+    bool isTosHandlerError_ = false;
     int statusCode_ = -1;
     std::string code_;
     std::string message_;
     std::string requestID_;
     std::string hostID_;
     std::string resource_;
+    std::string condition_;
     RequestInfo requestInfo_;
     int curlErrCode_ = 0;
     std::string requestUrl_;

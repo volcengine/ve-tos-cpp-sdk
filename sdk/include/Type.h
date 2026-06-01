@@ -9,7 +9,21 @@
 #include <sstream>
 #include <unordered_map>
 #include <chrono>
+
+#include "tos_async/AsyncDataSource.h"
+
 namespace VolcengineTos {
+using OnContentLengthSet = std::function<void(int64_t)>;
+using OnHttpStatusSet = std::function<void(int)>;
+using OnRequestStart = std::function<void()>;
+
+enum class TransferEncoding {
+    None,
+    Identity,
+    Chunked,
+    ContentLength,
+};
+
 enum class ACLType {
     NotSet = 0,
     Private,

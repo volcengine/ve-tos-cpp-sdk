@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Type.h"
 #include "model/GenericInput.h"
 
 namespace VolcengineTos {

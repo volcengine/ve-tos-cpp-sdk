@@ -247,6 +247,22 @@ bool StringUtils::isValidUTF8(const std::string& input) {
     return true;
 }
 
+std::string StringUtils::uriEncode(const std::string& in, bool encodeSlash) {
+    static const char* hex = "0123456789ABCDEF";
+    std::ostringstream encoded;
+    for (std::string::const_iterator it = in.begin(); it != in.end(); ++it) {
+        const unsigned char ch = static_cast<unsigned char>(*it);
+        const bool unescaped = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+                               (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' || ch == '~';
+        if (unescaped || (ch == '/' && !encodeSlash)) {
+            encoded << static_cast<char>(ch);
+        } else {
+            encoded << '%' << hex[ch >> 4] << hex[ch & 0x0F];
+        }
+    }
+    return encoded.str();
+}
+
 std::string MapUtils::findValueByKeyIgnoreCase(const std::map<std::string, std::string>& map, const std::string& key) {
     auto iter = map.find(key);
     if (iter != map.end()) {

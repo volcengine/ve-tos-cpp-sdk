@@ -9,6 +9,7 @@
 #include "auth/StaticCredentials.h"
 #include "auth/EnvCredentials.h"
 #include "auth/EcsCredentials.h"
+#include "transport/http/HttpRequest.h"
 
 namespace VolcengineTos {
 typedef std::time_t (*func)();
@@ -41,6 +42,7 @@ public:
     static bool isSigningHeader(const std::string& key, bool isSigningQuery);
     static bool isSigningQuery(const std::string& key);
     std::map<std::string, std::string> signHeader(const std::shared_ptr<TosRequest>& req) override;
+    void signHeader(const std::shared_ptr<HttpRequest>& req) override;
     std::map<std::string, std::string> signQuery(const std::shared_ptr<TosRequest>& req,
                                                  std::chrono::duration<int> ttl) override;
     static std::string signingKey(const SignKeyInfo& info, const std::string& buf);
@@ -59,8 +61,17 @@ private:
                                         const std::string& contentSha256,
                                         std::vector<std::pair<std::string, std::string>> header,
                                         std::vector<std::pair<std::string, std::string>> query);
+    static std::string canonicalRequest(const std::string& method, const std::string& path, bool pathEncode,
+                                        const std::string& contentSha256,
+                                        std::vector<std::pair<std::string, std::string>> header,
+                                        std::vector<std::pair<std::string, std::string>> query);
 
     std::string doSign(const std::string& method, const std::string& path, const std::string& contentSha256,
+                       const std::vector<std::pair<std::string, std::string>>& header,
+                       const std::vector<std::pair<std::string, std::string>>& query, std::time_t now,
+                       const Credential& cred);
+    std::string doSign(const std::string& method, const std::string& path, bool pathEncode,
+                       const std::string& contentSha256,
                        const std::vector<std::pair<std::string, std::string>>& header,
                        const std::vector<std::pair<std::string, std::string>>& query, std::time_t now,
                        const Credential& cred);

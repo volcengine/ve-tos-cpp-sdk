@@ -68,6 +68,12 @@ public:
     void setListOnlyOnce(bool listOnlyOnce) {
         listOnlyOnce_ = listOnlyOnce;
     }
+    bool getFetchMeta() const {
+        return fetchMeta_;
+    }
+    void setFetchMeta(bool fetchMeta) {
+        fetchMeta_ = fetchMeta;
+    }
 
 private:
     std::string bucket_;
@@ -78,5 +84,6 @@ private:
     int maxKeys_ = 0;
     std::string encodingType_;
     bool listOnlyOnce_ = false;
+    bool fetchMeta_ = false;
 };
 }  // namespace VolcengineTos

@@ -6,7 +6,7 @@ HttpResponse::HttpResponse()
         : status_(http::otherErr), statusCode_(-1), statusMsg_(), headers_(), Id2_(), body_(), bodySize_(0) {
 }
 
-size_t HttpResponse::getBodySize() {
+size_t HttpResponse::getBodySize() const {
     if (!body_) {
         return 0;
     }

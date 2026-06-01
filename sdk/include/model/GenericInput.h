@@ -1,6 +1,7 @@
 #pragma once
 #include <ctime>
 #include <map>
+#include <string>
 namespace VolcengineTos {
 
 class GenericInput {

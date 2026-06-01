@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <iostream>
+#include <memory>
 #include <string>
 #include <utility>
 #include "model/GenericInput.h"

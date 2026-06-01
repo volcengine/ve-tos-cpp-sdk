@@ -57,6 +57,37 @@ std::shared_ptr<TosRequest> RequestBuilder::build(const std::string& method) {
     return req;
 }
 
+std::shared_ptr<HttpRequest> RequestBuilder::toBuild(const std::string& method) const {
+    std::string host;
+    std::string path;
+    if (isCustomDomain_) {
+        host = host_;
+        path = "/" + object_;
+    } else {
+        if (bucket_.empty()) {
+            host = host_;
+            path = "/";
+        } else {
+            host = bucket_;
+            host += ".";
+            host += host_;
+            path = "/";
+            path += object_;
+        }
+    }
+
+    std::shared_ptr<HttpRequest> req = std::make_shared<HttpRequest>(method, nullptr);
+    Url url;
+    for (std::map<std::string, std::string>::const_iterator iter = query_.begin(); iter != query_.end(); ++iter) {
+        url.addQuery(iter->first, iter->second);
+    }
+    url.setScheme(scheme_);
+    url.setHost(host);
+    url.setPath(SignV4::uriEncode(path, false));
+    req->setUrl(url);
+    return req;
+}
+
 std::shared_ptr<TosRequest> RequestBuilder::buildControlRequest(const std::string& method) {
     std::string host = accountID_ + "." + controlHost_;
     mergeRequestHeaderAndHeader(requestHeader_, headers_);
@@ -91,6 +122,16 @@ std::shared_ptr<TosRequest> RequestBuilder::Build(const std::string& method) {
     for (; iter != sigHeader.end(); iter++) {
         req->setSingleHeader(iter->first, iter->second);
     }
+    return req;
+}
+
+std::shared_ptr<HttpRequest> RequestBuilder::buildHttpRequest(const std::string& method) {
+    std::shared_ptr<HttpRequest> req = toBuild(method);
+    mergeRequestHeaderAndHeader(requestHeader_, headers_);
+    req->setHeaders(headers_);
+    signer_->signHeader(req);
+    req->setRequestDate(requestDate_);
+    req->setContentLength(contentLength_);
     return req;
 }
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.6.24
+        VERSION 2.6.26
         LANGUAGES CXX)
 
 # project settings
@@ -15,15 +15,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_UNITTEST "Build unittest" OFF)
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_SHARED_LIB "Build shared library" OFF)
+option(BUILD_ASYNC_SDK "Build async SDK sources and public async APIs" OFF)
+set(BUILD_ASYNC_SDK_IO_URING "AUTO" CACHE STRING
+        "Build async SDK io_uring file transfer support: AUTO, ON, OFF")
+set_property(CACHE BUILD_ASYNC_SDK_IO_URING PROPERTY STRINGS AUTO ON OFF)
 # close warning
 add_definitions(-w)
 # check OS platform
-if (UNIX)
-    set(OS_PLATFORM "LINUX")
-    set(LINUX_PLATFORM 1)
-elseif (APPLE)
+if (APPLE)
     set(OS_PLATFORM "APPLE")
     set(APPLE_PLATFORM 1)
+elseif (UNIX)
+    set(OS_PLATFORM "LINUX")
+    set(LINUX_PLATFORM 1)
 elseif (WIN32)
     set(OS_PLATFORM "WINDOWS")
     set(WINDOWS_PLATFORM 1)
@@ -32,6 +36,11 @@ else ()
 endif ()
 
 message(STATUS "OS_PLATFORM: ${OS_PLATFORM}")
+message(STATUS "BUILD_ASYNC_SDK: ${BUILD_ASYNC_SDK}")
+message(STATUS "BUILD_ASYNC_SDK_IO_URING: ${BUILD_ASYNC_SDK_IO_URING}")
+if (BUILD_ASYNC_SDK AND NOT "${OS_PLATFORM}" STREQUAL "LINUX")
+    message(FATAL_ERROR "BUILD_ASYNC_SDK is currently supported only on Linux")
+endif ()
 add_definitions(-DPLATFORM_${OS_PLATFORM})
 if (${OS_PLATFORM} STREQUAL "WINDOWS")
     set(WLIB_TARGET "Win32")
@@ -71,6 +80,34 @@ else ()
     message(STATUS "CURL lib: ${CURL_LIBRARIES}")
     set(CLIENT_CURL_LIBS ${CURL_LIBRARIES})
     set(CLIENT_CURL_INCLUDE_DIRS ${CURL_INCLUDE_DIRS})
+endif ()
+
+set(VOLCENGINE_TOS_ASYNC_HAS_IO_URING 0)
+set(ASYNC_IO_URING_LIBS "")
+if (BUILD_ASYNC_SDK)
+    string(TOUPPER "${BUILD_ASYNC_SDK_IO_URING}" ASYNC_IO_URING_MODE)
+    if (NOT ASYNC_IO_URING_MODE STREQUAL "AUTO" AND
+            NOT ASYNC_IO_URING_MODE STREQUAL "ON" AND
+            NOT ASYNC_IO_URING_MODE STREQUAL "OFF")
+        message(FATAL_ERROR "BUILD_ASYNC_SDK_IO_URING must be AUTO, ON, or OFF")
+    endif ()
+
+    if (ASYNC_IO_URING_MODE STREQUAL "OFF")
+        message(STATUS "Async SDK io_uring support: OFF")
+    else ()
+        include(CheckIncludeFileCXX)
+        check_include_file_cxx("liburing.h" HAVE_LIBURING_H)
+        find_library(LIBURING_LIBRARY NAMES uring)
+        if (HAVE_LIBURING_H AND LIBURING_LIBRARY)
+            set(VOLCENGINE_TOS_ASYNC_HAS_IO_URING 1)
+            set(ASYNC_IO_URING_LIBS ${LIBURING_LIBRARY})
+            message(STATUS "Async SDK io_uring support: ON (${LIBURING_LIBRARY})")
+        elseif (ASYNC_IO_URING_MODE STREQUAL "ON")
+            message(FATAL_ERROR "BUILD_ASYNC_SDK_IO_URING=ON requires liburing.h and liburing")
+        else ()
+            message(STATUS "Async SDK io_uring support: OFF (liburing not found)")
+        endif ()
+    endif ()
 endif ()
 
 list(APPEND SDK_COMPILER_FLAGS "-std=c++11")
