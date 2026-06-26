@@ -137,6 +137,8 @@ void TosClientImpl::init(const std::string& endpoint, const std::string& control
     conf.setProxyUsername(config.proxyUsername);
     conf.setProxyPassword(config.proxyPassword);
     conf.setDnsCacheTime(config.dnsCacheTime);
+    conf.setEnableDnsIpBalancing(config.enableDnsIpBalancing);
+    conf.setDnsCacheHostCapacity(config.dnsCacheHostCapacity);
     conf.setMaxConnections(config.maxConnections);
     conf.setSocketTimeout(config.socketTimeout);
     conf.setCaFile(config.caFile);

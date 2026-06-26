@@ -1,5 +1,8 @@
 ## Release Note
 
+### 2026.6.26 Version 2.6.27
+- fix: 当 sslCtxCallback 接管证书校验且未配置 caFile/caPath 时，避免 libcurl 默认 CA 校验继续返回 curlCode 60
+
 ### 2026.6.1 Version 2.6.26
 - feat: 支持异步 SDK 源码引入及可选编译
 - feat: 异步文件传输支持 posix、mmap、io_uring backend

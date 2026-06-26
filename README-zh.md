@@ -132,6 +132,24 @@ TosClientV2 client(region, accessKey, secretKey);
 CloseClient();
 ```
 
+### DNS IP 均衡
+
+当 `ClientConfig::enableDnsIpBalancing` 为 `true` 且 `ClientConfig::dnsCacheTime` 大于 `0` 时，SDK 会为解析出多 IP 的 endpoint host 启用 SDK 自主管理的 IP 均衡能力。传输层会在请求发送时按顺序轮转选取 IP；如果某个 IP 在可重试的连接失败中命中，SDK 会将该 IP 从当前缓存集合中剔除。整个过程中，请求签名、URL host 和 TLS/SNI 仍然保持原始域名不变。
+
+SDK 侧的 host 缓存最多保留 `ClientConfig::dnsCacheHostCapacity` 个 host；超过上限时，会淘汰最近最少使用的 host。默认值为 `1024`。
+
+当 `ClientConfig::enableDnsIpBalancing` 为 `false` 或 `ClientConfig::dnsCacheTime` 为 `0` 时，SDK 保持现有的 libcurl 默认行为，不启用 SDK 管理的多 IP 均衡。
+
+```cpp
+ClientConfig config;
+config.dnsCacheTime = 5; // 单位：分钟，DNS 缓存 TTL
+config.enableDnsIpBalancing = true; // 可选，开启 SDK 管理的 IP 均衡
+config.dnsCacheHostCapacity = 1024; // 可选，SDK 侧 DNS/IP 缓存的 host 上限
+
+InitializeClient();
+TosClientV2 client(region, accessKey, secretKey, config);
+```
+
 ### 创建桶
 
 桶是TOS的全局唯一的命名空间，相当于数据的容器，用来储存对象数据。如下代码展示如何创建一个新桶：

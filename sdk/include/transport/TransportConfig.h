@@ -44,6 +44,10 @@ class TransportConfig {
     void setProxyPassword(const std::string& proxyPassword) { proxyPassword_ = proxyPassword; }
     int getDnsCacheTime() const { return dnsCacheTime_; }
     void setDnsCacheTime(int dnsCacheTime) { dnsCacheTime_ = dnsCacheTime; }
+    bool isEnableDnsIpBalancing() const { return enableDnsIpBalancing_; }
+    void setEnableDnsIpBalancing(bool enableDnsIpBalancing) { enableDnsIpBalancing_ = enableDnsIpBalancing; }
+    int getDnsCacheHostCapacity() const { return dnsCacheHostCapacity_; }
+    void setDnsCacheHostCapacity(int dnsCacheHostCapacity) { dnsCacheHostCapacity_ = dnsCacheHostCapacity; }
     int getMaxConnections() const { return maxConnections_; }
     void setMaxConnections(int maxConnections) { maxConnections_ = maxConnections; }
     int getSocketTimeout() const { return socketTimeout_; }
@@ -100,6 +104,8 @@ class TransportConfig {
     std::string proxyUsername_;
     std::string proxyPassword_;
     int dnsCacheTime_ = 0;
+    bool enableDnsIpBalancing_ = false;
+    int dnsCacheHostCapacity_ = 1024;
     int maxConnections_ = 25;
     int socketTimeout_ = 30000;
     std::string caPath_;

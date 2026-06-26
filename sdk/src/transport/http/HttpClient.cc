@@ -1,4 +1,11 @@
 #include <iostream>
+#include <set>
+#include <utility>
+#ifndef _WIN32
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#endif
 #include "curl/curl.h"
 
 #include "transport/http/HttpClient.h"
@@ -26,6 +33,205 @@ struct ResourceManager {
     std::shared_ptr<RateLimiter> rateLimiter;
     //    std::shared_ptr<DataConsumeCallBack> callBack;
 };
+
+namespace {
+std::atomic<uint64_t> g_dnsCacheStartOffset{0};
+
+std::string defaultPortForScheme(const std::string& scheme) {
+    return scheme == "http" ? "80" : "443";
+}
+
+bool isDigits(const std::string& value) {
+    return !value.empty() &&
+           std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isdigit(c) != 0; });
+}
+
+std::string formatResolveAddress(const std::string& ip) {
+    if (ip.find(':') != std::string::npos && (ip.front() != '[' || ip.back() != ']')) {
+        return "[" + ip + "]";
+    }
+    return ip;
+}
+
+bool shouldEvictResolvedIp(CURLcode res) {
+    return res == CURLE_COULDNT_CONNECT || res == CURLE_OPERATION_TIMEDOUT;
+}
+
+std::pair<std::string, std::string> splitHostAndPort(const Url& url) {
+    std::string host = url.host();
+    std::string port = url.port();
+    if (!port.empty()) {
+        return {host, port};
+    }
+    auto pos = host.rfind(':');
+    if (pos != std::string::npos && host.find(':') == pos) {
+        auto candidatePort = host.substr(pos + 1);
+        if (isDigits(candidatePort)) {
+            return {host.substr(0, pos), candidatePort};
+        }
+    }
+    return {host, defaultPortForScheme(url.scheme())};
+}
+
+#ifdef _WIN32
+std::vector<std::string> defaultDnsLookup(const std::string& host) {
+    (void)host;
+    return {};
+}
+#else
+std::vector<std::string> defaultDnsLookup(const std::string& host) {
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_ADDRCONFIG;
+    addrinfo* result = nullptr;
+    std::vector<std::string> ipList;
+    if (getaddrinfo(host.c_str(), nullptr, &hints, &result) != 0 || result == nullptr) {
+        return ipList;
+    }
+
+    std::set<std::string> uniq;
+    for (addrinfo* current = result; current != nullptr; current = current->ai_next) {
+        char ipBuffer[INET6_ADDRSTRLEN] = {0};
+        void* addr = nullptr;
+        if (current->ai_family == AF_INET) {
+            addr = &reinterpret_cast<sockaddr_in*>(current->ai_addr)->sin_addr;
+        } else if (current->ai_family == AF_INET6) {
+            addr = &reinterpret_cast<sockaddr_in6*>(current->ai_addr)->sin6_addr;
+        }
+        if (addr == nullptr) {
+            continue;
+        }
+        if (inet_ntop(current->ai_family, addr, ipBuffer, sizeof(ipBuffer)) != nullptr) {
+            uniq.insert(ipBuffer);
+        }
+    }
+    freeaddrinfo(result);
+
+    ipList.assign(uniq.begin(), uniq.end());
+    return ipList;
+}
+#endif
+}  // namespace
+
+bool HostIpCache::isExpired(const CacheEntry& entry) const {
+    return entry.expireAt <= std::chrono::steady_clock::now();
+}
+
+void HostIpCache::eraseUnlocked(const std::string& host) {
+    auto it = data_.find(host);
+    if (it == data_.end()) {
+        return;
+    }
+    order_.erase(it->second.orderIt);
+    data_.erase(it);
+}
+
+void HostIpCache::touchUnlocked(CacheEntry& entry, const std::string& host) {
+    order_.erase(entry.orderIt);
+    order_.push_back(host);
+    entry.orderIt = std::prev(order_.end());
+}
+
+void HostIpCache::trimToCapacityUnlocked() {
+    if (maxHosts_ == 0) {
+        data_.clear();
+        order_.clear();
+        return;
+    }
+    while (data_.size() > maxHosts_ && !order_.empty()) {
+        auto evictHost = order_.front();
+        eraseUnlocked(evictHost);
+    }
+}
+
+std::vector<std::string> HostIpCache::Get(const std::string& host) {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = data_.find(host);
+    if (it == data_.end()) {
+        return {};
+    }
+    if (isExpired(it->second)) {
+        eraseUnlocked(host);
+        return {};
+    }
+    touchUnlocked(it->second, host);
+    return it->second.ipList;
+}
+
+void HostIpCache::Put(const std::string& host, const std::vector<std::string>& ipList,
+                      const std::chrono::steady_clock::time_point& expireAt) {
+    if (host.empty() || ipList.empty()) {
+        ClearHost(host);
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(mu_);
+    eraseUnlocked(host);
+    CacheEntry entry;
+    entry.ipList = ipList;
+    entry.expireAt = expireAt;
+    entry.nextIndex = static_cast<size_t>(g_dnsCacheStartOffset.fetch_add(1, std::memory_order_relaxed) %
+                                          entry.ipList.size());
+    order_.push_back(host);
+    entry.orderIt = std::prev(order_.end());
+    data_[host] = std::move(entry);
+    trimToCapacityUnlocked();
+}
+
+std::string HostIpCache::Select(const std::string& host) {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = data_.find(host);
+    if (it == data_.end()) {
+        return "";
+    }
+    if (isExpired(it->second)) {
+        eraseUnlocked(host);
+        return "";
+    }
+    if (it->second.ipList.empty()) {
+        eraseUnlocked(host);
+        return "";
+    }
+    auto& entry = it->second;
+    touchUnlocked(entry, host);
+    auto selected = entry.ipList[entry.nextIndex % entry.ipList.size()];
+    entry.nextIndex = (entry.nextIndex + 1) % entry.ipList.size();
+    return selected;
+}
+
+bool HostIpCache::RemoveIp(const std::string& host, const std::string& ip) {
+    std::lock_guard<std::mutex> lock(mu_);
+    auto it = data_.find(host);
+    if (it == data_.end()) {
+        return false;
+    }
+    auto& ipList = it->second.ipList;
+    auto removeIt = std::remove(ipList.begin(), ipList.end(), ip);
+    if (removeIt == ipList.end()) {
+        return false;
+    }
+    ipList.erase(removeIt, ipList.end());
+    if (ipList.empty()) {
+        eraseUnlocked(host);
+        return true;
+    }
+    touchUnlocked(it->second, host);
+    if (it->second.nextIndex >= ipList.size()) {
+        it->second.nextIndex %= ipList.size();
+    }
+    return true;
+}
+
+void HostIpCache::ClearHost(const std::string& host) {
+    std::lock_guard<std::mutex> lock(mu_);
+    eraseUnlocked(host);
+}
+
+size_t HostIpCache::Size() const {
+    std::lock_guard<std::mutex> lock(mu_);
+    return data_.size();
+}
 
 static bool isOpenSslCompatibleBackend() {
     auto* versionInfo = curl_version_info(CURLVERSION_NOW);
@@ -254,7 +460,7 @@ void acquire_lock(CURL* handle, curl_lock_data data, curl_lock_access access, vo
 void release_lock(CURL* handle, curl_lock_data data, void* userptr) { pthread_mutex_unlock(&curlShareLock); }
 #endif
 
-HttpClient::HttpClient() {
+HttpClient::HttpClient() : dnsLookupCallback_(defaultDnsLookup) {
     curlContainer_ = new CurlContainer(25, 12000, 10000);
     if (dnsCacheTime_ > 0) {
         share_handle = curl_share_init();
@@ -265,7 +471,9 @@ HttpClient::HttpClient() {
     }
 }
 
-HttpClient::HttpClient(const HttpConfig& config) {
+HttpClient::HttpClient(const HttpConfig& config)
+        : dnsIpCache_(config.dnsCacheHostCapacity > 0 ? static_cast<size_t>(config.dnsCacheHostCapacity) : 1024),
+          dnsLookupCallback_(config.dnsLookupCallback ? config.dnsLookupCallback : defaultDnsLookup) {
     curlContainer_ = new CurlContainer(config.maxConnections, config.socketTimeout, config.connectTimeout);
     tcpKeepAlive_ = config.tcpKeepAlive;
     dialTimeout_ = config.dialTimeout;
@@ -281,6 +489,7 @@ HttpClient::HttpClient(const HttpConfig& config) {
 #else
     dnsCacheTime_ = config.dnsCacheTime;
 #endif
+    enableDnsIpBalancing_ = config.enableDnsIpBalancing && dnsCacheTime_ > 0;
     caPath_ = config.caPath;
     caFile_ = config.caFile;
     clientCrt_ = config.clientCrt_;
@@ -314,17 +523,100 @@ void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
 }
 
 void HttpClient::removeDNS(void* curl, const std::shared_ptr<HttpRequest>& request) {
-    // 无法感知 IP，超时时将会直接踢出该 host 对应的 DNS 映射信息
+    // 无法感知 IP 时，直接踢出该 host 对应的 curl DNS 映射信息，并清理 SDK 内缓存。
     curl_slist* dns_list = nullptr;
-    auto servicehost = request->url().host();
-    std::string port = request->url().scheme() == "http" ? "80" : "443";
+    auto hostAndPort = splitHostAndPort(request->url());
+    auto servicehost = hostAndPort.first;
+    auto port = hostAndPort.second;
     auto rmHost = "-" + servicehost + ":" + port;
     dns_list = curl_slist_append(dns_list, rmHost.c_str());
     std::lock_guard<std::mutex> lock(mu_);
     curl_easy_setopt(curl, CURLOPT_RESOLVE, dns_list);
+    dnsIpCache_.ClearHost(servicehost);
+    curl_slist_free_all(dns_list);
+}
+
+std::vector<std::string> HttpClient::lookupHostIpList(const std::string& host) const {
+    if (!dnsLookupCallback_ || host.empty()) {
+        return {};
+    }
+    return dnsLookupCallback_(host);
+}
+
+std::vector<std::string> HttpClient::getHostIpList(const std::string& host) {
+    auto ipList = dnsIpCache_.Get(host);
+    if (!ipList.empty()) {
+        return ipList;
+    }
+
+    ipList = lookupHostIpList(host);
+    if (!ipList.empty()) {
+        dnsIpCache_.Put(host, ipList, std::chrono::steady_clock::now() + std::chrono::minutes(dnsCacheTime_));
+        auto logger = LogUtils::GetLogger();
+        if (logger != nullptr) {
+            logger->debug("Refreshed SDK DNS cache, host:{}, ip_count:{}", host, ipList.size());
+        }
+    }
+    return ipList;
+}
+
+ResolveBinding HttpClient::buildResolveBinding(const std::shared_ptr<HttpRequest>& request) {
+    ResolveBinding binding;
+    if (!enableDnsIpBalancing_ || dnsCacheTime_ <= 0 || request == nullptr) {
+        return binding;
+    }
+
+    auto hostAndPort = splitHostAndPort(request->url());
+    binding.host = hostAndPort.first;
+    binding.port = hostAndPort.second;
+    if (binding.host.empty() || !NetUtils::isNotIP(binding.host)) {
+        return ResolveBinding{};
+    }
+
+    auto ipList = getHostIpList(binding.host);
+    if (ipList.empty()) {
+        return ResolveBinding{};
+    }
+
+    binding.selectedIp = dnsIpCache_.Select(binding.host);
+    if (binding.selectedIp.empty()) {
+        return ResolveBinding{};
+    }
+
+    auto resolveEntry = binding.host + ":" + binding.port + ":" + formatResolveAddress(binding.selectedIp);
+    binding.resolveList = curl_slist_append(nullptr, resolveEntry.c_str());
+    auto logger = LogUtils::GetLogger();
+    if (logger != nullptr) {
+        logger->debug("Selected SDK DNS IP, host:{}, ip:{}, port:{}", binding.host, binding.selectedIp, binding.port);
+    }
+    return binding;
+}
+
+void HttpClient::releaseResolveBinding(ResolveBinding& binding) const {
+    if (binding.resolveList != nullptr) {
+        curl_slist_free_all(binding.resolveList);
+        binding.resolveList = nullptr;
+    }
+}
+
+void HttpClient::removeFailedIp(const ResolveBinding& binding) {
+    if (!binding.active()) {
+        return;
+    }
+    if (dnsIpCache_.RemoveIp(binding.host, binding.selectedIp)) {
+        auto logger = LogUtils::GetLogger();
+        if (logger != nullptr) {
+            logger->info("Evicted failed SDK DNS IP, host:{}, ip:{}", binding.host, binding.selectedIp);
+        }
+    }
 }
 
 std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRequest>& request) {
+    ResolveBinding resolveBinding;
+    if (enableDnsIpBalancing_) {
+        resolveBinding = buildResolveBinding(request);
+    }
+
     // init curl for this request
     CURL* curl = curlContainer_->Acquire();
     auto response = std::make_shared<HttpResponse>();
@@ -345,8 +637,15 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     } else {
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+        // 当用户设置了 sslCtxCallback 但没有配置 caFile/caPath 时，禁用默认验证，
+        // 让用户的回调函数完全控制证书验证逻辑。
+        if (sslCtxCallback_ != nullptr && caFile_.empty() && caPath_.empty()) {
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+        } else {
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+        }
     }
     if (!caPath_.empty()) {
         curl_easy_setopt(curl, CURLOPT_CAPATH, caPath_.c_str());
@@ -368,6 +667,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
                                    ", ssl ctx callback requires OpenSSL-compatible libcurl backend");
             response->setCurlErrCode(CURLE_NOT_BUILT_IN);
             curlContainer_->Release(curl, false);
+            releaseResolveBinding(resolveBinding);
             return response;
         }
         auto res = curl_easy_setopt(curl, CURLOPT_SSL_CTX_FUNCTION, curlSslCtxCallbackBridge);
@@ -380,6 +680,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
             response->setStatusMsg(std::string("curlCode: ") + std::to_string(res) + ", " + curl_easy_strerror(res));
             response->setCurlErrCode(res);
             curlContainer_->Release(curl, false);
+            releaseResolveBinding(resolveBinding);
             return response;
         }
     }
@@ -453,6 +754,9 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     // 使用缓存 dns
     if (dnsCacheTime_ > 0) {
         setShareHandle(curl, dnsCacheTime_);
+        if (resolveBinding.active()) {
+            curl_easy_setopt(curl, CURLOPT_RESOLVE, resolveBinding.resolveList);
+        }
     }
     CURLcode res = curl_easy_perform(curl);
     if (res == CURLE_COULDNT_CONNECT) {
@@ -478,11 +782,13 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     double totalTime = 0;
     double speed = 0;
     bool isHighLatencyReq = false;
+    char* primaryIp = nullptr;
     curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
     curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
     curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
     curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
     curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
+    curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &primaryIp);
     if (request->method() == http::MethodPut || request->method() == http::MethodPost) {
         curl_easy_getinfo(curl, CURLINFO_SPEED_UPLOAD, &speed);
     } else if (request->method() == http::MethodGet) {
@@ -501,18 +807,20 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
             logger->warn(
                 "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, "
                 "TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
-                "time:{} ms",
+                "time:{} ms, Selected IP:{}, Primary IP:{}",
                 request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
                 (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
-                (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
+                (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000), resolveBinding.selectedIp,
+                primaryIp == nullptr ? "" : primaryIp);
         } else {
             logger->debug(
                 "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, "
                 "TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
-                "time:{} ms",
+                "time:{} ms, Selected IP:{}, Primary IP:{}",
                 request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
                 (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
-                (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000));
+                (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000), resolveBinding.selectedIp,
+                primaryIp == nullptr ? "" : primaryIp);
         }
     } else if (isHighLatencyReq) {
         std::ostringstream ss;
@@ -524,12 +832,20 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         ss << "TLS handshake time:" << (long)(tlsConnect * 1000) << " ms, ";
         ss << "start transfer time:" << (long)(startTrans * 1000) << " ms, ";
         ss << "Data sending time:" << (long)((totalTime - startTrans) * 1000) << " ms, ";
-        ss << "Total HTTP request time:" << (long)(totalTime * 1000) << " ms";
+        ss << "Total HTTP request time:" << (long)(totalTime * 1000) << " ms, ";
+        ss << "Selected IP:" << resolveBinding.selectedIp << ", ";
+        ss << "Primary IP:" << (primaryIp == nullptr ? "" : primaryIp);
         std::cout << ss.str() << std::endl;
     }
 
     if (res != CURLE_OK && dnsCacheTime_ > 0) {
-        removeDNS(curl, request);
+        if (resolveBinding.active()) {
+            if (shouldEvictResolvedIp(res)) {
+                removeFailedIp(resolveBinding);
+            }
+        } else {
+            removeDNS(curl, request);
+        }
     }
     long response_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
@@ -551,6 +867,7 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
 
     request->setTransferedBytes(resourceMan.send);
     curlContainer_->Release(curl, (res != CURLE_OK));
+    releaseResolveBinding(resolveBinding);
     curl_slist_free_all(list);
     return response;
 }

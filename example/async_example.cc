@@ -443,6 +443,12 @@ OnDataSendWithEvent MakeNoDataSender() {
     };
 }
 
+OnDataSendWithEvent MakeOverSender() {
+    return [](char*, size_t len, AsyncEvent*) -> size_t {
+        return len + 1;
+    };
+}
+
 OnDataReceiveWithEvent MakePauseThenReceiver(const std::shared_ptr<std::string>& data, int pauses,
                                              int pause_delay_ms) {
     auto state = std::make_shared<PausingReceiveState>(data, pauses, pause_delay_ms);
@@ -473,6 +479,13 @@ OnDataReceiveWithEvent MakeMinusOneReceiver(const std::shared_ptr<std::string>& 
 OnDataReceiveWithEvent MakeNoConsumeReceiver() {
     return [](char*, size_t, AsyncEvent*) -> size_t {
         return 0;
+    };
+}
+
+OnDataReceiveWithEvent MakeOverReceiver(const std::shared_ptr<std::string>& data) {
+    return [data](char* in, size_t len, AsyncEvent*) -> size_t {
+        data->append(in, len);
+        return len + 1;
     };
 }
 
@@ -754,6 +767,22 @@ int main(int argc, char** argv) {
                 });
         reporter.expectSuccess("listBucketsAsync", list_buckets_out);
 
+        {
+            ClientConfig refused_config = MakeConfig(options);
+            refused_config.endPoint = "http://127.0.0.1:1";
+            refused_config.maxRetryCount = 0;
+            refused_config.requestTimeout = 1000;
+            refused_config.socketTimeout = 1000;
+            TosAsyncClient refused_client(options.region, "ak", "sk", refused_config);
+            HeadBucketAsyncInput refused_head("async-example-network-failure");
+            auto refused_out = AwaitOutcome<HeadBucketAsyncOutput>(
+                    [&](const OutcomeCallback<HeadBucketAsyncOutput>& cb) {
+                        refused_client.headBucketAsync(refused_head, cb);
+                    });
+            reporter.expectFailure("headBucketAsync(connection refused)", refused_out);
+            refused_client.close();
+        }
+
         if (!has_bucket) {
             reporter.fail("setup", "bucket is not accessible");
             reporter.summary();
@@ -786,6 +815,37 @@ int main(int argc, char** argv) {
                 });
         if (reporter.expectSuccess("putObjectAsync", put_out)) {
             ExpectCrc64("putObjectAsync crc64", put_out, base_data, reporter);
+        }
+
+        const std::string missing_key = Key(options, "missing.txt");
+        auto missing_get_data = std::make_shared<std::string>();
+        GetObjectAsyncInput missing_get(options.bucket, missing_key);
+        auto missing_get_out = AwaitOutcome<GetObjectAsyncOutput>(
+                [&](const OutcomeCallback<GetObjectAsyncOutput>& cb) {
+                    client.getObjectAsync(missing_get, MakeReceiver(missing_get_data), cb);
+                });
+        reporter.expectFailure("getObjectAsync(missing object)", missing_get_out);
+
+        HeadObjectAsyncInput missing_head(options.bucket, missing_key);
+        auto missing_head_out = AwaitOutcome<HeadObjectAsyncOutput>(
+                [&](const OutcomeCallback<HeadObjectAsyncOutput>& cb) {
+                    client.headObjectAsync(missing_head, cb);
+                });
+        reporter.expectFailure("headObjectAsync(missing object)", missing_head_out);
+
+        const std::string empty_key = Key(options, "empty.txt");
+        const std::string empty_data;
+        cleanup_keys.push_back(empty_key);
+        PutObjectAsyncInput empty_put(options.bucket, empty_key, TransferEncoding::ContentLength);
+        empty_put.setContentLength(0);
+        auto empty_put_out = AwaitOutcome<PutObjectAsyncOutput>(
+                [&](const OutcomeCallback<PutObjectAsyncOutput>& cb) {
+                    client.putObjectAsync(empty_put, MakeSender(empty_data), cb);
+                });
+        if (reporter.expectSuccess("putObjectAsync(empty object)", empty_put_out)) {
+            ExpectCrc64("putObjectAsync(empty object) crc64", empty_put_out, empty_data, reporter);
+            VerifyObjectData(client, options, empty_key, empty_data, reporter,
+                             "putObjectAsync(empty object) verify");
         }
 
         auto received = std::make_shared<std::string>();
@@ -849,6 +909,17 @@ int main(int argc, char** argv) {
                 });
         reporter.expectFailure("putObjectAsync zero-byte producer without pause", event_no_data_put_out);
 
+        const std::string event_over_data_key = Key(options, "event-over-data-upload.txt");
+        cleanup_keys.push_back(event_over_data_key);
+        PutObjectAsyncInput event_over_data_put(
+                options.bucket, event_over_data_key, TransferEncoding::ContentLength);
+        event_over_data_put.setContentLength(static_cast<int64_t>(event_data.size()));
+        auto event_over_data_put_out = AwaitOutcome<PutObjectAsyncOutput>(
+                [&](const OutcomeCallback<PutObjectAsyncOutput>& cb) {
+                    client.putObjectAsync(event_over_data_put, MakeOverSender(), cb);
+                });
+        reporter.expectFailure("putObjectAsync producer over-return", event_over_data_put_out);
+
         auto pause_receive_data = std::make_shared<std::string>();
         GetObjectAsyncInput pause_receive_input(options.bucket, base_key);
         auto pause_receive_out = AwaitOutcome<GetObjectAsyncOutput>(
@@ -898,6 +969,14 @@ int main(int argc, char** argv) {
             reporter.fail("getObjectAsync zero-byte consumer without pause data",
                           "consumer unexpectedly received data");
         }
+
+        auto over_receive_data = std::make_shared<std::string>();
+        GetObjectAsyncInput over_receive_input(options.bucket, base_key);
+        auto over_receive_out = AwaitOutcome<GetObjectAsyncOutput>(
+                [&](const OutcomeCallback<GetObjectAsyncOutput>& cb) {
+                    client.getObjectAsync(over_receive_input, MakeOverReceiver(over_receive_data), cb);
+                });
+        reporter.expectFailure("getObjectAsync consumer over-return", over_receive_out);
 
         HeadObjectAsyncInput head_object(options.bucket, base_key);
         auto head_object_out = AwaitOutcome<HeadObjectAsyncOutput>(
@@ -970,6 +1049,29 @@ int main(int argc, char** argv) {
             ExpectCrc64("getObjectToFdRangeAsync crc64", get_fd_out.outcome, base_data, reporter);
         }
 
+        const std::string short_download_path = JoinPath(options.workdir, "get-fd-range-short.out");
+        FileRange short_download_range;
+        short_download_range.path = short_download_path;
+        short_download_range.length = base_data.size() - 1;
+        auto short_get_fd_out = AwaitTransfer<GetObjectAsyncOutput>(
+                [&](const TransferCallback<GetObjectAsyncOutput>& cb) {
+                    client.getObjectToFdRangeAsync(
+                            get_input, short_download_range, PosixTransferOptions(), cb);
+                });
+        reporter.expectFailure("getObjectToFdRangeAsync(range too short)",
+                               short_get_fd_out.outcome);
+
+        FileRange invalid_download_range;
+        invalid_download_range.path = JoinPath(options.workdir, "missing-dir/get-fd-range.out");
+        invalid_download_range.length = base_data.size();
+        auto invalid_get_fd_out = AwaitTransfer<GetObjectAsyncOutput>(
+                [&](const TransferCallback<GetObjectAsyncOutput>& cb) {
+                    client.getObjectToFdRangeAsync(
+                            get_input, invalid_download_range, PosixTransferOptions(), cb);
+                });
+        reporter.expectFailure("getObjectToFdRangeAsync(invalid target path)",
+                               invalid_get_fd_out.outcome);
+
         const std::string file_data = "async example put from file";
         const std::string upload_file_path = JoinPath(options.workdir, "upload-file.txt");
         WriteFile(upload_file_path, file_data);
@@ -983,6 +1085,32 @@ int main(int argc, char** argv) {
         if (reporter.expectSuccess("putObjectFromFileAsync", put_file_out)) {
             ExpectCrc64("putObjectFromFileAsync crc64", put_file_out, file_data, reporter);
         }
+
+        const std::string empty_file_path = JoinPath(options.workdir, "empty-upload-file.txt");
+        const std::string empty_file_key = Key(options, "put-from-empty-file.txt");
+        cleanup_keys.push_back(empty_file_key);
+        WriteFile(empty_file_path, empty_data);
+        PutObjectFromFileAsyncInput put_empty_file_input(
+                options.bucket, empty_file_key, empty_file_path);
+        auto put_empty_file_out = AwaitOutcome<PutObjectFromFileAsyncOutput>(
+                [&](const OutcomeCallback<PutObjectFromFileAsyncOutput>& cb) {
+                    client.putObjectFromFileAsync(put_empty_file_input, cb);
+                });
+        if (reporter.expectSuccess("putObjectFromFileAsync(empty file)", put_empty_file_out)) {
+            ExpectCrc64("putObjectFromFileAsync(empty file) crc64",
+                        put_empty_file_out, empty_data, reporter);
+            VerifyObjectData(client, options, empty_file_key, empty_data, reporter,
+                             "putObjectFromFileAsync(empty file) verify");
+        }
+
+        PutObjectFromFileAsyncInput missing_file_input(
+                options.bucket, Key(options, "put-from-missing-file.txt"),
+                JoinPath(options.workdir, "does-not-exist-upload-file.txt"));
+        auto missing_file_out = AwaitOutcome<PutObjectFromFileAsyncOutput>(
+                [&](const OutcomeCallback<PutObjectFromFileAsyncOutput>& cb) {
+                    client.putObjectFromFileAsync(missing_file_input, cb);
+                });
+        reporter.expectFailure("putObjectFromFileAsync(missing source file)", missing_file_out);
 
         const std::string fd_key = Key(options, "put-from-fd.txt");
         cleanup_keys.push_back(fd_key);
@@ -1005,9 +1133,30 @@ int main(int argc, char** argv) {
             ExpectCrc64("putObjectFromFdRangeAsync crc64", put_fd_out.outcome, file_data, reporter);
         }
 
+        const std::string oversized_fd_key = Key(options, "put-from-fd-oversized.txt");
+        cleanup_keys.push_back(oversized_fd_key);
+        int oversized_fd = ::open(upload_file_path.c_str(), O_RDONLY);
+        if (oversized_fd < 0) {
+            throw std::runtime_error("open oversized upload file failed: " +
+                                     std::string(std::strerror(errno)));
+        }
+        FileRange oversized_upload_range;
+        oversized_upload_range.fd = oversized_fd;
+        oversized_upload_range.length = file_data.size() + 1;
+        oversized_upload_range.owns_fd = true;
+        PutObjectAsyncInput oversized_fd_input(
+                options.bucket, oversized_fd_key, TransferEncoding::ContentLength);
+        auto oversized_fd_out = AwaitTransfer<PutObjectAsyncOutput>(
+                [&](const TransferCallback<PutObjectAsyncOutput>& cb) {
+                    client.putObjectFromFdRangeAsync(
+                            oversized_fd_input, oversized_upload_range, PosixTransferOptions(), cb);
+                });
+        reporter.expectFailure("putObjectFromFdRangeAsync(range exceeds source)",
+                               oversized_fd_out.outcome);
+
         if (iouring_local_probe_ok) {
             const std::string iouring_file_data =
-                    RepeatData("async-iouring-file-transfer-e2e-", 512 * 1024 + 31);
+                    RepeatData("async-iouring-file-transfer-e2e-", 512 * 1024);
             const std::string iouring_upload_path =
                     JoinPath(options.workdir, "iouring-e2e-upload.bin");
             const std::string iouring_download_path =
@@ -1399,7 +1548,7 @@ int main(int argc, char** argv) {
         reporter.fail("exception", ex.what());
         reporter.summary();
         try {
-            InitializeTosAsyncClient();
+            CloseTosAsyncClient();
         } catch (...) {
         }
         return 1;
