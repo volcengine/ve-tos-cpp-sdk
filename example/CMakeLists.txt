@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.6.26
+        VERSION 2.6.27
         LANGUAGES CXX)
 
 function(ve_tos_link_example target)

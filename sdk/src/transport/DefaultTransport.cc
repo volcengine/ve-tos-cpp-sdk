@@ -15,6 +15,8 @@ DefaultTransport::DefaultTransport(const TransportConfig& config) {
     conf.proxyUsername = config.getProxyUsername();
     conf.proxyPassword = config.getProxyPassword();
     conf.dnsCacheTime = config.getDnsCacheTime();
+    conf.enableDnsIpBalancing = config.isEnableDnsIpBalancing();
+    conf.dnsCacheHostCapacity = config.getDnsCacheHostCapacity();
     conf.caPath = config.getCaPath();
     conf.caFile = config.getCaFile();
     conf.highLatencyLogThreshold = config.getHighLatencyLogThreshold();

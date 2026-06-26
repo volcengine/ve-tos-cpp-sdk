@@ -1,18 +1,28 @@
 #pragma once
 
-#include <memory>
-#include <condition_variable>
-#include <atomic>
-#include <mutex>
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <cassert>
+#include <chrono>
+#include <condition_variable>
+#include <functional>
+#include <list>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <set>
 #include <sstream>
+#include <vector>
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "curl/curl.h"
 
 namespace VolcengineTos {
+#ifndef VOLCENGINE_TOS_SSL_CTX_CALLBACK_DEFINED
+#define VOLCENGINE_TOS_SSL_CTX_CALLBACK_DEFINED
+using SslCtxCallback = int (*)(void* sslCtx, void* userData);
+#endif
+
 static bool hasInitHttpClient = false;
 #ifdef _WIN32
 static CRITICAL_SECTION curlShareLock;
@@ -32,6 +42,8 @@ struct HttpConfig {
     std::string proxyUsername;
     std::string proxyPassword;
     int dnsCacheTime;
+    bool enableDnsIpBalancing = false;
+    int dnsCacheHostCapacity = 1024;
     std::string caPath;
     std::string caFile;
     int highLatencyLogThreshold;
@@ -40,6 +52,50 @@ struct HttpConfig {
     std::string netInterface_;
     SslCtxCallback sslCtxCallback;
     void* sslCtxCallbackUserData;
+    std::function<std::vector<std::string>(const std::string&)> dnsLookupCallback;
+};
+
+class HostIpCache {
+   public:
+    explicit HostIpCache(size_t maxHosts = 1024) : maxHosts_(maxHosts) {}
+
+    std::vector<std::string> Get(const std::string& host);
+    void Put(const std::string& host, const std::vector<std::string>& ipList,
+             const std::chrono::steady_clock::time_point& expireAt);
+    std::string Select(const std::string& host);
+    bool RemoveIp(const std::string& host, const std::string& ip);
+    void ClearHost(const std::string& host);
+    size_t Size() const;
+
+   private:
+    struct CacheEntry {
+        std::vector<std::string> ipList;
+        std::chrono::steady_clock::time_point expireAt;
+        size_t nextIndex = 0;
+        std::list<std::string>::iterator orderIt;
+    };
+
+    void eraseUnlocked(const std::string& host);
+    bool isExpired(const CacheEntry& entry) const;
+    void touchUnlocked(CacheEntry& entry, const std::string& host);
+    void trimToCapacityUnlocked();
+
+   private:
+    mutable std::mutex mu_;
+    std::map<std::string, CacheEntry> data_;
+    std::list<std::string> order_;
+    size_t maxHosts_;
+};
+
+struct ResolveBinding {
+    std::string host;
+    std::string port;
+    std::string selectedIp;
+    curl_slist* resolveList = nullptr;
+
+    bool active() const {
+        return resolveList != nullptr && !selectedIp.empty();
+    }
 };
 
 template <typename RESOURCE_TYPE>
@@ -63,6 +119,16 @@ class ResourceManager_ {
     bool HasResourcesAvailable() {
         std::lock_guard<std::mutex> locker(m_queueLock);
         return m_resources.size() > 0 && !m_shutdown.load();
+    }
+
+    bool TryAcquire(RESOURCE_TYPE& resource) {
+        std::lock_guard<std::mutex> locker(m_queueLock);
+        if (m_shutdown.load() || m_resources.empty()) {
+            return false;
+        }
+        resource = m_resources.back();
+        m_resources.pop_back();
+        return true;
     }
 
     void Release(RESOURCE_TYPE resource) {
@@ -199,6 +265,11 @@ class HttpClient {
    protected:
     void setShareHandle(void* curl_handle, int cacheTime);
     void removeDNS(void* curl_handle, const std::shared_ptr<HttpRequest>& request);
+    ResolveBinding buildResolveBinding(const std::shared_ptr<HttpRequest>& request);
+    void releaseResolveBinding(ResolveBinding& binding) const;
+    void removeFailedIp(const ResolveBinding& binding);
+    std::vector<std::string> getHostIpList(const std::string& host);
+    std::vector<std::string> lookupHostIpList(const std::string& host) const;
     CURLSH* share_handle = nullptr;
 
    protected:
@@ -213,6 +284,7 @@ class HttpClient {
     std::string proxyUsername_;
     std::string proxyPassword_;
     int dnsCacheTime_ = 0;
+    bool enableDnsIpBalancing_ = false;
     std::string caPath_;
     std::string caFile_;
     int highLatencyLogThreshold_ = 100;
@@ -223,5 +295,7 @@ class HttpClient {
     std::string netInterface_;
     SslCtxCallback sslCtxCallback_ = nullptr;
     void* sslCtxCallbackUserData_ = nullptr;
+    HostIpCache dnsIpCache_;
+    std::function<std::vector<std::string>(const std::string&)> dnsLookupCallback_;
 };
 }  // namespace VolcengineTos

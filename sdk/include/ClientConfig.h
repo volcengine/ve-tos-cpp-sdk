@@ -18,6 +18,8 @@ class ClientConfig {
           enableCRC(true),
           enableVerifySSL(true),
           dnsCacheTime(0),
+          enableDnsIpBalancing(false),
+          dnsCacheHostCapacity(1024),
           socketTimeout(30000),
           maxConnections(25),
           sslCtxCallback(nullptr),
@@ -38,6 +40,8 @@ class ClientConfig {
     bool enableCRC;
     bool enableVerifySSL;
     int dnsCacheTime;
+    bool enableDnsIpBalancing;
+    int dnsCacheHostCapacity;
     int socketTimeout;
     int maxConnections;
     bool isCustomDomain = false;

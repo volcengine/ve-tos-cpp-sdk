@@ -140,6 +140,24 @@ do something with the client
 CloseClient();
 ```
 
+### DNS IP balancing
+
+When `ClientConfig::enableDnsIpBalancing` is `true` and `ClientConfig::dnsCacheTime` is greater than `0`, the SDK enables SDK-managed IP balancing for endpoint hosts that resolve to multiple IP addresses. The transport rotates the selected IP for each request and evicts a failed IP after retryable connection failures. This keeps request signing and TLS/SNI bound to the original host while spreading connections across the resolved IP set.
+
+The SDK-side host cache keeps up to `ClientConfig::dnsCacheHostCapacity` hosts and evicts the least recently used host when the capacity is exceeded. The default value is `1024`.
+
+When `ClientConfig::enableDnsIpBalancing` is `false` or `ClientConfig::dnsCacheTime` is `0`, the SDK keeps the existing libcurl-based behavior and does not apply SDK-managed multi-IP balancing.
+
+```C++
+ClientConfig config;
+config.dnsCacheTime = 5; // minutes, DNS cache TTL
+config.enableDnsIpBalancing = true; // optional, enables SDK-managed IP balancing
+config.dnsCacheHostCapacity = 1024; // optional, max cached hosts for SDK-side DNS/IP cache
+
+InitializeClient();
+TosClientV2 client(region, accessKey, secretKey, config);
+```
+
 ### Creat a bucket
 
 The bucket is a kind of unique namespace in TOS, which is a container to store data.
