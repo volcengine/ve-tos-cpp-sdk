@@ -1,7 +1,12 @@
 ## Release Note
 
+### 2026.7.6 Version 2.6.28
+- fix: 修复 UploadFileCheckpointV2 损坏或截断 checkpoint 文件导致 JSON 解析异常并触发进程 abort 的问题
+- fix: UploadFileCheckpointV2 checkpoint 写入改为临时文件原子替换，降低取消或异常退出时生成不完整 checkpoint 的风险
+
 ### 2026.6.26 Version 2.6.27
 - fix: 当 sslCtxCallback 接管证书校验且未配置 caFile/caPath 时，避免 libcurl 默认 CA 校验继续返回 curlCode 60
+- fix: 自定义 RequestHeader 按设计忽略 Connection 等禁止透传头域
 
 ### 2026.6.1 Version 2.6.26
 - feat: 支持异步 SDK 源码引入及可选编译
