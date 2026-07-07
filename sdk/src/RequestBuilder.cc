@@ -22,9 +22,8 @@ void mergeRequestHeaderAndHeader(const std::map<std::string, std::string> &reqHe
         std::string key(iter->first);
         std::string kk = StringUtils::toLower(key);
 
-        if (kk == "content-length" || kk == "host" || kk == "x-tos-date" ||
-            kk == "range" || kk == "transfer-encoding" || kk == "authorization" ||
-            kk == "date") {
+        if (kk == "content-length" || kk == "host" || kk == "connection" || kk == "x-tos-date" ||
+            kk == "range" || kk == "transfer-encoding" || kk == "authorization" || kk == "date") {
             continue;
         }
 

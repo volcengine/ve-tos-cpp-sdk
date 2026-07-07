@@ -2,9 +2,13 @@
 // #include "../src/utils/LogUtils.h"
 
 #include <cstdlib>
+#include <ctime>
+#include <iostream>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <sstream>
 
 #ifndef _WIN32
 #include <dlfcn.h>
@@ -104,6 +108,118 @@ int runExternalSslCallbackExample(const std::string& endpoint, const std::string
     }
 }
 #endif
+
+int runCustomRequestHeaderExample(const std::string& endpoint, const std::string& region, const std::string& bucket,
+                                  const std::string& accessKey, const std::string& secretKey,
+                                  const std::string& objectKey) {
+    if (accessKey.empty() || secretKey.empty()) {
+        std::cerr << "Please set TOS_ACCESS_KEY_ID and TOS_SECRET_ACCESS_KEY before running custom header example"
+                  << std::endl;
+        return 1;
+    }
+    if (bucket.empty()) {
+        std::cerr << "Please set TOS_BUCKET before running custom header example" << std::endl;
+        return 1;
+    }
+
+    const std::string key =
+            objectKey.empty() || objectKey == "your object key"
+                    ? "custom-request-header-example-" + std::to_string(std::time(nullptr))
+                    : objectKey;
+    const std::string data = "custom request header example data " + std::to_string(std::time(nullptr));
+    const std::string metaKey = "request-header-put";
+    const std::string metaValue = "from-request-header";
+
+    ClientConfig conf;
+    conf.endPoint = endpoint;
+    conf.enableCRC = true;
+
+    InitializeClient();
+    int ret = 0;
+    {
+        TosClientV2 client(region, accessKey, secretKey, conf);
+
+        auto content = std::make_shared<std::stringstream>(data);
+        PutObjectV2Input putInput(bucket, key, content);
+        putInput.setRequestHeader({{std::string(HEADER_META_PREFIX) + metaKey, metaValue},
+                                   {"X-Custom-Header", "put-custom"},
+                                   {"Connection", "close"}});
+        auto putOutput = client.putObject(putInput);
+        if (!putOutput.isSuccess()) {
+            std::cerr << "putObject with request headers failed: " << putOutput.error().String() << std::endl;
+            CloseClient();
+            return 2;
+        }
+        std::cout << "putObject with request headers success, request id: "
+                  << putOutput.result().getRequestInfo().getRequestId() << std::endl;
+
+        HeadObjectV2Input headInput(bucket, key);
+        auto headOutput = client.headObject(headInput);
+        if (!headOutput.isSuccess()) {
+            std::cerr << "headObject after putObject failed: " << headOutput.error().String() << std::endl;
+            ret = 3;
+        } else {
+            auto meta = headOutput.result().getMeta();
+            auto metaIter = meta.find(metaKey);
+            if (metaIter == meta.end() || metaIter->second != metaValue) {
+                std::cerr << "putObject request header metadata was not persisted" << std::endl;
+                ret = 4;
+            } else {
+                std::cout << "putObject request header metadata verified: " << metaKey << "=" << metaIter->second
+                          << std::endl;
+            }
+        }
+
+        if (ret == 0) {
+            GetObjectV2Input mismatchGetInput(bucket, key);
+            mismatchGetInput.setRequestHeader({{"If-Match", "\"request-header-example-not-match\""}});
+            auto mismatchGetOutput = client.getObject(mismatchGetInput);
+            if (mismatchGetOutput.isSuccess() || mismatchGetOutput.error().getStatusCode() != 412) {
+                std::cerr << "getObject If-Match request header did not take effect" << std::endl;
+                if (!mismatchGetOutput.isSuccess()) {
+                    std::cerr << mismatchGetOutput.error().String() << std::endl;
+                }
+                ret = 5;
+            } else {
+                std::cout << "getObject mismatched If-Match request header verified with status 412" << std::endl;
+            }
+        }
+
+        if (ret == 0) {
+            auto etag = headOutput.result().getETag();
+            GetObjectV2Input getInput(bucket, key);
+            getInput.setRequestHeader({{"If-Match", etag}, {"X-Custom-Header", "get-custom"}});
+            auto getOutput = client.getObject(getInput);
+            if (!getOutput.isSuccess()) {
+                std::cerr << "getObject with request headers failed: " << getOutput.error().String() << std::endl;
+                ret = 6;
+            } else {
+                std::stringstream downloaded;
+                downloaded << getOutput.result().getContent()->rdbuf();
+                if (downloaded.str() != data) {
+                    std::cerr << "getObject data mismatch" << std::endl;
+                    ret = 7;
+                } else {
+                    std::cout << "getObject with request headers success, request id: "
+                              << getOutput.result().getRequestInfo().getRequestId() << std::endl;
+                }
+            }
+        }
+
+        DeleteObjectInput deleteInput(bucket, key);
+        auto deleteOutput = client.deleteObject(deleteInput);
+        if (!deleteOutput.isSuccess()) {
+            std::cerr << "cleanup deleteObject failed: " << deleteOutput.error().String() << std::endl;
+            if (ret == 0) {
+                ret = 8;
+            }
+        } else if (ret == 0) {
+            std::cout << "custom request header example success" << std::endl;
+        }
+    }
+    CloseClient();
+    return ret;
+}
 
 }  // namespace
 
@@ -863,6 +979,9 @@ int main() {
         return runExternalSslCallbackExample(endpoint, region, bucket, ak, sk);
     }
 #endif
+    if (scenario == "custom_headers") {
+        return runCustomRequestHeaderExample(endpoint, region, bucket, ak, sk, key);
+    }
 
     // 日志支持
     //    LogUtils::SetLogger(logFilePath, "tos-cpp-sdk", LogLevel::LogDebug);
