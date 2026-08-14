@@ -1,5 +1,8 @@
 ## Release Note
 
+### 2026.8.13 Version 2.6.29
+- fix: 当 sslCtxCallback 接管证书校验且未配置 caFile/caPath 时，同时关闭 libcurl 主机名校验，避免 callback 通过后仍因 curl 默认校验返回 curlCode 60
+
 ### 2026.7.6 Version 2.6.28
 - fix: 修复 UploadFileCheckpointV2 损坏或截断 checkpoint 文件导致 JSON 解析异常并触发进程 abort 的问题
 - fix: UploadFileCheckpointV2 checkpoint 写入改为临时文件原子替换，降低取消或异常退出时生成不完整 checkpoint 的风险

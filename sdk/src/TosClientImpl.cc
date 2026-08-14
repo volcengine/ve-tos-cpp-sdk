@@ -3347,7 +3347,7 @@ Outcome<TosError, SetObjectMetaOutput> TosClientImpl::setObjectMeta(const SetObj
     }
     auto rb = newBuilder(input.getBucket(), input.getKey(), input);
     rb.withQuery("metadata", "");
-    rb.withQueryCheckEmpty("versionid", input.getVersionId());
+    rb.withQueryCheckEmpty("versionId", input.getVersionId());
 
     setObjectMetaSetOptionHeader(rb, input);
     auto req = rb.Build(http::MethodPost, nullptr);
