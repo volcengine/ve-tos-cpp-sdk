@@ -180,17 +180,13 @@ bool StringUtils::startsWithIgnoreCase(const std::string& src_str, const std::st
 }
 
 std::string StringUtils::toLower(const std::string& input) {
-    char* inp = (char*)input.c_str();
-    std::stringstream ret;
-    for (int i = 0; i < input.length(); ++i) {
-        if (inp[i] >= 'A' && inp[i] <= 'Z') {
-            char low = inp[i] + 32;
-            ret << low;
-        } else {
-            ret << inp[i];
+    std::string ret(input);
+    for (char& ch : ret) {
+        if (ch >= 'A' && ch <= 'Z') {
+            ch += 'a' - 'A';
         }
     }
-    return ret.str();
+    return ret;
 }
 
 std::string StringUtils::stringToHex(const unsigned char* input, int length) {

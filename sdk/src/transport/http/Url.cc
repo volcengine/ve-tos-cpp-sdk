@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <sstream>
 #include <vector>
 #include "../src/auth/SignV4.h"
 #include "transport/http/Url.h"
@@ -105,18 +104,21 @@ void Url::fromString(const std::string& url) {
 }
 
 std::string Url::toString() const {
-    std::ostringstream out;
+    const bool has_query = hasQuery();
+    const std::string query = has_query ? queryToStringWithEncode() : std::string();
+    std::string out;
+    out.reserve(scheme_.size() + host_.size() + port_.size() + path_.size() + query.size() + 5);
     if (!scheme_.empty())
-        out << scheme_ << "://";
+        out.append(scheme_).append("://");
     if (!host_.empty())
-        out << host_;
+        out.append(host_);
     if (!port_.empty())
-        out << ":" << port_;
+        out.append(":").append(port_);
     if (!path_.empty() && path_ != "/")
-        out << path_;
-    if (hasQuery())
-        out << "?" << queryToStringWithEncode();
-    return out.str();
+        out.append(path_);
+    if (has_query)
+        out.append("?").append(query);
+    return out;
 }
 
 void Url::setHost(const std::string& host) {

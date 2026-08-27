@@ -20,6 +20,7 @@
 #include "model/object/ResumableCopyPartInfo.h"
 #include "model/object/ResumableCopyCheckpoint.h"
 #include "model/acl/PolicyURLInner.h"
+#include <cerrno>
 #include <cstring>
 #include <fstream>
 #include <cstdio>
@@ -1711,7 +1712,7 @@ UploadFileCheckpointV2 loadCheckpointV2FromFile(const std::string& checkpointFil
     return ufc;
 }
 bool deleteCheckpointFile(const std::string& checkpointFilePath) {
-    return remove(checkpointFilePath.c_str());
+    return checkpointFilePath.empty() || remove(checkpointFilePath.c_str()) == 0 || errno == ENOENT;
 }
 Outcome<TosError, std::vector<UploadFilePartInfo>> getPartInfoFromFile(int64_t uploadFileSize, int64_t partSize) {
     Outcome<TosError, std::vector<UploadFilePartInfo>> ret;
@@ -2356,8 +2357,41 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
     if (!output.isSuccess()) {
         uploadEventCompleteMultipartUploadFailed(event, eventChange);
         ret.setSuccess(false);
-        error.setMessage("complete multi part failed");
-        ret.setE(error);
+        auto completeError = output.error();
+        if (completeError.getCode() == "NoSuchUpload") {
+            const auto serverMessage = completeError.getMessage();
+            std::string message = input.isEnableCheckpoint()
+                                          ? "the uploadId recorded in the checkpoint no longer exists on the server"
+                                          : "the multipart uploadId no longer exists on the server";
+            message += "; the multipart upload may already have been completed remotely, aborted, or expired";
+
+            if (input.isEnableCheckpoint()) {
+                if (input.isEnableCheckpointCleanupOnNoSuchUpload()) {
+                    if (deleteCheckpointFile(checkpointFilePath)) {
+                        message +=
+                                "; the stale checkpoint was removed, retry uploadFile to start a new multipart "
+                                "upload";
+                    } else {
+                        const int checkpointRemoveErrno = errno;
+                        message +=
+                                "; failed to remove the stale checkpoint, check the checkpoint path permissions "
+                                "before retrying";
+                        if (logger != nullptr) {
+                            logger->warn(
+                                    "failed to remove stale upload checkpoint after NoSuchUpload, path: {}, errno: {}",
+                                    checkpointFilePath, checkpointRemoveErrno);
+                        }
+                    }
+                } else {
+                    message += "; the stale checkpoint was retained because checkpoint cleanup is disabled";
+                }
+            }
+            if (!serverMessage.empty()) {
+                message += "; server message: " + serverMessage;
+            }
+            completeError.setMessage(message);
+        }
+        ret.setE(completeError);
         return ret;
     }
     // 合并成功，删除 checkpoint 文件
