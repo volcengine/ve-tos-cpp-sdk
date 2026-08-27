@@ -43,6 +43,12 @@ public:
     void setEnableCheckpoint(bool enablecheckpoint) {
         enableCheckpoint_ = enablecheckpoint;
     }
+    bool isEnableCheckpointCleanupOnNoSuchUpload() const {
+        return enableCheckpointCleanupOnNoSuchUpload_;
+    }
+    void setEnableCheckpointCleanupOnNoSuchUpload(bool enablecheckpointcleanuponnosuchupload) {
+        enableCheckpointCleanupOnNoSuchUpload_ = enablecheckpointcleanuponnosuchupload;
+    }
     const std::string& getCheckpointFile() const {
         return checkpointFile_;
     }
@@ -216,6 +222,8 @@ private:
     int64_t partSize_ = 20 * 1024 * 1024;  // 默认20MB分片大小
     int taskNum_ = 1;
     bool enableCheckpoint_ = false;
+    // CompleteMultipartUpload 返回 NoSuchUpload 时，是否删除已失效的 checkpoint。默认保留上传进度。
+    bool enableCheckpointCleanupOnNoSuchUpload_ = false;
     std::string checkpointFile_;
     DataTransferListener dataTransferListener_ = {nullptr, nullptr};
     UploadEventListener uploadEventListener_ = {nullptr};

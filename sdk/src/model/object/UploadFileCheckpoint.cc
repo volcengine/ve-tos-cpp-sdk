@@ -1,4 +1,6 @@
 
+#include <cstdio>
+#include <exception>
 #include <fstream>
 #include "model/object/UploadFileCheckpoint.h"
 #include "../src/external/json/json.hpp"
@@ -31,29 +33,36 @@ void VolcengineTos::UploadFileCheckpoint::load() {
     std::stringstream ss;
     ss << ifs.rdbuf();
     ifs.close();
-    auto j = json::parse(ss.str());
-    if (j.contains("Bucket"))
-        j.at("Bucket").get_to(bucket_);
-    if (j.contains("Key"))
-        j.at("Key").get_to(key_);
-    if (j.contains("PartSize"))
-        j.at("PartSize").get_to(partSize_);
-    if (j.contains("UploadID"))
-        j.at("UploadID").get_to(uploadID_);
-    if (j.contains("SSECustomerAlgorithm"))
-        j.at("SSECustomerAlgorithm").get_to(sseAlgorithm_);
-    if (j.contains("SSECustomerMD5"))
-        j.at("SSECustomerMD5").get_to(sseKeyMd5_);
-    if (j.contains("UploadFileInfo")) {
-        fileInfo_.load(j.at("UploadFileInfo"));
-    }
-    if (j.contains("Parts")) {
-        json parts = j.at("Parts");
-        for (auto& part : parts) {
-            UploadFilePartInfo ufp;
-            ufp.load(part);
-            uploadFilePartInfoList_.emplace_back(ufp);
+    try {
+        auto j = json::parse(ss.str());
+        if (j.contains("Bucket"))
+            j.at("Bucket").get_to(bucket_);
+        if (j.contains("Key"))
+            j.at("Key").get_to(key_);
+        if (j.contains("PartSize"))
+            j.at("PartSize").get_to(partSize_);
+        if (j.contains("UploadID"))
+            j.at("UploadID").get_to(uploadID_);
+        if (j.contains("SSECustomerAlgorithm"))
+            j.at("SSECustomerAlgorithm").get_to(sseAlgorithm_);
+        if (j.contains("SSECustomerMD5"))
+            j.at("SSECustomerMD5").get_to(sseKeyMd5_);
+        if (j.contains("UploadFileInfo")) {
+            fileInfo_.load(j.at("UploadFileInfo"));
         }
+        if (j.contains("Parts")) {
+            json parts = j.at("Parts");
+            for (auto& part : parts) {
+                UploadFilePartInfo ufp;
+                ufp.load(part);
+                uploadFilePartInfoList_.emplace_back(ufp);
+            }
+        }
+    } catch (const std::exception&) {
+        std::remove(checkpointFilePath_.c_str());
+        const auto checkpointFilePath = checkpointFilePath_;
+        *this = UploadFileCheckpoint();
+        checkpointFilePath_ = checkpointFilePath;
     }
 }
 

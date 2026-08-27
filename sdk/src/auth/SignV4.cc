@@ -7,7 +7,6 @@
 #include <ctime>
 #include <utility>
 #include <vector>
-#include <sstream>
 #include <algorithm>
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
@@ -88,9 +87,16 @@ std::map<std::string, std::string> SignV4::signHeader(const std::shared_ptr<TosR
             .append("/tos/request");
     auto keys = joinMapToString(signedHeader);
 
-    std::stringstream auth;
-    auth << "TOS4-HMAC-SHA256 Credential=" << credential << ",SignedHeaders=" << keys << ",Signature=" << sig;
-    signedRes[authorization] = auth.str();
+    std::string auth;
+    auth.reserve(sizeof("TOS4-HMAC-SHA256 Credential=") - 1 + credential.size() +
+                 sizeof(",SignedHeaders=") - 1 + keys.size() + sizeof(",Signature=") - 1 + sig.size());
+    auth.append("TOS4-HMAC-SHA256 Credential=");
+    auth.append(credential);
+    auth.append(",SignedHeaders=");
+    auth.append(keys);
+    auth.append(",Signature=");
+    auth.append(sig);
+    signedRes[authorization] = std::move(auth);
 
     return signedRes;
 }
@@ -138,9 +144,16 @@ void SignV4::signHeader(const std::shared_ptr<HttpRequest>& req) {
             .append("/tos/request");
     auto keys = joinMapToString(signedHeader);
 
-    std::stringstream auth;
-    auth << "TOS4-HMAC-SHA256 Credential=" << credential << ",SignedHeaders=" << keys << ",Signature=" << sig;
-    header[authorization] = auth.str();
+    std::string auth;
+    auth.reserve(sizeof("TOS4-HMAC-SHA256 Credential=") - 1 + credential.size() +
+                 sizeof(",SignedHeaders=") - 1 + keys.size() + sizeof(",Signature=") - 1 + sig.size());
+    auth.append("TOS4-HMAC-SHA256 Credential=");
+    auth.append(credential);
+    auth.append(",SignedHeaders=");
+    auth.append(keys);
+    auth.append(",Signature=");
+    auth.append(sig);
+    header[authorization] = std::move(auth);
 }
 
 std::map<std::string, std::string> SignV4::signQuery(const std::shared_ptr<TosRequest>& req,

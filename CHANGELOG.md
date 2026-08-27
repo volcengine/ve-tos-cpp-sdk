@@ -1,5 +1,8 @@
 ## Release Note
 
+### 2026.8.26 Version 2.6.30
+- fix: UploadFileV2 保留 CompleteMultipartUpload 的原始错误，并支持按请求选择在 NoSuchUpload 时清理失效 checkpoint，同时补充 uploadId 可能已在远端完成合并、终止或过期的诊断信息
+
 ### 2026.8.13 Version 2.6.29
 - fix: 当 sslCtxCallback 接管证书校验且未配置 caFile/caPath 时，同时关闭 libcurl 主机名校验，避免 callback 通过后仍因 curl 默认校验返回 curlCode 60
 

@@ -12,8 +12,11 @@
 #endif
 
 #include "model/object/UploadFileCheckpointV2.h"
+#include "model/object/UploadFileV2Input.h"
 
 using namespace VolcengineTos;
+
+bool deleteCheckpointFile(const std::string& checkpointFilePath);
 
 namespace {
 std::string checkpointPath(const std::string& name) {
@@ -124,4 +127,25 @@ TEST(UploadFileCheckpointV2Test, DumpWritesLoadableCheckpoint) {
 
     std::remove(path.c_str());
     std::remove((path + ".tmp").c_str());
+}
+
+TEST(UploadFileCheckpointV2Test, NoSuchUploadCleanupIsOptIn) {
+    UploadFileV2Input input;
+    EXPECT_FALSE(input.isEnableCheckpointCleanupOnNoSuchUpload());
+
+    input.setEnableCheckpointCleanupOnNoSuchUpload(true);
+    EXPECT_TRUE(input.isEnableCheckpointCleanupOnNoSuchUpload());
+}
+
+TEST(UploadFileCheckpointV2Test, DeleteCheckpointFileUsesSuccessSemantics) {
+    const auto path = checkpointPath("delete-upload-file-checkpoint-v2");
+    {
+        std::ofstream ofs(path, std::ios::out | std::ios::trunc | std::ios::binary);
+        ofs << "checkpoint";
+    }
+
+    ASSERT_TRUE(fileExists(path));
+    EXPECT_TRUE(deleteCheckpointFile(path));
+    EXPECT_FALSE(fileExists(path));
+    EXPECT_TRUE(deleteCheckpointFile(path));
 }

@@ -1,6 +1,9 @@
 #include "model/object/DownloadFileCheckpoint.h"
 #include "../src/external/json/json.hpp"
 
+#include <cstdio>
+#include <exception>
+
 void VolcengineTos::DownloadFileCheckpoint::load(const std::string& checkpointFilePath_) {
     std::ifstream ifs(checkpointFilePath_, std::ios::in);
     std::stringstream ss;
@@ -10,40 +13,45 @@ void VolcengineTos::DownloadFileCheckpoint::load(const std::string& checkpointFi
     if (str.empty()) {
         return;
     }
-    auto j = nlohmann::json::parse(str);
-    if (j.contains("Bucket"))
-        j.at("Bucket").get_to(bucket_);
-    if (j.contains("Key"))
-        j.at("Key").get_to(key_);
-    if (j.contains("VersionID"))
-        j.at("VersionID").get_to(versionID_);
-    if (j.contains("PartSize"))
-        j.at("PartSize").get_to(partSize_);
-    if (j.contains("IfMatch"))
-        j.at("IfMatch").get_to(ifMatch_);
-    if (j.contains("IfModifiedSince"))
-        j.at("IfModifiedSince").get_to(ifModifiedSince_);
-    if (j.contains("IfNoneMatch"))
-        j.at("IfNoneMatch").get_to(ifNoneMatch_);
-    if (j.contains("IfUnmodifiedSince"))
-        j.at("IfUnmodifiedSince").get_to(ifUnmodifiedSince_);
-    if (j.contains("SSEAlgorithm"))
-        j.at("SSEAlgorithm").get_to(sseAlgorithm_);
-    if (j.contains("SSECustomerMD5"))
-        j.at("SSECustomerMD5").get_to(sseKeyMd5_);
-    if (j.contains("ObjectInfo")) {
-        objectInfo_.load(j.at("ObjectInfo"));
-    }
-    if (j.contains("FileInfo")) {
-        fileInfo_.load(j.at("FileInfo"));
-    }
-    if (j.contains("PartsInfo")) {
-        nlohmann::json parts = j.at("PartsInfo");
-        for (auto& part : parts) {
-            DownloadFilePartInfo dfp;
-            dfp.load(part);
-            partsInfo_.emplace_back(dfp);
+    try {
+        auto j = nlohmann::json::parse(str);
+        if (j.contains("Bucket"))
+            j.at("Bucket").get_to(bucket_);
+        if (j.contains("Key"))
+            j.at("Key").get_to(key_);
+        if (j.contains("VersionID"))
+            j.at("VersionID").get_to(versionID_);
+        if (j.contains("PartSize"))
+            j.at("PartSize").get_to(partSize_);
+        if (j.contains("IfMatch"))
+            j.at("IfMatch").get_to(ifMatch_);
+        if (j.contains("IfModifiedSince"))
+            j.at("IfModifiedSince").get_to(ifModifiedSince_);
+        if (j.contains("IfNoneMatch"))
+            j.at("IfNoneMatch").get_to(ifNoneMatch_);
+        if (j.contains("IfUnmodifiedSince"))
+            j.at("IfUnmodifiedSince").get_to(ifUnmodifiedSince_);
+        if (j.contains("SSEAlgorithm"))
+            j.at("SSEAlgorithm").get_to(sseAlgorithm_);
+        if (j.contains("SSECustomerMD5"))
+            j.at("SSECustomerMD5").get_to(sseKeyMd5_);
+        if (j.contains("ObjectInfo")) {
+            objectInfo_.load(j.at("ObjectInfo"));
         }
+        if (j.contains("FileInfo")) {
+            fileInfo_.load(j.at("FileInfo"));
+        }
+        if (j.contains("PartsInfo")) {
+            nlohmann::json parts = j.at("PartsInfo");
+            for (auto& part : parts) {
+                DownloadFilePartInfo dfp;
+                dfp.load(part);
+                partsInfo_.emplace_back(dfp);
+            }
+        }
+    } catch (const std::exception&) {
+        std::remove(checkpointFilePath_.c_str());
+        *this = DownloadFileCheckpoint();
     }
 }
 void VolcengineTos::DownloadFileCheckpoint::dump(const std::string& checkpointFilePath_) {
