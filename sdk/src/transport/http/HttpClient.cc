@@ -1,4 +1,5 @@
 #include <iostream>
+#include <limits>
 #include <set>
 #include <utility>
 #ifndef _WIN32
@@ -262,7 +263,7 @@ static void processHandler(const DataTransferStatusChange& handler, int64_t cons
     handler(data);
 }
 
-static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
+static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) try {
     auto* resourceMan = static_cast<ResourceManager*>(data);
 
     if (resourceMan == nullptr || resourceMan->httpReq == nullptr) {
@@ -272,10 +273,32 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
                            resourceMan->dataTransferType, resourceMan->userData);
         }
 
-        return 0;
+        return CURL_READFUNC_ABORT;
     }
     std::shared_ptr<std::iostream>& content = resourceMan->httpReq->Body();
+    if (size != 0 && nmemb > (std::numeric_limits<size_t>::max)() / size) {
+        return CURL_READFUNC_ABORT;
+    }
     const size_t wanted = size * nmemb;
+    if (resourceMan->send < 0 || (resourceMan->total > 0 && resourceMan->send > resourceMan->total)) {
+        return CURL_READFUNC_ABORT;
+    }
+    size_t read = wanted;
+    if (resourceMan->total > 0) {
+        const uint64_t remains = static_cast<uint64_t>(resourceMan->total - resourceMan->send);
+        if (remains < read) {
+            read = static_cast<size_t>(remains);
+        }
+    }
+    if (read == 0) {
+        return 0;
+    }
+    if (ptr == nullptr || read > static_cast<uintmax_t>((std::numeric_limits<std::streamsize>::max)())) {
+        return CURL_READFUNC_ABORT;
+    }
+    if (content == nullptr) {
+        return resourceMan->total > 0 ? CURL_READFUNC_ABORT : 0;
+    }
 
     auto rateLimiter = resourceMan->rateLimiter;
     if (rateLimiter != nullptr) {
@@ -293,20 +316,19 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
         resourceMan->dataTransferType = 2;
     }
 
-    size_t got = 0;
-    if (content != nullptr && wanted > 0) {
-        size_t read = wanted;
-        if (resourceMan->total > 0) {
-            int64_t remains = resourceMan->total - resourceMan->send;
-            if (remains < static_cast<int64_t>(wanted)) {
-                read = static_cast<size_t>(remains);
-            }
-        }
-        content->read(ptr, read);
-        got = static_cast<size_t>(content->gcount());
+    // Validate the signed count before it can reach progress accounting or CRC.
+    content->read(ptr, static_cast<std::streamsize>(read));
+    const std::streamsize count = content->gcount();
+    if (count < 0 || static_cast<uintmax_t>(count) > read || content->bad() || (content->fail() && !content->eof())) {
+        return CURL_READFUNC_ABORT;
+    }
+    const size_t got = static_cast<size_t>(count);
+    if ((resourceMan->total > 0 && got < read) ||
+        got > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)() - resourceMan->send)) {
+        return CURL_READFUNC_ABORT;
     }
 
-    resourceMan->send += got;
+    resourceMan->send += static_cast<int64_t>(got);
     if (resourceMan->progress) {
         // 数据发送完成
         if (resourceMan->total == resourceMan->send) {
@@ -320,6 +342,9 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
         resourceMan->sendCrc64Value = CRC64::CalcCRC(resourceMan->sendCrc64Value, (void*)ptr, got);
     }
     return got;
+} catch (...) {
+    // User streams and progress handlers must not unwind through libcurl.
+    return CURL_READFUNC_ABORT;
 }
 
 static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {

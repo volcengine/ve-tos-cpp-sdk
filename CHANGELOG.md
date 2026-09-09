@@ -1,5 +1,8 @@
 ## Release Note
 
+### Unreleased
+- fix: 同步上传校验输入流读取长度及计数边界，捕获读取和进度回调异常，避免非法长度进入 CRC64 导致崩溃；已知长度的流提前结束时中止请求。
+
 ### 2026.8.26 Version 2.6.30
 - fix: UploadFileV2 保留 CompleteMultipartUpload 的原始错误，并支持按请求选择在 NoSuchUpload 时清理失效 checkpoint，同时补充 uploadId 可能已在远端完成合并、终止或过期的诊断信息
 
