@@ -6,7 +6,7 @@
 #include "../../../../include/utils/ConcurrentCachedBlockQueue.h"
 #include "utils/CurlCache.h"
 #include "../../../../include/utils/LinkedBufferQueue.h"
-#include "../../../../include/utils/LockFreeQueue.h"
+#include "../../../../include/utils/ConcurrentQueue.h"
 
 #include <curl/curl.h>
 #include <atomic>
@@ -14,10 +14,12 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <thread>
 #include <vector>
 
 #include <unistd.h>
+#include "AsyncEngine.h"
 
 namespace VolcengineTos {
 
@@ -30,6 +32,9 @@ class AsyncHttpClient {
  public:
     // 构造函数，默认使用CPU核心数的线程
     explicit AsyncHttpClient(TransportConfig config, size_t thread_count = 0, bool crc_enable_ = false);
+    AsyncHttpClient(TransportConfig config, std::shared_ptr<AsyncEngine> engine,
+                    const AsyncClientSharingOptions& sharing = {});
+    void beginClose();
 
     AsyncHttpClient(const AsyncHttpClient&) = delete;
     AsyncHttpClient& operator=(const AsyncHttpClient&) = delete;
@@ -54,7 +59,22 @@ class AsyncHttpClient {
         OnRequestStart on_request_start, OnHttpStatusSet on_http_status_set,
         OnContentLengthSet on_content_length_set) const;
 
+    // Callback-only submission allocates no promise/shared future state.
+    void sendCallback(const std::shared_ptr<HttpRequest>& request,
+        const OnDataReceiveWithEvent& on_data_receive, const OnDataSendWithEvent& on_data_send,
+        std::function<void(std::shared_ptr<HttpResponse>)> on_request_finished,
+        OnRequestStart on_request_start = {}, OnHttpStatusSet on_http_status_set = {},
+        OnContentLengthSet on_content_length_set = {}) const;
+
  private:
+    friend class AsyncEngineCore;
+    friend struct AsyncTransportTestAccess;
+    std::future<std::shared_ptr<HttpResponse>> submit(
+        const std::shared_ptr<HttpRequest>& request, const OnDataReceiveWithEvent& on_data_receive,
+        const OnDataSendWithEvent& on_data_send,
+        std::function<void(std::shared_ptr<HttpResponse>)> on_request_finished,
+        OnRequestStart on_request_start, OnHttpStatusSet on_http_status_set,
+        OnContentLengthSet on_content_length_set, bool need_future) const;
     struct CurlMultiHandle;
 
     // 内部结构体定义
@@ -63,10 +83,18 @@ class AsyncHttpClient {
 
         std::string url;
         std::shared_ptr<HttpRequest> request;
-        std::promise<std::shared_ptr<HttpResponse>> promise;
+        std::optional<std::promise<std::shared_ptr<HttpResponse>>> promise;
+        bool pending_slot = false;
+        bool detail_log = false;
+        size_t response_header_limit = 0;
+        size_t response_header_bytes = 0;
+        std::function<void(RequestContext&)> on_result_;
+        std::function<void()> on_retired_;
+        std::shared_ptr<void> engine_request;
 
         CURLM* multi_handle = nullptr;
         CURL* curl_handle = nullptr;
+        bool registered_with_multi = false;
 
         curl_slist* headers = nullptr;
         bool is_read = false;
@@ -85,6 +113,8 @@ class AsyncHttpClient {
 
         // 限流
         std::shared_ptr<RateLimiter> rate_limiter;
+        // Worker-owned QoS timer, separate from the user's PauseFor/Resume.
+        int64_t qos_resume_at_ms = 0;
 
         // 下游更强情况下：靠用户自行暂停，然后通知恢复。看是否以后能将客户的事件注册进来，实现事件共池
         std::shared_ptr<AsyncEvent> event_;
@@ -95,6 +125,11 @@ class AsyncHttpClient {
         // 响应相关
         std::shared_ptr<HttpResponse> response = std::make_shared<HttpResponse>();
         bool completed = false;
+        // Worker-owned, sticky: a later CURLMSG_DONE/OK cannot undo a sink/source error.
+        CURLcode callback_error = CURLE_OK;
+        void recordCallbackError(CURLcode code) noexcept {
+            if (callback_error == CURLE_OK) callback_error = code;
+        }
         bool headers_completed_ = false;  // 新增：标记响应头是否接收完成
 
         // 重试相关
@@ -112,7 +147,48 @@ class AsyncHttpClient {
             ++g_req_ctx_create_cnt;
         }
 
+        void releasePendingSlot() noexcept {
+            if (pending_slot) {
+                pending_slot = false;
+                parent->pending_count.fetch_sub(1, std::memory_order_relaxed);
+            }
+        }
+        void notifyFinished() noexcept {
+            // Claim before external code, including reentry. Not a drain signal.
+            std::function<void(std::shared_ptr<HttpResponse>)> callback;
+            callback.swap(on_request_finished_);
+            auto observer = std::move(on_result_);
+            if (observer) { try { observer(*this); } catch (...) {} }
+            if (callback) { try { callback(response); } catch (...) {} }
+        }
+        void failPromise(const char* message) noexcept {
+            if (!promise) return;
+            try { promise->set_exception(std::make_exception_ptr(std::runtime_error(message))); }
+            catch (...) {}
+        }
+        void fulfillPromise() noexcept {
+            if (!promise) return;
+            try { promise->set_value(response); } catch (...) {}
+        }
+        void detachCurl() noexcept {
+            if (registered_with_multi) {
+                curl_multi_remove_handle(multi_handle, curl_handle);
+                registered_with_multi = false;
+            }
+        }
+        void failSetup(CURLcode code, const char* message) noexcept {
+            // No transfer has run. Detach before external completion/reentry.
+            detachCurl();
+            completed = true;
+            response->setStatus(http::otherErr);
+            response->setCurlErrCode(code);
+            try { response->setStatusMsg(message); } catch (...) {}
+            failPromise(message);
+            notifyFinished();
+        }
         ~RequestContext() {
+            releasePendingSlot();
+            detachCurl();
             if (headers) {
                 curl_slist_free_all(headers);
             }
@@ -122,6 +198,19 @@ class AsyncHttpClient {
             }
             request = nullptr;
             ++g_req_ctx_destroy_cnt;
+            // Retiring means all user captures and transport buffers are gone,
+            // not merely that the result callback has started.
+            on_request_finished_ = {};
+            on_result_ = {};
+            on_request_start_ = {};
+            on_http_status_set_ = {};
+            on_content_length_set_ = {};
+            on_data_receive_with_event_ = {};
+            on_data_send_with_event_ = {};
+            cached_buffer_queue_.clear();
+            response.reset();
+            event_.reset();
+            if (on_retired_) { try { on_retired_(); } catch (...) {} }
         }
 
         bool operator==(const RequestContext& other) const {
@@ -130,16 +219,16 @@ class AsyncHttpClient {
     };
 
     struct CurlMultiHandle {
-        CURLM* multi_handle = curl_multi_init();  // 析构清理
+        CURLM* multi_handle = nullptr;  // allocated after all throwing members
         std::thread thread;
         int max_connection_num = 0;
 
-        // async-only cutover 后，worker 的活跃态等待从“sleep/condvar 驱动”改成了
-        // `curl_multi_wait + eventfd` 模式；这里的 fd 就是给新请求入队、AsyncEvent 恢复、
-        // 以及 shutdown 这些跨线程事件准备的唤醒通道。
-        // 保留这段说明是为了后续 review 时区分：它解决的是“活跃态如何尽快打断 wait”，
-        // 不是“空闲态如何取到新请求”——后者还受 queue_cv 路径影响。
+        // Socket/timer wait, including paused transfers. Submission, resume
+        // and shutdown wake exactly the owning worker via this counted fd.
         int wake_fd = -1;
+        // Shared engine: redirect wakeups to its worker, not a per-multi thread.
+        void (*engine_notify)(void*) = nullptr;
+        void* engine_notify_data = nullptr;
 
         // 向 wake_fd 写入事件，唤醒 workerThread
         void Notify();
@@ -149,28 +238,17 @@ class AsyncHttpClient {
 
         std::atomic<bool> running{false};
         std::atomic<bool> running_finish{false};
-        // idle / paused-only 路径上的 queue_cv_ 只是“边沿触发”的唤醒原语，本身不会记住
-        // 一次 notify_one()。因此这里额外维护一个 generation counter：
-        //   1) waitForWorkOrResume() 在准备睡眠前先拍下当前 wake_seq；
-        //   2) 任意需要 worker 重新检查状态的事件（send/resume/shutdown）都会先 ++wake_seq；
-        //   3) queue_cv_.wait(..., pred) 通过比较 wake_seq 是否变化来判断“自从我决定要睡之后，
-        //      是否已经发生过新的唤醒事件”。
-        // 这解决的是经典 lost wakeup 竞态：
-        //   waiter 判断自己可以睡 -> producer 入队新工作并 notify -> waiter 尚未真正阻塞，
-        //   于是这次 notify 边沿被错过 -> waiter 随后睡下去，明明队列里已经有工作，却要等到
-        //   下一次无关事件/超时才会醒。
-        // 对比之下，活跃态的 curl_multi_wait 走的是 wake_fd(eventfd) 路径，eventfd 自带计数语义，
-        // 内核会“记住”之前写入过的唤醒，所以不需要额外的软件计数器；wake_seq 是专门补给
-        // queue_cv_ 这条路径的“状态记忆”。
+        // Generation and queue_mutex_ close the predicate-check/park race for
+        // the no-active-transfer CV wait (also the eventfd-failure fallback).
         std::atomic<uint64_t> wake_seq{0};
 
         // todo：大中小IO拆分
-        LockFreeQueue<RequestContext> request_queue_;
+        ConcurrentQueue<RequestContext> request_queue_;
         CachedQueue<RequestContext> paused_queue_;
         std::set<RequestContext*> active_set_;
         std::atomic<uint64_t> active_count{0};
-        std::atomic<int64_t> next_request_not_before_ms{-1};
-        int curl_multi_wait_timeout_ms = 50;
+        std::atomic<size_t> pending_count{0};
+        int curl_multi_wait_timeout_ms;
 
         CurlCache curl_cache;
         std::vector<curl_waitfd> extra_fds;
@@ -180,9 +258,8 @@ class AsyncHttpClient {
         std::atomic<time_t> last_print_ms{0};
 
         std::mutex queue_mutex_;
-        // 空闲态 / paused-only 态的等待原语。当前设计将活跃 I/O 的阻塞固定收敛到
-        // curl_multi_wait，而把无 runnable active 请求时的阻塞统一放在这里。
-        // 注意：queue_cv_ 必须与 wake_seq 配合使用；单独的 notify_one() 只有边沿，没有记忆。
+        // No active transfers: park until a queued deadline or notification.
+        // Paused transfers stay in curl so its own deadlines keep advancing.
         std::condition_variable queue_cv_;
 
         CurlMultiHandle(const TransportConfig& transport_config, const int max_connection_num)
@@ -190,7 +267,11 @@ class AsyncHttpClient {
               curl_multi_wait_timeout_ms(transport_config.getCurlMultiWaitTimeoutMs()),
               curl_cache(transport_config, max_connection_num),
               current_ms(0),
-              last_print_ms(0) {}
+              last_print_ms(0) {
+            // A queue/cache/config constructor can throw. Allocate the raw
+            // curl resource only after those members have finished.
+            multi_handle = curl_multi_init();
+        }
 
         ~CurlMultiHandle() {
             int wait_count = 50;
@@ -199,84 +280,24 @@ class AsyncHttpClient {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
 
-            // 清理队列中未处理的请求（避免内存泄漏 + 通知调用者）
-            while (!request_queue_.unsafeEmpty()) {
-                RequestContext* ctx = request_queue_.pop();
-
-                // Notify pipeline/caller before destroying context so that higher-level
-                // resources (e.g. pooled pipelines / request bodies) can be released.
-                if (ctx && ctx->response) {
-                    ctx->response->setStatus(http::otherErr);
-                    ctx->response->setStatusMsg("AsyncHttpClient destroyed before request processing");
-                }
-                if (ctx && ctx->on_request_finished_) {
-                    try {
-                        ctx->on_request_finished_(ctx->response);
-                    } catch (...) {
-                    }
-                }
-
-                try {
-                    ctx->promise.set_exception(std::make_exception_ptr(
-                        std::runtime_error("AsyncHttpClient destroyed before request processing")));
-                } catch (...) { /* 防止set_exception重复调用崩溃 */
-                }
-
-                delete ctx;  // 释放请求上下文内存
+            // Paused entries alias active_set_: they do not own contexts.
+            while (paused_queue_.pop() != nullptr) {}
+            while (RequestContext* ctx = request_queue_.pop()) {
+                ctx->response->setStatus(http::otherErr);
+                ctx->response->setStatusMsg("AsyncHttpClient destroyed before request processing");
+                ctx->notifyFinished();
+                ctx->failPromise("AsyncHttpClient destroyed before request processing");
+                delete ctx;
             }
-
-            while (!paused_queue_.empty()) {
-                RequestContext* ctx = paused_queue_.pop();
-
-                if (ctx && ctx->response) {
-                    ctx->response->setStatus(http::otherErr);
-                    ctx->response->setStatusMsg("AsyncHttpClient destroyed before request processing");
-                }
-                if (ctx && ctx->on_request_finished_) {
-                    try {
-                        ctx->on_request_finished_(ctx->response);
-                    } catch (...) {
-                    }
-                }
-
-                try {
-                    ctx->promise.set_exception(std::make_exception_ptr(
-                        std::runtime_error("AsyncHttpClient destroyed before request processing")));
-                } catch (...) { /* 防止set_exception重复调用崩溃 */
-                }
-
-                delete ctx;  // 释放请求上下文内存
+            for (RequestContext* ctx : active_set_) {
+                ctx->response->setStatus(http::otherErr);
+                ctx->response->setStatusMsg("AsyncHttpClient destroyed at request processing");
+                ctx->notifyFinished();
+                ctx->failPromise("AsyncHttpClient destroyed at request processing");
+                ctx->detachCurl();
+                delete ctx;
             }
-
-            auto iter = active_set_.begin();
-            while (iter != active_set_.end()) {
-                RequestContext* ctx = *iter;  // 获取当前指针
-                if (ctx != nullptr) {
-                    try {
-                        ctx->promise.set_exception(std::make_exception_ptr(
-                            std::runtime_error("AsyncHttpClient destroyed at request processing")));
-                    } catch (...) { /* 防止set_exception重复调用崩溃 */
-                    }
-
-                    if (ctx->response) {
-                        ctx->response->setStatus(http::otherErr);
-                        ctx->response->setStatusMsg("AsyncHttpClient destroyed at request processing");
-                    }
-                    if (ctx->on_request_finished_) {
-                        try {
-                            ctx->on_request_finished_(ctx->response);
-                        } catch (...) {
-                        }
-                    }
-
-                    if (multi_handle != nullptr && ctx->curl_handle != nullptr) {
-                        curl_multi_remove_handle(multi_handle, ctx->curl_handle);
-                    }
-                    delete ctx;
-                }
-                // 3. erase 当前元素，返回下一个有效迭代器（直接赋值给 iter，无需 iter++）
-                iter = active_set_.erase(iter);
-            }
+            active_set_.clear();
 
             if (multi_handle) {
                 curl_multi_cleanup(multi_handle);
@@ -292,15 +313,14 @@ class AsyncHttpClient {
 
     // 内部方法
 
-    static RequestContext* getRequest(CurlMultiHandle& multi_handle, int64_t* next_request_not_before_ms);
-    CURLcode addRequestToEventor(CURLM* multi_handle, RequestContext* ctx) const;
+    static RequestContext* getRequest(CurlMultiHandle& multi_handle);
+    static CURLcode addRequestToEventor(CURLM* multi_handle, RequestContext* ctx);
     static void processCompleteActiveFds(CURLM* multi_handle, std::thread::id& thread_id,
                                          std::vector<curl_waitfd>& extra_fds,
                                          const std::set<RequestContext*>& active_ctxs);
-    void processRequestDone(CurlMultiHandle& multi_handle, CurlCache& curl_cache, const CURLMsg* msg,
-                            int& messages_left) const;
-    void processCompletedRequests(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
-                                  CurlCache& curl_cache, std::vector<curl_waitfd>& extra_fds) const;
+    static void finishRequest(CurlMultiHandle& multi_handle, RequestContext* ctx, CURLcode result);
+    static void processCompletedRequests(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
+                                  CurlCache& curl_cache, std::vector<curl_waitfd>& extra_fds);
     static void updateCurrentTime(CurlMultiHandle& multi_handle);
     void tryPrintLog(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
                      const CurlCache& curl_cache) const;
@@ -308,10 +328,10 @@ class AsyncHttpClient {
                            CurlCache& curl_cache) const;
     static void processActiveFds(const CurlMultiHandle& multi_handle, std::vector<curl_waitfd>& extra_fds,
                                  const std::set<RequestContext*>& active_ctxs);
-    static bool hasRunnableActive(const CurlMultiHandle& multi_handle);
     static int64_t getNextIdleWakeupMs(const CurlMultiHandle& multi_handle);
-    static void processActiveRequest(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
-                                     std::vector<curl_waitfd>& extra_fds);
+    static int64_t pausedDeadlineMs(const RequestContext& ctx);
+    void processActiveRequest(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
+                              std::vector<curl_waitfd>& extra_fds) const;
     static void waitForWorkOrResume(CurlMultiHandle& multi_handle);
     static void processPausedRequest(CurlMultiHandle& multi_handle, std::thread::id& thread_id);
     static void enqueuePausedRequest(CurlMultiHandle& multi_handle, RequestContext* ctx);
@@ -343,11 +363,14 @@ class AsyncHttpClient {
                                                     AsyncEvent* event);
     static size_t readCallback(char* ptr, size_t size, size_t nmemb, void* userdata);
     static size_t headerCallback(char* buffer, size_t size, size_t nitems, void* userdata);
+    static size_t headerCallbackImpl(char* buffer, size_t total_size, RequestContext* ctx);
     static int debugCallback(CURL* curl, curl_infotype type, char* data, size_t size, void* userdata);
 
     // 成员变量
     // 全局引用计数：跟踪活跃的 AsyncHttpClient 实例数
     static std::atomic_uint curl_global_ref_count;
+    // Serializes admission with close; never held across network IO or callbacks.
+    mutable std::mutex submission_mutex_;
     std::vector<std::shared_ptr<CurlMultiHandle>> multi_handles_;
     size_t thread_count_;
     std::atomic<bool> running_{false};
@@ -355,6 +378,8 @@ class AsyncHttpClient {
 
     TransportConfig transport_config_;
     bool enable_crc_ = false;
+    std::shared_ptr<AsyncEngine> engine_;
+    std::shared_ptr<struct AsyncClientSession> session_;
 
     // todo：DNS支持手动淘汰
     static size_t writeCallbackImpl(RequestContext* ctx, char* ptr, size_t data_len);

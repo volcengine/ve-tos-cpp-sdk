@@ -1,4 +1,5 @@
 #include "AsyncHttpClient.h"
+#include "AsyncEngineCore.h"
 
 
 #include "TosClient.h"
@@ -23,6 +24,12 @@
 
 using namespace VolcengineTos;
 namespace VolcengineTos {
+namespace {
+// A reference count alone can publish an unfinished initialization or race
+// the final cleanup with a new engine's first initialization. This lock is
+// only used at native transport lifetime boundaries, never on the IO path.
+std::mutex native_curl_lifetime_mutex;
+}
 std::atomic<uint64_t> g_req_ctx_create_cnt(0);
 std::atomic<uint64_t> g_req_ctx_destroy_cnt(0);
 std::atomic_uint AsyncHttpClient::curl_global_ref_count(0);
@@ -35,21 +42,22 @@ void AsyncHttpClient::WakeupMultiHandleFromEvent(void* user_data) {
 }
 
 void AsyncHttpClient::CurlMultiHandle::Notify() {
-    // 对 queue_cv_ 路径来说，真正的唤醒条件不是“刚才有人 notify 过”，而是
-    // “自从 waiter 决定睡眠以来，是否发生过新的事件”。因此先递增 wake_seq，
-    // 再发出 notify_one()；这样即便 notify 恰好落在 waiter 进入 wait() 的边缘窗口，
-    // waiter 也会因为看到 wake_seq 已变化而不再继续睡下去。
-    wake_seq.fetch_add(1, std::memory_order_relaxed);
+    if (engine_notify) { engine_notify(engine_notify_data); return; }
+    // Publish under the waiter's mutex. An atomic predicate alone still loses
+    // notify between the predicate check and actually parking on the condvar.
+    {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        wake_seq.fetch_add(1, std::memory_order_relaxed);
+    }
     if (wake_fd < 0) {
-        // 这里不需要额外持有 queue_mutex_：wait 的 predicate 观察的是 running/wake_seq
-        // 这两个原子状态，而不是某个必须在同一把 mutex 下发布的普通布尔值。
         queue_cv_.notify_one();
         return;
     }
     const uint64_t one = 1;
-    const ssize_t n = ::write(wake_fd, &one, sizeof(one));
-    (void)n;
-    // wake_fd 唤醒的是 curl_multi_wait，queue_cv_ 唤醒的是 idle / paused-only wait；
+    ssize_t n;
+    do { n = ::write(wake_fd, &one, sizeof(one)); } while (n < 0 && errno == EINTR);
+    // EAGAIN means eventfd already contains a wakeup; it must not be retried.
+    // wake_fd 唤醒的是 curl_multi_wait，queue_cv_ 唤醒的是 idle wait；
     // 两条阻塞路径都要覆盖。
     queue_cv_.notify_one();
 }
@@ -64,6 +72,7 @@ void AsyncHttpClient::CurlMultiHandle::DrainWakeFd() {
         if (n == static_cast<ssize_t>(sizeof(value))) {
             continue;
         }
+        if (n < 0 && errno == EINTR) continue;
         if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
             break;
         }
@@ -113,8 +122,8 @@ AsyncHttpClient::AsyncHttpClient(TransportConfig config, const size_t thread_cou
         if (multi_handle->wake_fd < 0) {
             Logger::getInstance().error("Failed to create eventfd for thread ", i, ", errno=", errno);
         }
-        Logger::getInstance().debug("Created curl_multi handle ", ptrToString(multi_handle->multi_handle),
-                                    " for thread ", i);
+        Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Created curl_multi handle ", ptrToString(multi_handle->multi_handle),
+                                    " for thread ", i); });
 
         multi_handle->running = true;
         multi_handle->thread = std::thread(&AsyncHttpClient::workerThread, this, std::ref(*multi_handle));
@@ -130,6 +139,12 @@ AsyncHttpClient::AsyncHttpClient(TransportConfig config, const size_t thread_cou
 }
 
 void AsyncHttpClient::closeClient() {
+    if (engine_) {
+        closed_.store(true, std::memory_order_release);
+        engine_->core_->CloseSession(session_, true);
+        return;
+    }
+    std::unique_lock<std::mutex> admission(submission_mutex_);
     bool expected = false;
     if (!closed_.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
         Logger::getInstance().info("CloseClient already completed, skip");
@@ -137,6 +152,7 @@ void AsyncHttpClient::closeClient() {
     }
 
     running_ = false;
+    admission.unlock();
     Logger::getInstance().info("AsyncHttpClient shutdown start, worker_count=", multi_handles_.size());
     for (const auto& handle : multi_handles_) {
         handle->running = false;  // 标记当前线程需退出
@@ -169,9 +185,24 @@ void AsyncHttpClient::closeClient() {
 AsyncHttpClient::~AsyncHttpClient() {
     Logger::getInstance().info("AsyncHttpClient destructor start");
     closeClient();
+    if (engine_) engine_->core_->Detach(session_);
+}
+
+AsyncHttpClient::AsyncHttpClient(TransportConfig config, std::shared_ptr<AsyncEngine> engine,
+                               const AsyncClientSharingOptions& sharing)
+    : thread_count_(0), transport_config_(std::move(config)), engine_(std::move(engine)) {
+    if (!engine_) throw std::invalid_argument("null async engine");
+    session_ = engine_->core_->Attach(transport_config_, sharing);
+}
+
+void AsyncHttpClient::beginClose() {
+    if (!engine_) { closeClient(); return; }
+    closed_.store(true, std::memory_order_release);
+    engine_->core_->CloseSession(session_, false);
 }
 
 void AsyncHttpClient::initCurl() {
+    std::lock_guard<std::mutex> lock(native_curl_lifetime_mutex);
     const uint32_t old_count = curl_global_ref_count.fetch_add(1, std::memory_order_acq_rel);
     if (old_count == 0) {
         // 第一个实例：初始化 libcurl 全局资源
@@ -192,6 +223,7 @@ void AsyncHttpClient::initCurl() {
 }
 
 void AsyncHttpClient::cleanupCurl() {
+    std::lock_guard<std::mutex> lock(native_curl_lifetime_mutex);
     uint32_t old_count = curl_global_ref_count.load(std::memory_order_acquire);
     while (true) {
         if (old_count == 0) {
@@ -215,205 +247,134 @@ void AsyncHttpClient::cleanupCurl() {
 }
 
 std::future<std::shared_ptr<HttpResponse>> AsyncHttpClient::send(
-    const std::shared_ptr<HttpRequest>& request, const OnDataReceiveWithEvent& on_data_receive,
-    const OnDataSendWithEvent& on_data_send,
-    std::function<void(std::shared_ptr<HttpResponse>)> on_request_finished, OnRequestStart on_request_start,
-    OnHttpStatusSet on_http_status_set, OnContentLengthSet on_content_length_set) const {
-    // 1. 创建请求上下文
-    auto* ctx = new RequestContext(request);
-    ctx->url = request->url().toString();
-    ctx->enable_crc_ = request->isCheckCrc64();
-    ctx->on_data_receive_with_event_ = on_data_receive;
-    ctx->on_data_send_with_event_ = on_data_send;
-    ctx->on_request_finished_ = std::move(on_request_finished);
-    if (on_request_start) {
-        ctx->on_request_start_ = std::move(on_request_start);
+    const std::shared_ptr<HttpRequest>& request, const OnDataReceiveWithEvent& receive,
+    const OnDataSendWithEvent& produce, std::function<void(std::shared_ptr<HttpResponse>)> done,
+    OnRequestStart start, OnHttpStatusSet status, OnContentLengthSet length) const {
+    return submit(request, receive, produce, std::move(done), std::move(start),
+                  std::move(status), std::move(length), true);
+}
+
+void AsyncHttpClient::sendCallback(
+    const std::shared_ptr<HttpRequest>& request, const OnDataReceiveWithEvent& receive,
+    const OnDataSendWithEvent& produce, std::function<void(std::shared_ptr<HttpResponse>)> done,
+    OnRequestStart start, OnHttpStatusSet status, OnContentLengthSet length) const {
+    (void)submit(request, receive, produce, std::move(done), std::move(start),
+                 std::move(status), std::move(length), false);
+}
+
+std::future<std::shared_ptr<HttpResponse>> AsyncHttpClient::submit(
+    const std::shared_ptr<HttpRequest>& request, const OnDataReceiveWithEvent& receive,
+    const OnDataSendWithEvent& produce, std::function<void(std::shared_ptr<HttpResponse>)> done,
+    OnRequestStart start, OnHttpStatusSet status, OnContentLengthSet length, bool need_future) const {
+    if (!request) throw std::invalid_argument("null async HTTP request");
+    if (engine_) return engine_->core_->Submit(session_, request, receive, produce, std::move(done),
+                                              std::move(start), std::move(status), std::move(length), need_future);
+    std::optional<std::promise<std::shared_ptr<HttpResponse>>> promise;
+    std::future<std::shared_ptr<HttpResponse>> future;
+    if (need_future) {
+        promise.emplace();
+        future = promise->get_future();
     }
-    if (on_content_length_set) {
-        ctx->on_content_length_set_ = std::move(on_content_length_set);
-    }
-    if (on_http_status_set) {
-        ctx->on_http_status_set_ = std::move(on_http_status_set);
-    }
-    ctx->not_send_util_ = request->notSendUtilMs();
-    ctx->is_chunked = request->isChunked();
-    ctx->rate_limiter = request->getRateLimiter();
-    ctx->event_ = std::make_shared<AsyncEvent>();
 
-    auto future = ctx->promise.get_future();
-
-    // 2. 选择「请求数最少」的线程队列
-    std::shared_ptr<CurlMultiHandle> target_handle = nullptr;
-    size_t min_queue_size = std::numeric_limits<size_t>::max();
-
-    // 遍历所有线程队列，无锁获取大小，可能不精确
-    for (auto& handle : multi_handles_) {
-        size_t current_size = handle->request_queue_.unsafeSize() + handle->active_count;
-
-        // 更新最小队列（找到更小的则替换）
-        if (current_size < min_queue_size) {
-            min_queue_size = current_size;
-            target_handle = handle;
+    std::unique_lock<std::mutex> admission(submission_mutex_);
+    CurlMultiHandle* target = nullptr;
+    size_t min_load = std::numeric_limits<size_t>::max();
+    if (running_ && !closed_) {
+        for (const auto& handle : multi_handles_) {
+            const size_t pending = handle->pending_count.load(std::memory_order_relaxed);
+            const size_t limit = transport_config_.getMaxRequestQueue() > 0
+                ? static_cast<size_t>(transport_config_.getMaxRequestQueue())
+                : static_cast<size_t>(handle->curl_cache.getMaxPoolSize()) * 2;
+            if (pending >= limit) continue;
+            const size_t load = pending + handle->active_count.load(std::memory_order_relaxed);
+            if (load < min_load) {
+                target = handle.get();
+                min_load = load;
+            }
         }
-
-        // 优化：找到空队列直接退出遍历（减少后续锁开销）
-        if (min_queue_size == 0) break;
     }
-
-    // 异常处理
-    if (!running_ || !target_handle) {
-        Logger::getInstance().error("send() failed: no valid worker thread, worker number: ",
-                                    thread_count_);
-        ctx->response->setStatus(http::otherErr);
-        ctx->response->setStatusMsg("failed: no valid worker thread.");
-        if (ctx->on_request_finished_) {
-            ctx->on_request_finished_(ctx->response);
+    if (!target) {
+        const char* reason = (!running_ || closed_) ? "No worker thread available" : "Request queue overflow";
+        admission.unlock();
+        auto response = std::make_shared<HttpResponse>();
+        response->setStatus(http::otherErr);
+        response->setStatusMsg(reason);
+        if (done) { try { done(response); } catch (...) {} }
+        if (promise) {
+            try { promise->set_exception(std::make_exception_ptr(std::runtime_error(reason))); }
+            catch (...) {}
         }
-        try {
-            ctx->promise.set_exception(
-                std::make_exception_ptr(std::runtime_error("No worker thread available")));
-        } catch (...) {
-        }
-        delete ctx;
         return future;
     }
 
-    size_t max_queue_size;
-    if (transport_config_.getMaxRequestQueue() > 0) {
-        max_queue_size = static_cast<size_t>(transport_config_.getMaxRequestQueue());
-    } else {
-        max_queue_size = static_cast<size_t>(target_handle->curl_cache.getMaxPoolSize() * 2);
+    // Other producers cannot enter until publication; the worker only decreases
+    // this counter. Reserve before allocating ctx, including callback captures.
+    target->pending_count.fetch_add(1, std::memory_order_relaxed);
+    std::unique_ptr<RequestContext> ctx;
+    try {
+        ctx.reset(new RequestContext(request));
+    } catch (...) {
+        target->pending_count.fetch_sub(1, std::memory_order_relaxed);
+        throw;
     }
-
-    if (target_handle->request_queue_.unsafeSize() > max_queue_size) {
-        // todo：可以考虑做个任务窃取，应对投递的任务长尾问题，就算请求均分了，某些请求在其他worker因为客户投递顺序问题更容易拿到某类任务，执行时间长，未充分发挥多核能力。
-        //  如果要实现，在getRequest的时候不要一把拿了那么多请求，要做点反压，还需设计。
-        Logger::getInstance().error(
-            "send() failed: queue overflow, now request wait: ", target_handle->request_queue_.unsafeSize(),
-            ", max: ", max_queue_size, ", worker number:", thread_count_);
-        ctx->response->setStatus(http::otherErr);
-        ctx->response->setStatusMsg("failed: request queue overflow.");
-        if (ctx->on_request_finished_) {
-            ctx->on_request_finished_(ctx->response);
-        }
-        try {
-            ctx->promise.set_exception(
-                std::make_exception_ptr(std::runtime_error("Request queue overflow")));
-        } catch (...) {
-        }
-        delete ctx;
-        return future;
+    try {
+        ctx->parent = target;
+        ctx->detail_log = transport_config_.isDetailLog();
+        ctx->pending_slot = true;
+        ctx->promise = std::move(promise);
+        ctx->url = request->url().toString();
+        ctx->enable_crc_ = request->isCheckCrc64();
+        ctx->on_data_receive_with_event_ = receive;
+        ctx->on_data_send_with_event_ = produce;
+        ctx->on_request_finished_ = std::move(done);
+        ctx->on_request_start_ = std::move(start);
+        ctx->on_http_status_set_ = std::move(status);
+        ctx->on_content_length_set_ = std::move(length);
+        ctx->not_send_util_ = request->notSendUtilMs();
+        ctx->is_chunked = request->isChunked();
+        ctx->rate_limiter = request->getRateLimiter();
+        ctx->event_ = std::make_shared<AsyncEvent>();
+        ctx->event_->setNotifier(&AsyncHttpClient::WakeupMultiHandleFromEvent, target);
+        target->request_queue_.push(ctx.get());
+        ctx.release();  // Worker owns ctx now. Never dereference it after publication.
+        target->Notify();
+    } catch (...) {
+        admission.unlock();
+        ctx.reset();
+        throw;
     }
-    ctx->parent = target_handle.get();
-    ctx->event_->setNotifier(&AsyncHttpClient::WakeupMultiHandleFromEvent, ctx->parent);
-
-    // 3. 将请求投递到目标队列
-    size_t old_count = target_handle->request_queue_.unsafeSize();
-    // 队列入队 + 原子变量更新
-    target_handle->request_queue_.push(ctx);
-    Logger::getInstance().debug("send request ", ptrToString(ctx),
-                                " to handle (multi: ", ptrToString(target_handle->multi_handle),
-                                "), queue_size: ", target_handle->request_queue_.unsafeSize(), " -> ",
-                                old_count, ", active: ", target_handle->active_count, " url: ", ctx->url);
-
-    // 4. 唤醒目标线程处理新请求（让活跃态 curl_multi_wait 与空闲态 idle wait 都能立即返回）。
-    target_handle->Notify();
     return future;
 }
 
-AsyncHttpClient::RequestContext* AsyncHttpClient::getRequest(CurlMultiHandle& multi_handle,
-                                                             int64_t* next_request_not_before_ms) {
-    std::thread::id thread_id = std::this_thread::get_id();
-    RequestContext* target_ctx = nullptr;
-    int64_t next_not_before_ms = -1;
-
-    // 循环获取：直到找到符合发送时间的ctx，或队列为空。
-    // 当队列中的请求都尚未到 not_send_util_ 时，顺手记录最早可发送时间，供 idle wait 使用。
-    size_t queue_len = multi_handle.request_queue_.unsafeSize();
-
-    int i = 0;
-    // 防止push进去循环判断
-    while (i < queue_len) {
-        i++;
-
-        // 1. 当前没人投递请求，且没有请求在运行
-        RequestContext* ctx = multi_handle.request_queue_.pop();
-
-        // 2. 校验ctx有效性（避免空指针）
-        if (!ctx) {
-            Logger::getInstance().error("getRequest() thread ", thread_id,
-                                        " popped null RequestContext, skip");
-            continue;
-        }
-
-        // 3. not_send_util_是否已到达（当前时间 >= 允许发送时间）
-        int64_t current_time = multi_handle.current_ms.load();  // 需确保该函数返回毫秒级时间戳
-        if (current_time >= ctx->not_send_util_) {
-            // 已到发送时间，返回该ctx
-            Logger::getInstance().debug(
-                "getRequest() thread ", thread_id, " retrieved valid RequestContext ", ptrToString(ctx),
-                ", not_send_util_:", ctx->not_send_util_, ", current_time:", current_time,
-                ", remaining queue size: ", multi_handle.request_queue_.unsafeSize());
-            target_ctx = ctx;
-            break;
-        } else {
-            // 未到发送时间，放回队列尾部，继续取下一个
-            multi_handle.request_queue_.push(ctx);  // 放回队列（需确保queue的push线程安全）
-            if (ctx->not_send_util_ > 0 &&
-                (next_not_before_ms < 0 || ctx->not_send_util_ < next_not_before_ms)) {
-                next_not_before_ms = ctx->not_send_util_;
-            }
-
-            Logger::getInstance().debug("getRequest() thread ", thread_id, " RequestContext ",
-                                        ptrToString(ctx),
-                                        " not ready (not_send_util_:", ctx->not_send_util_,
-                                        ", current_time:", current_time, "), pushed back to queue");
-        }
-    }
-
-    if (next_request_not_before_ms != nullptr) {
-        *next_request_not_before_ms = next_not_before_ms;
-    }
-
-    return target_ctx;
+AsyncHttpClient::RequestContext* AsyncHttpClient::getRequest(CurlMultiHandle& handle) {
+    const int64_t now = handle.current_ms.load(std::memory_order_relaxed);
+    auto* ctx = handle.request_queue_.popIf([&](RequestContext* candidate) {
+        return now >= candidate->not_send_util_;
+    });
+    if (ctx) ctx->releasePendingSlot();
+    return ctx;
 }
 
 // todo: https协议测试
-CURLcode AsyncHttpClient::addRequestToEventor(CURLM* multi_handle, RequestContext* ctx) const {
+CURLcode AsyncHttpClient::addRequestToEventor(CURLM* multi_handle, RequestContext* ctx) {
     ctx->multi_handle = multi_handle;
 
     CURLcode res = CURLE_FAILED_INIT;
     const std::shared_ptr<HttpRequest> request = ctx->request;
-    Logger::getInstance().debug("addRequestToMulti() for URL: ", ctx->url,
-                                ", multi_handle: ", ptrToString(multi_handle));
-
-    auto fail_request = [ctx](const std::string& err_msg, const CURLcode code) {
-        ctx->response->setStatus(http::otherErr);
-        ctx->response->setStatusMsg(err_msg);
-        ctx->response->setCurlErrCode(code);
-        if (ctx->on_request_finished_) {
-            ctx->on_request_finished_(ctx->response);
-        }
-        try {
-            ctx->promise.set_exception(std::make_exception_ptr(std::runtime_error(err_msg)));
-        } catch (...) {
-        }
-    };
+    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("addRequestToMulti() for URL: ", ctx->url,
+                                ", multi_handle: ", ptrToString(multi_handle)); });
 
     // 处理ctx->curl_handle泄露和ctx泄露
     CURL* curl = ctx->curl_handle;
     if (!curl) {
         Logger::getInstance().error("Failed to create curl handle for URL: ", ctx->url);
-        fail_request("Failed to create curl handle", CURLE_FAILED_INIT);
         return CURLE_FAILED_INIT;
     }
 
     // 设置URL
     res = curl_easy_setopt(curl, CURLOPT_URL, ctx->url.c_str());
     if (res != CURLE_OK) {
-        const std::string err_msg = std::string("Failed to set URL: ") + curl_easy_strerror(res);
         Logger::getInstance().error("Failed to set URL for ", ctx->url, ": ", curl_easy_strerror(res));
-        fail_request(err_msg, res);
         return res;
     }
 
@@ -457,22 +418,26 @@ CURLcode AsyncHttpClient::addRequestToEventor(CURLM* multi_handle, RequestContex
     }
 
     // 设置请求头
-    curl_slist* list = nullptr;
+    auto append_header = [ctx](const char* value) {
+        curl_slist* next = curl_slist_append(ctx->headers, value);
+        if (!next) throw std::bad_alloc();
+        // Preserve ownership of the existing list if a later append fails.
+        ctx->headers = next;
+    };
     auto& headers = request->Headers();
     for (const auto& p : headers) {
         if (p.second.empty()) continue;
         std::string str(p.first);
         str.append(":").append(p.second);
-        list = curl_slist_append(list, str.c_str());
+        append_header(str.c_str());
     }
     // Disable Expect: 100-continue
-    list = curl_slist_append(list, "Expect:");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-    ctx->headers = list;
+    append_header("Expect:");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, ctx->headers);
     // add user-agent
     curl_easy_setopt(curl, CURLOPT_USERAGENT, VolcengineTos::DefaultUserAgent().c_str());
 
-    if (transport_config_.isDetailLog()) {
+    if (ctx->detail_log) {
         Logger::getInstance().info("HTTP Request: ", request->method(), " ", ctx->url);
         curl_slist* temp = ctx->headers;  // 临时指针，避免修改原链表
         while (temp != nullptr) {
@@ -497,22 +462,24 @@ CURLcode AsyncHttpClient::addRequestToEventor(CURLM* multi_handle, RequestContex
     // 将请求添加到multi handle
     CURLMcode mres = curl_multi_add_handle(multi_handle, curl);
     if (mres != CURLM_OK) {
-        const std::string err_msg =
-            std::string("Failed to add handle to multi: ") + curl_multi_strerror(mres);
         Logger::getInstance().error("Failed to add handle to multi for URL: ", ctx->url, ": ",
                                     curl_multi_strerror(mres));
-        fail_request(err_msg, CURLE_FAILED_INIT);
         return CURLE_FAILED_INIT;
     }
+    ctx->registered_with_multi = true;
 
     // 将上下文指针存储在curl句柄中
     curl_easy_setopt(curl, CURLOPT_PRIVATE, ctx);
 
     if (ctx->on_request_start_) {
-        ctx->on_request_start_();
+        try {
+            ctx->on_request_start_();
+        } catch (...) {
+            return CURLE_ABORTED_BY_CALLBACK;
+        }
     }
 
-    Logger::getInstance().debug("Associated RequestContext with curl handle for URL: ", ctx->url);
+    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Associated RequestContext with curl handle for URL: ", ctx->url); });
     return CURLE_OK;
 }
 
@@ -676,12 +643,12 @@ static CURLcode fillHttpResponseStats(const int64_t current_time, CURL* curl, Ht
     // 请求重试退避，服务端需携带Retry-After头
     //    res = curl_easy_getinfo(curl, CURLINFO_RETRY_AFTER, &stats.getRetryAfter());
     //    if (res != CURLE_OK) {
-    //        Logger::getInstance().debug("Failed to get CURLINFO_RETRY_COUNT: ", curl_easy_strerror(res));
+    //        Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Failed to get CURLINFO_RETRY_COUNT: ", curl_easy_strerror(res)); });
     //    }
 
     res = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &stats.getStatusCode());
     if (res != CURLE_OK) {
-        Logger::getInstance().debug("Failed to get CURLINFO_RESPONSE_CODE: ", curl_easy_strerror(res));
+        Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Failed to get CURLINFO_RESPONSE_CODE: ", curl_easy_strerror(res)); });
     }
 
     response.getCurlStats().setAction(request.userName());
@@ -694,26 +661,17 @@ static CURLcode fillHttpResponseStats(const int64_t current_time, CURL* curl, Ht
     return CURLE_OK;
 }
 
-void AsyncHttpClient::processRequestDone(CurlMultiHandle& multi_handle, CurlCache& curl_cache,
-                                         const CURLMsg* msg, int& messages_left) const {
-    CURL* curl = msg->easy_handle;
-    void* ptr;
-    curl_easy_getinfo(curl, CURLINFO_PRIVATE, &ptr);
-    const auto ctx = static_cast<RequestContext*>(ptr);
-
-    const CURLcode res = msg->data.result;
-    if (res == CURLE_COULDNT_CONNECT) {
-        ctx->response->setStatus(http::Refused);
-        std::stringstream ss;
-        ss << "curlCode: " << res << ", " << curl_easy_strerror(res);
-        ctx->response->setStatusMsg(ss.str());
-        ctx->response->setCurlErrCode(res);
-    } else if (res != CURLE_OK) {
-        ctx->response->setStatus(http::otherErr);
-        std::stringstream ss;
-        ss << "curlCode: " << res << ", " << curl_easy_strerror(res);
-        ctx->response->setStatusMsg(ss.str());
-        ctx->response->setCurlErrCode(res);
+void AsyncHttpClient::finishRequest(CurlMultiHandle& multi_handle, RequestContext* ctx, CURLcode res) {
+    const auto it = multi_handle.active_set_.find(ctx);
+    if (it == multi_handle.active_set_.end() || ctx->completed) return;
+    if (ctx->callback_error != CURLE_OK) res = ctx->callback_error;
+    if (res == CURLE_OK && ctx->event_->isFailed())
+        res = ctx->is_read ? CURLE_WRITE_ERROR : CURLE_ABORTED_BY_CALLBACK;
+    ctx->completed = true;
+    ctx->response->setCurlErrCode(res);
+    if (res != CURLE_OK) {
+        ctx->response->setStatus(res == CURLE_COULDNT_CONNECT ? http::Refused : http::otherErr);
+        try { ctx->response->setStatusMsg(curl_easy_strerror(res)); } catch (...) {}
     } else {
         ctx->response->setStatus(http::Success);
         if (ctx->is_read) {
@@ -723,9 +681,7 @@ void AsyncHttpClient::processRequestDone(CurlMultiHandle& multi_handle, CurlCach
         }
     }
 
-    ctx->completed = true;
-
-    if (transport_config_.isDetailLog()) {
+    if (ctx->detail_log) {
         Logger::getInstance().info("Http Response: ", ctx->url);
         if (ctx->response->Headers().empty()) {
         } else {
@@ -744,51 +700,42 @@ void AsyncHttpClient::processRequestDone(CurlMultiHandle& multi_handle, CurlCach
     }
 
     Logger::getInstance().info("Request fully completed (body and callback) - URL: ", ctx->url,
-                               ", Request Number to process: ", messages_left, " cached_buffer_queue_empty",
+                               ", cached_buffer_queue_empty=",
                                ctx->cached_buffer_queue_.empty(), ", receive=", ctx->receive,
                                " send=", ctx->send);
-    ctx->on_request_finished_(ctx->response);
-
-    const auto it = multi_handle.active_set_.find(ctx);
-    if (it != multi_handle.active_set_.end()) {
-        multi_handle.active_set_.erase(it);
-        multi_handle.active_count--;
-    } else {
-        Logger::getInstance().error(
-            "Request fully completed (body and callback) but can't find in active_set - URL: ", ctx->url,
-            ", Request Number to process: ", messages_left, " cached_buffer_queue_empty",
-            ctx->cached_buffer_queue_.empty(), ", receive=", ctx->receive, " send=", ctx->send);
-    }
-
     // 因为 future 已在 header 完成时唤醒，此处只需处理错误和资源清理
-    if (msg->data.result != CURLE_OK) {
-        //        Logger::getInstance().error("Request failed: ", curl_easy_strerror(msg->data.result));
+    if (res != CURLE_OK) {
         // 若 header 未完成就出错，需唤醒 future 传递异常
         if (!ctx->headers_completed_) {
-            ctx->promise.set_exception(
-                std::make_exception_ptr(std::runtime_error(curl_easy_strerror(msg->data.result))));
+            ctx->failPromise(curl_easy_strerror(res));
         }
     }
 
     // 填充响应性能数据
-    if (transport_config_.isDetailLog()) {
-        fillHttpResponseStats(multi_handle.current_ms.load(), ctx->curl_handle, *ctx->response,
-                              *ctx->request);
+    if (ctx->detail_log) {
+        try {
+            fillHttpResponseStats(multi_handle.current_ms.load(), ctx->curl_handle, *ctx->response,
+                                  *ctx->request);
+        } catch (...) {}  // Diagnostics must not prevent terminal delivery.
     }
 
-    // curl_cache.Release(ctx->curl_handle, msg->data.result != CURLE_OK);
-    // ctx->curl_handle = nullptr;
-    curl_multi_remove_handle(multi_handle.multi_handle, curl);
+    // Worker only, never inside a curl callback. Removing a handle also
+    // removes its pending DONE message; do not inspect a CURLMsg afterwards.
+    // Retire all aliases before external completion/reentry and easy reuse.
+    ctx->detachCurl();
     removeFromPausedQueue(multi_handle, ctx);
-
+    multi_handle.active_set_.erase(it);
+    --multi_handle.active_count;
+    ctx->releasePendingSlot();
+    ctx->notifyFinished();
     delete ctx;
 }
 
 void AsyncHttpClient::processCompletedRequests(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
                                                CurlCache& curl_cache,
-                                               std::vector<curl_waitfd>& extra_fds) const {
-    Logger::getInstance().debug("processCompletedRequests() called for multi_handle: ",
-                                ptrToString(multi_handle.multi_handle));
+                                               std::vector<curl_waitfd>& extra_fds) {
+    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("processCompletedRequests() called for multi_handle: ",
+                                ptrToString(multi_handle.multi_handle)); });
 
     processCompleteActiveFds(multi_handle.multi_handle, thread_id, extra_fds, multi_handle.active_set_);
 
@@ -797,7 +744,9 @@ void AsyncHttpClient::processCompletedRequests(CurlMultiHandle& multi_handle, st
 
     while ((msg = curl_multi_info_read(multi_handle.multi_handle, &messages_left)) != nullptr) {
         if (msg->msg == CURLMSG_DONE) {
-            processRequestDone(multi_handle, curl_cache, msg, messages_left);
+            void* ptr = nullptr;
+            curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &ptr);
+            finishRequest(multi_handle, static_cast<RequestContext*>(ptr), msg->data.result);
         } else {
             // 理论上无第二种
             Logger::getInstance().error("Worker thread ", thread_id,
@@ -892,34 +841,30 @@ void AsyncHttpClient::processNewRequest(CurlMultiHandle& multi_handle, std::thre
     int i = 0;
     do {
         i++;
-        int64_t next_request_not_before_ms = -1;
-        auto ctx = getRequest(multi_handle, &next_request_not_before_ms);
+        std::unique_ptr<RequestContext> ctx(getRequest(multi_handle));
         if (!ctx) {
-            multi_handle.next_request_not_before_ms.store(next_request_not_before_ms,
-                                                          std::memory_order_relaxed);
             break;
         }
-        multi_handle.next_request_not_before_ms.store(-1, std::memory_order_relaxed);
-        ctx->curl_handle = curl_cache.Acquire();
-        if (ctx->curl_handle) {
-            Logger::getInstance().debug("Worker thread ", thread_id,
-                                        " processing request to URL: ", ctx->url);
-            const CURLcode res = addRequestToEventor(multi_handle.multi_handle, ctx);
-            if (res != CURLE_OK) {
-                delete ctx;
-                break;
+        try {
+            ctx->curl_handle = curl_cache.Acquire();
+            if (!ctx->curl_handle) {
+                ctx->failSetup(CURLE_FAILED_INIT, "Failed to acquire curl handle");
+                continue;
             }
-            multi_handle.active_set_.insert(ctx);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Worker thread ", thread_id,
+                                        " processing request to URL: ", ctx->url); });
+            const CURLcode res = addRequestToEventor(multi_handle.multi_handle, ctx.get());
+            if (res != CURLE_OK) {
+                ctx->failSetup(res, curl_easy_strerror(res));
+                continue;
+            }
+            multi_handle.active_set_.insert(ctx.get());
             multi_handle.active_count++;
-        } else {
-            Logger::getInstance().error("Worker thread ", thread_id, " can't processing request to URL.");
-            ctx->response->setStatus(http::otherErr);
-            ctx->response->setStatusMsg("can't processing request to URL.");
-            ctx->on_request_finished_(ctx->response);
-            ctx->promise.set_exception(
-                std::make_exception_ptr(std::runtime_error("can't processing request to URL")));
-            delete ctx;
-            break;
+            ctx.release();  // active_set_ owns the fully initialized request.
+        } catch (const std::bad_alloc&) {
+            ctx->failSetup(CURLE_OUT_OF_MEMORY, "Async request setup allocation failed");
+        } catch (...) {
+            ctx->failSetup(CURLE_FAILED_INIT, "Async request setup failed");
         }
         if (multi_handle.active_count >= multi_handle.max_connection_num) {
             return;
@@ -954,52 +899,38 @@ void AsyncHttpClient::processActiveFds(const CurlMultiHandle& multi_handle,
     (void)active_ctxs;
 }
 
-bool AsyncHttpClient::hasRunnableActive(const CurlMultiHandle& multi_handle) {
-    const int64_t now_ms = multi_handle.current_ms.load(std::memory_order_relaxed);
-    for (const auto* ctx : multi_handle.active_set_) {
-        if (ctx == nullptr || ctx->completed) {
-            continue;
-        }
-        if (ctx->event_ != nullptr) {
-            if (ctx->event_->isStopping()) {
-                continue;
-            }
-            if (ctx->event_->isWaiting()) {
-                const int64_t resume_at_ms = ctx->event_->getResumeAt();
-                if (resume_at_ms > 0 && now_ms < resume_at_ms) {
-                    continue;
-                }
-            }
-        }
-        if (!ctx->cached_buffer_queue_.empty()) {
-            continue;
-        }
-        return true;
-    }
-    return false;
+int64_t AsyncHttpClient::pausedDeadlineMs(const RequestContext& ctx) {
+    if (ctx.event_->isFailed()) return 0;
+    const auto state = ctx.event_->getState();
+    if (state == AsyncEvent::State::Stopping) return -1;
+    const int64_t user_deadline = state == AsyncEvent::State::Waiting ? ctx.event_->getResumeAt() : 0;
+    return std::max(ctx.qos_resume_at_ms, user_deadline);
 }
 
 int64_t AsyncHttpClient::getNextIdleWakeupMs(const CurlMultiHandle& multi_handle) {
-    int64_t next_wakeup_ms = multi_handle.next_request_not_before_ms.load(std::memory_order_relaxed);
-    const auto paused_ctxs = multi_handle.paused_queue_.traverse();
-    for (const auto* ctx : paused_ctxs) {
-        if (ctx == nullptr || ctx->event_ == nullptr) {
-            continue;
-        }
-        if (multi_handle.active_set_.find(const_cast<RequestContext*>(ctx)) ==
-            multi_handle.active_set_.end()) {
-            continue;
-        }
-        const int64_t event_resume_at_ms = ctx->event_->isWaiting() ? ctx->event_->getResumeAt() : 0;
-        if (event_resume_at_ms > 0 && (next_wakeup_ms < 0 || event_resume_at_ms < next_wakeup_ms)) {
-            next_wakeup_ms = event_resume_at_ms;
-        }
+    int64_t next_wakeup_ms = -1;
+    auto earlier = [&](int64_t deadline) {
+        deadline = std::max<int64_t>(0, deadline);
+        if (next_wakeup_ms < 0 || deadline < next_wakeup_ms) next_wakeup_ms = deadline;
+    };
+    // Nonempty is not runnable: the request may be delayed or all active
+    // slots may be occupied. Inspect under the queue lock to include newly
+    // queued earlier deadlines, not just the previous getRequest() snapshot.
+    if (multi_handle.active_count.load(std::memory_order_relaxed) < multi_handle.max_connection_num) {
+        multi_handle.request_queue_.inspect([&](const RequestContext* ctx) { earlier(ctx->not_send_util_); });
+    }
+    // Both containers are worker-owned. Inspect active membership directly,
+    // without allocating/copying a paused-queue snapshot before every wait.
+    for (const auto* ctx : multi_handle.active_set_) {
+        if (!ctx->in_paused_queue.load(std::memory_order_relaxed) || !ctx->event_) continue;
+        const auto deadline = pausedDeadlineMs(*ctx);
+        if (deadline >= 0) earlier(deadline);
     }
     return next_wakeup_ms;
 }
 
 void AsyncHttpClient::processActiveRequest(CurlMultiHandle& multi_handle, std::thread::id& thread_id,
-                                           std::vector<curl_waitfd>& extra_fds) {
+                                           std::vector<curl_waitfd>& extra_fds) const {
     int still_running = 0;
     CURLMcode res;
     do {
@@ -1012,6 +943,11 @@ void AsyncHttpClient::processActiveRequest(CurlMultiHandle& multi_handle, std::t
         return;
     }
 
+    // A partial completion must not wait for another request's socket/timer.
+    // Retire it now, before sleeping, also making its connection slot reusable.
+    updateCurrentTime(multi_handle);
+    processCompletedRequests(multi_handle, thread_id, multi_handle.curl_cache, extra_fds);
+
     // res == CURLM_OK
     processActiveFds(multi_handle, extra_fds, multi_handle.active_set_);
 
@@ -1023,17 +959,48 @@ void AsyncHttpClient::processActiveRequest(CurlMultiHandle& multi_handle, std::t
         return;
     }
 
+    int timeout_ms = multi_handle.curl_multi_wait_timeout_ms;
+    const int64_t deadline = getNextIdleWakeupMs(multi_handle);
+    if (deadline >= 0) {
+        const int64_t remaining = deadline - multi_handle.current_ms.load(std::memory_order_relaxed);
+        if (remaining <= 0) return;  // Ready SDK work, not merely a nonempty queue.
+        timeout_ms = static_cast<int>(std::min<int64_t>(timeout_ms, remaining));
+    }
+    // Without eventfd, new submissions cannot interrupt curl's socket wait.
+    // Preserve a short bounded fallback; never use a zero-fd immediate-return
+    // curl wait as an unbounded poll loop.
+    if (multi_handle.wake_fd < 0) timeout_ms = std::min(timeout_ms, 10);
+    const auto wait_started = std::chrono::steady_clock::now();
+    const auto wake_seq = multi_handle.wake_seq.load(std::memory_order_relaxed);
     int numfds = 0;
     res = curl_multi_wait(multi_handle.multi_handle, extra_fds.empty() ? nullptr : extra_fds.data(),
-                          extra_fds.size(), multi_handle.curl_multi_wait_timeout_ms, &numfds);
-    Logger::getInstance().debug("Worker thread ", thread_id,
+                          extra_fds.size(), timeout_ms, &numfds);
+    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Worker thread ", thread_id,
                                 " calling curl_multi_wait with numfds: ", numfds,
-                                ", still_running=", still_running);
+                                ", still_running=", still_running); });
 
     if (res != CURLM_OK) {
         Logger::getInstance().error("Worker thread ", thread_id,
                                     " calling curl_multi_wait with failed, numfds: ", numfds,
                                     " error: ", curl_multi_strerror(res));
+    }
+
+    if (multi_handle.wake_fd < 0 && numfds == 0 && res == CURLM_OK) {
+        // curl_multi_wait returns immediately when curl has no socket and no
+        // extra fd exists (e.g. paused-only). Park for the remaining bound,
+        // respecting curl's current timer and concurrent submission/close.
+        auto remaining = std::chrono::milliseconds(timeout_ms) -
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - wait_started);
+        long curl_timeout = -1;
+        if (curl_multi_timeout(multi_handle.multi_handle, &curl_timeout) == CURLM_OK && curl_timeout >= 0)
+            remaining = std::min(remaining, std::chrono::milliseconds(curl_timeout));
+        if (remaining.count() > 0) {
+            std::unique_lock<std::mutex> lock(multi_handle.queue_mutex_);
+            multi_handle.queue_cv_.wait_for(lock, remaining, [&] {
+                return !multi_handle.running.load(std::memory_order_acquire) ||
+                       multi_handle.wake_seq.load(std::memory_order_relaxed) != wake_seq;
+            });
+        }
     }
 
     // 若被 eventfd 唤醒，清空计数，避免下一次空转。
@@ -1049,104 +1016,41 @@ void AsyncHttpClient::enqueuePausedRequest(CurlMultiHandle& multi_handle, Reques
     bool expected = false;
     if (!ctx->in_paused_queue.compare_exchange_strong(expected, true, std::memory_order_acq_rel,
                                                       std::memory_order_acquire)) {
-        Logger::getInstance().info("skip duplicate paused enqueue, ctx=", ptrToString(ctx), ", url=", ctx->url,
-                                   ", event=", ctx->event_ ? ctx->event_->toString() : std::string("null"));
+        Logger::getInstance().infoLazy([&](Logger& logger) {
+            logger.info("skip duplicate paused enqueue, ctx=", ptrToString(ctx), ", url=", ctx->url,
+                        ", event=", ctx->event_ ? ctx->event_->toString() : std::string("null"));
+        });
         return;
     }
-    Logger::getInstance().info("enqueue paused request, ctx=", ptrToString(ctx), ", url=", ctx->url,
-                               ", event=", ctx->event_ ? ctx->event_->toString() : std::string("null"));
+    Logger::getInstance().infoLazy([&](Logger& logger) {
+        logger.info("enqueue paused request, ctx=", ptrToString(ctx), ", url=", ctx->url,
+                    ", event=", ctx->event_ ? ctx->event_->toString() : std::string("null"));
+    });
     multi_handle.paused_queue_.push(ctx);
 }
 
 void AsyncHttpClient::waitForWorkOrResume(CurlMultiHandle& multi_handle) {
-    const int64_t next_wakeup_ms = getNextIdleWakeupMs(multi_handle);
-    auto has_immediate_work = [&multi_handle]() {
-        if (!multi_handle.request_queue_.unsafeEmpty()) {
-            return true;
-        }
-
-        const auto now_ms = multi_handle.current_ms.load();
-        const auto paused_ctxs = multi_handle.paused_queue_.traverse();
-        for (const auto* ctx : paused_ctxs) {
-            if (ctx == nullptr || ctx->event_ == nullptr) {
-                continue;
-            }
-            if (multi_handle.active_set_.find(const_cast<RequestContext*>(ctx)) ==
-                multi_handle.active_set_.end()) {
-                continue;
-            }
-            if (ctx->event_->isFailed()) {
-                return true;
-            }
-            if (ctx->event_->isStopping()) {
-                continue;
-            }
-            if (!ctx->cached_buffer_queue_.empty()) {
-                return true;
-            }
-            bool user_pause_active = ctx->event_->isStopping();
-            if (ctx->event_->isWaiting()) {
-                const int64_t resume_at_ms = ctx->event_->getResumeAt();
-                if (resume_at_ms > 0 && now_ms < resume_at_ms) {
-                    user_pause_active = true;
-                }
-            }
-            if (!user_pause_active) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    // 在真正进入 wait 前记录当前世代。后面的 predicate 比较“现在的 wake_seq 是否还等于
-    // 我准备睡时看到的 wake_seq”。如果其间恰好有 Notify() 发生，即便那次 notify_one()
-    // 没被 wait 这次边沿接住，predicate 也会因为 wake_seq 已变化而立即返回，避免丢通知。
-    const uint64_t wake_seq = multi_handle.wake_seq.load(std::memory_order_relaxed);
-
+    // Called only with no active transfers. Inspect levels/deadlines while
+    // holding Notify's mutex; a producer that queues after inspection must
+    // publish a new generation before the waiter can miss its wakeup.
     std::unique_lock<std::mutex> lock(multi_handle.queue_mutex_);
-    if (!multi_handle.running.load(std::memory_order_acquire)) {
+    if (!multi_handle.running.load(std::memory_order_acquire)) return;
+    const uint64_t wake_seq = multi_handle.wake_seq.load(std::memory_order_relaxed);
+    const int64_t next_wakeup_ms = getNextIdleWakeupMs(multi_handle);
+    updateCurrentTime(multi_handle);
+    if (next_wakeup_ms >= 0 && next_wakeup_ms <= multi_handle.current_ms.load(std::memory_order_relaxed))
         return;
-    }
-    if (has_immediate_work()) {
-        // TODO(review): 仅靠 wake_seq 只能记住“睡下之后有没有新的 notify 边沿”，记不住“当前队列里
-        // 已经存在可立即处理的 paused/request work”。当 AsyncEvent::markResumed() 恰好发生在
-        // worker 决定 idle 但尚未真正 wait 的窗口里时，wake_seq 可能已经被新的快照吞掉；如果
-        // 这里不再主动复查 paused/request 状态，worker 会抱着一个已经 resume 的请求永久睡死。
-        return;
-    }
-
-    // queue_cv_ 只是停车点；真正的唤醒条件是：
-    //   1) worker 被要求退出；或
-    //   2) 自己准备睡眠之后发生过新的外部事件（由 wake_seq 变化表示）。
-    // 若没有 wake_seq，这里只能写成“被 notify 就醒”，那就会暴露如下竞态：
-    //   T1(waiter): 判断当前无 runnable active，准备 wait
-    //   T2(producer): 入队请求并 notify_one
-    //   T1(waiter): 此时尚未真正阻塞，因此错过这次 notify 边沿
-    //   T1(waiter): 随后睡下去，已有工作却没人再叫醒它
-    // 使用 generation counter 后，T2 会先 ++wake_seq；于是 T1 即使错过 notify 边沿，
-    // 也会在 wait 的 predicate 检查里观察到 wake_seq != snapshot，从而不再睡眠。
-    auto should_wake = [&multi_handle, wake_seq, &has_immediate_work]() {
+    auto should_wake = [&multi_handle, wake_seq]() {
         return !multi_handle.running.load(std::memory_order_acquire) ||
-               multi_handle.wake_seq.load(std::memory_order_relaxed) != wake_seq || has_immediate_work();
+               multi_handle.wake_seq.load(std::memory_order_relaxed) != wake_seq;
     };
-
     if (next_wakeup_ms > 0) {
         const auto deadline =
             std::chrono::system_clock::time_point(std::chrono::milliseconds(next_wakeup_ms));
         multi_handle.queue_cv_.wait_until(lock, deadline, should_wake);
-    } else if (multi_handle.active_count.load(std::memory_order_relaxed) > 0 ||
-               !multi_handle.paused_queue_.empty()) {
-        // TODO(review): 仅靠外部 notify 驱动 paused-only worker 存在单点风险：只要上游恢复边沿没有
-        // 成功送达（例如第三方异步源未注册 notifier、或某条恢复路径未来回归遗漏 Notify），
-        // worker 就会抱着 active/paused 请求永久睡死。这里在“仍有 active/paused 请求但当前无
-        // runnable work”的场景下退化成短周期条件等待，把恢复检测改成 level-triggered 兜底，
-        // 让 `processPausedRequest()` 至少按 `curl_multi_wait_timeout_ms` 周期重新扫描一次。
-        multi_handle.queue_cv_.wait_for(lock, std::chrono::milliseconds(multi_handle.curl_multi_wait_timeout_ms),
-                                        should_wake);
     } else {
         multi_handle.queue_cv_.wait(lock, should_wake);
     }
-
     lock.unlock();
     multi_handle.DrainWakeFd();
 }
@@ -1156,25 +1060,12 @@ void AsyncHttpClient::removeFromPausedQueue(CurlMultiHandle& multi_handle, Reque
         return;
     }
 
-    std::vector<RequestContext*> to_keep;
-    while (true) {
-        auto* paused_ctx = multi_handle.paused_queue_.pop();
-        if (!paused_ctx) {
-            break;
-        }
-        paused_ctx->in_paused_queue.store(false, std::memory_order_release);
-        if (paused_ctx != target_ctx) {
-            to_keep.push_back(paused_ctx);
-        }
-    }
-
-    for (auto* ctx : to_keep) {
-        enqueuePausedRequest(multi_handle, ctx);
-    }
+    multi_handle.paused_queue_.erase(target_ctx);
+    target_ctx->in_paused_queue.store(false, std::memory_order_release);
 }
 
 void AsyncHttpClient::processPausedRequest(CurlMultiHandle& multi_handle, std::thread::id& thread_id) {
-    Logger::getInstance().debug("Worker thread ", thread_id, " processPausedRequest.");
+    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("Worker thread ", thread_id, " processPausedRequest."); });
 
     std::vector<RequestContext*> to_resume;
     std::vector<RequestContext*> to_pause;
@@ -1186,9 +1077,11 @@ void AsyncHttpClient::processPausedRequest(CurlMultiHandle& multi_handle, std::t
             break;  // 队空，退出循环
         }
         paused_ctx->in_paused_queue.store(false, std::memory_order_release);
-        Logger::getInstance().info("dequeue paused request, ctx=", ptrToString(paused_ctx), ", url=", paused_ctx->url,
+        Logger::getInstance().infoLazy([&](Logger& logger) {
+            logger.info("dequeue paused request, ctx=", ptrToString(paused_ctx), ", url=", paused_ctx->url,
                                    ", event=", paused_ctx->event_ ? paused_ctx->event_->toString()
                                                                   : std::string("null"));
+        });
 
         if (multi_handle.active_set_.find(paused_ctx) == multi_handle.active_set_.end()) {
             // 可能是已完成/已清理的上下文遗留在暂停队列里，直接丢弃
@@ -1198,53 +1091,65 @@ void AsyncHttpClient::processPausedRequest(CurlMultiHandle& multi_handle, std::t
         }
 
         if (paused_ctx->event_->isFailed()) {
-            // TODO(review): 数据源/落盘 sink 已经把请求标成终态失败时，不能继续留在 paused queue 里等待；
-            // 必须先恢复 easy handle，让下一轮回调把失败传回 libcurl/SDK，避免 future 永久不完成。
             to_resume.push_back(paused_ctx);
             continue;
         }
 
-        bool wait_ok = false;
         bool buff_send_ok = true;
 
         const time_t now_ms = multi_handle.current_ms.load();
-        if (paused_ctx->event_->isStopping()) {
+        const auto resume_at = pausedDeadlineMs(*paused_ctx);
+        if (resume_at < 0 || now_ms < resume_at) {
             to_pause.push_back(paused_ctx);
             continue;
         }
 
-        const auto resume_at = paused_ctx->event_->getResumeAt();
-        if (resume_at <= 0 || now_ms >= resume_at) {
-            wait_ok = true;
-        }
-
         // 触发cache暂停继续回调用户callback（带事件）
-        if (wait_ok && !paused_ctx->cached_buffer_queue_.empty()) {
+        if (!paused_ctx->cached_buffer_queue_.empty()) {
             AsyncEvent* ev = paused_ctx->event_.get();
-            ev->setReason("from cache");
             const std::size_t drained_from_cache = paused_ctx->cached_buffer_queue_.drainTo(
                 [paused_ctx, ev](char* data, std::size_t len) -> std::size_t {
-                    Logger::getInstance().info("consume buffered request, buff len=", len);
-                    if (paused_ctx->is_read) {
-                        const DownloadConsumeResult result = consumeDownloadData(paused_ctx, data, len, ev);
-                        return result.invalid_result || result.terminal_failure ? static_cast<size_t>(0)
-                                                                               : result.consumed;
-                    }
-
-                    size_t used = 0;
-                    if (paused_ctx->on_data_send_with_event_) {
-                        used = paused_ctx->on_data_send_with_event_(data, len, ev);
-                    } else {
-                        used = len;
-                    }
-                    if (used > len) {
-                        return static_cast<size_t>(0);
-                    }
-                    paused_ctx->send += used;
-                    if (paused_ctx->enable_crc_ && used > 0) {
-                        paused_ctx->send_crc64_value = CRC64::CalcCRC(paused_ctx->send_crc64_value, data, used);
-                    }
-                    return used;
+                    // The previous buffer's callback can re-arm backpressure.
+                    const auto deadline = pausedDeadlineMs(*paused_ctx);
+                    if (deadline < 0 || deadline > paused_ctx->parent->current_ms.load()) return 0;
+                    if (ev->isFailed() || paused_ctx->callback_error != CURLE_OK) return 0;
+                    const auto pause_generation = ev->pause_generation_.load(std::memory_order_acquire);
+                    const auto fail = [paused_ctx]() -> size_t {
+                        paused_ctx->recordCallbackError(paused_ctx->is_read ? CURLE_WRITE_ERROR
+                                                                           : CURLE_ABORTED_BY_CALLBACK);
+                        return 0;
+                    };
+                    try {
+                        size_t used = 0;
+                        if (paused_ctx->is_read) {
+                            const DownloadConsumeResult result = consumeDownloadData(paused_ctx, data, len, ev);
+                            if (result.invalid_result || result.terminal_failure) return fail();
+                            used = result.consumed;
+                        } else {
+                            if (paused_ctx->on_data_send_with_event_) {
+                                used = paused_ctx->on_data_send_with_event_(data, len, ev);
+                            } else {
+                                used = len;
+                            }
+                            if (used > len || ev->isFailed()) return fail();
+                            paused_ctx->send += used;
+                            if (paused_ctx->enable_crc_ && used > 0) {
+                                paused_ctx->send_crc64_value = CRC64::CalcCRC(paused_ctx->send_crc64_value, data, used);
+                            }
+                        }
+                        // An expired Waiting flag is not backpressure. Zero
+                        // progress must arm a real future/indefinite pause,
+                        // else retrying this same buffer spins the worker.
+                        const auto next_deadline = pausedDeadlineMs(*paused_ctx);
+                        // A fast downstream Resume may already have cleared
+                        // the pause armed inside this callback. Preserve that
+                        // signal, but do not accept a previous expired pause.
+                        const bool newly_paused = pause_generation !=
+                            ev->pause_generation_.load(std::memory_order_acquire);
+                        if (used == 0 && !newly_paused && next_deadline >= 0 &&
+                            next_deadline <= paused_ctx->parent->current_ms.load()) return fail();
+                        return used;
+                    } catch (...) { return fail(); }
                 });
 
             if (paused_ctx->is_read && drained_from_cache > 0) {
@@ -1260,12 +1165,15 @@ void AsyncHttpClient::processPausedRequest(CurlMultiHandle& multi_handle, std::t
             }
         }
 
-        if (paused_ctx->event_->isFailed()) {
+        if (paused_ctx->event_->isFailed() || paused_ctx->callback_error != CURLE_OK) {
             to_resume.push_back(paused_ctx);
             continue;
         }
 
-        if (!wait_ok || !buff_send_ok) {
+        // Re-read after user code: consuming the last cached byte does not
+        // authorize us to discard a newly requested Pause/PauseFor.
+        const auto next_resume_at = pausedDeadlineMs(*paused_ctx);
+        if (next_resume_at < 0 || next_resume_at > now_ms || !buff_send_ok) {
             // 时间没等到，或buff没发完，未满足恢复条件，重新push回队列
             to_pause.push_back(paused_ctx);
         } else {
@@ -1275,13 +1183,24 @@ void AsyncHttpClient::processPausedRequest(CurlMultiHandle& multi_handle, std::t
 
     // 恢复请求
     for (auto* ctx : to_resume) {
-        Logger::getInstance().info("resume request, event: ", ctx->event_->toString(),
-                                   " for URL: ", ctx->url);
+        if (ctx->event_->isFailed() || ctx->callback_error != CURLE_OK) {
+            finishRequest(multi_handle, ctx, ctx->is_read ? CURLE_WRITE_ERROR : CURLE_ABORTED_BY_CALLBACK);
+            continue;
+        }
+        Logger::getInstance().infoLazy([&](Logger& logger) {
+            logger.info("resume request, event: ", ctx->event_->toString(), " for URL: ", ctx->url);
+        });
         if (!ctx->event_->isFailed() && ctx->event_->isPaused()) {
             ctx->event_->Resume();
         }
         // handle 仍在 multi 中，仅需取消 pause
-        curl_easy_pause(ctx->curl_handle, CURLPAUSE_CONT);
+        const auto code = curl_easy_pause(ctx->curl_handle, CURLPAUSE_CONT);
+        if (code != CURLE_OK || ctx->callback_error != CURLE_OK || ctx->event_->isFailed()) {
+            // Unpause may synchronously call writeCallback, and its error
+            // need not be repeated in a later CURLMSG_DONE. Retire here only
+            // after curl_easy_pause has returned, using the same once path.
+            finishRequest(multi_handle, ctx, code);
+        }
     }
 
     // 继续暂停
@@ -1300,8 +1219,8 @@ AsyncHttpClient::PauseDecision AsyncHttpClient::buildPauseDecision(RequestContex
     if (ctx->rate_limiter != nullptr && bytes_used > 0) {
         auto acquire_res = ctx->rate_limiter->Acquire(static_cast<int64_t>(bytes_used));
         if (acquire_res.first) {
-            Logger::getInstance().debug("transfer callback consumed ", bytes_used,
-                                        " bytes for URL: ", ctx->url);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("transfer callback consumed ", bytes_used,
+                                        " bytes for URL: ", ctx->url); });
         } else {
             decision.should_pause = true;
             const int64_t qos_resume_at = multi_handle->current_ms + acquire_res.second;
@@ -1318,10 +1237,6 @@ AsyncHttpClient::PauseDecision AsyncHttpClient::buildPauseDecision(RequestContex
 
     if (ctx->event_->isWaiting()) {
         decision.should_pause = true;
-        const auto resume_at = ctx->event_->getResumeAt();
-        if (decision.resume_at_ms == 0 || resume_at > decision.resume_at_ms) {
-            decision.resume_at_ms = resume_at;
-        }
     }
 
     if (!ctx->cached_buffer_queue_.empty()) {
@@ -1332,9 +1247,9 @@ AsyncHttpClient::PauseDecision AsyncHttpClient::buildPauseDecision(RequestContex
 }
 
 void AsyncHttpClient::applyPauseState(RequestContext* ctx, int64_t resume_at_ms) {
-    if (resume_at_ms > 0) {
-        ctx->event_->setResumeAt(resume_at_ms);
-    }
+    // Never write a snapshot of user PauseFor back into AsyncEvent: an
+    // external Resume may already have cleared it while the callback retires.
+    ctx->qos_resume_at_ms = std::max(ctx->qos_resume_at_ms, resume_at_ms);
 }
 
 AsyncHttpClient::DownloadConsumeResult AsyncHttpClient::consumeDownloadData(RequestContext* ctx, char* ptr,
@@ -1382,7 +1297,9 @@ size_t AsyncHttpClient::finalizeUploadCallback(RequestContext* ctx, size_t bytes
         return bytes_read;
     }
 
-    Logger::getInstance().info("pause request, event: ", ctx->event_->toString(), " for URL: ", ctx->url);
+    Logger::getInstance().infoLazy([&](Logger& logger) {
+        logger.info("pause request, event: ", ctx->event_->toString(), " for URL: ", ctx->url);
+    });
     applyPauseState(ctx, decision.resume_at_ms);
     enqueuePausedRequest(*ctx->parent, ctx);
 
@@ -1400,6 +1317,11 @@ size_t AsyncHttpClient::finalizeDownloadCallback(RequestContext* ctx, char* ptr,
                                                  size_t written, size_t skipped) {
     const bool partial_consume = written < data_len;
     if (partial_consume) {
+        if (ctx->engine_request && (data_len - written > CURL_MAX_WRITE_SIZE ||
+            ctx->cached_buffer_queue_.totalSize() > CURL_MAX_WRITE_SIZE - (data_len - written))) {
+            ctx->recordCallbackError(CURLE_WRITE_ERROR);
+            return 0;
+        }
         ctx->cached_buffer_queue_.append(ptr + written, data_len - written);
     }
 
@@ -1408,7 +1330,9 @@ size_t AsyncHttpClient::finalizeDownloadCallback(RequestContext* ctx, char* ptr,
         return skipped + written;
     }
 
-    Logger::getInstance().info("pause request, event: ", ctx->event_->toString(), " for URL: ", ctx->url);
+    Logger::getInstance().infoLazy([&](Logger& logger) {
+        logger.info("pause request, event: ", ctx->event_->toString(), " for URL: ", ctx->url);
+    });
     applyPauseState(ctx, decision.resume_at_ms);
     enqueuePausedRequest(*ctx->parent, ctx);
     ctx->needSkip += skipped + written;
@@ -1417,16 +1341,25 @@ size_t AsyncHttpClient::finalizeDownloadCallback(RequestContext* ctx, char* ptr,
 }
 
 size_t AsyncHttpClient::writeCallback(char* ptr, size_t size, size_t nmemb, void* userdata) {
+    if (size != 0 && nmemb > static_cast<size_t>(-1) / size) return 0;
     auto* ctx = static_cast<RequestContext*>(userdata);
-    if (!ctx) {
-        Logger::getInstance().error("writeCallback: null context");
-        return -1;
+    try {
+        if (!ctx) {
+            Logger::getInstance().error("writeCallback: null context");
+            return -1;
+        }
+
+        const size_t data_len = size * nmemb;
+        Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("writeCallback: received ", data_len); });
+
+        return writeCallbackImpl(ctx, ptr, data_len);
+    } catch (...) {
+        // This is libcurl's C boundary, including diagnostic formatting and
+        // user receive code. A short consume lets curl finish the request as
+        // CURLE_WRITE_ERROR; do not allocate, log or complete it ourselves.
+        if (ctx) ctx->recordCallbackError(CURLE_WRITE_ERROR);
+        return 0;
     }
-
-    size_t data_len = size * nmemb;
-    Logger::getInstance().debug("writeCallback: received ", data_len);
-
-    return writeCallbackImpl(ctx, ptr, data_len);
 }
 
 size_t AsyncHttpClient::writeCallbackImpl(RequestContext* ctx, char* ptr, size_t data_len) {
@@ -1436,12 +1369,16 @@ size_t AsyncHttpClient::writeCallbackImpl(RequestContext* ctx, char* ptr, size_t
     }
 
     if (ctx->completed) {
-        Logger::getInstance().debug("writeCallback: request already completed for URL: ", ctx->url);
+        Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("writeCallback: request already completed for URL: ", ctx->url); });
         return 0;
     }
 
     size_t written = 0;
     size_t skipped = 0;
+
+    // Even a fully skipped replay must observe failure. Otherwise the last
+    // cached block could fail yet libcurl would accept the replay as success.
+    if (ctx->event_->isFailed() || ctx->callback_error != CURLE_OK) return 0;
 
     // async pause/resume 会让 libcurl 把同一批数据再次送进 callback。
     // 这里显式记录 skipped，是为了保证“暂停前已跳过的数据”在恢复后不会被重复记账，
@@ -1462,18 +1399,22 @@ size_t AsyncHttpClient::writeCallbackImpl(RequestContext* ctx, char* ptr, size_t
         return 0;
     }
 
+    const auto pause_generation = ctx->event_->pause_generation_.load(std::memory_order_acquire);
     const DownloadConsumeResult consume_result = consumeDownloadData(ctx, ptr, data_len, ctx->event_.get());
     if (consume_result.invalid_result) {
+        ctx->recordCallbackError(CURLE_WRITE_ERROR);
         return -1;
     }
     if (consume_result.terminal_failure) {
+        ctx->recordCallbackError(CURLE_WRITE_ERROR);
         Logger::getInstance().warn("writeCallback received terminal async failure after sink callback for URL: ",
                                    ctx->url, ", event=", ctx->event_->toString());
         return 0;
     }
     written = consume_result.consumed;
 
-    if (written == 0 && !ctx->event_->isStopping() && !ctx->event_->isWaiting()) {
+    const bool newly_paused = pause_generation != ctx->event_->pause_generation_.load(std::memory_order_acquire);
+    if (written == 0 && !newly_paused && !ctx->event_->isStopping() && !ctx->event_->isWaiting()) {
         Logger::getInstance().error("writeCallback: zero-byte consume without explicit pause for URL: ",
                                     ctx->url);
         ctx->event_->Fail("write callback consumed zero bytes without pause");
@@ -1484,16 +1425,16 @@ size_t AsyncHttpClient::writeCallbackImpl(RequestContext* ctx, char* ptr, size_t
 }
 
 size_t AsyncHttpClient::readCallback(char* ptr, size_t size, size_t nmemb, void* userdata) {
+    if (size != 0 && nmemb > static_cast<size_t>(-1) / size) return CURL_READFUNC_ABORT;
     auto* ctx = static_cast<RequestContext*>(userdata);
-    if (!ctx) {
-        Logger::getInstance().error("readCallback: null context");
-        return -1;
+    try {
+        if (!ctx) return CURL_READFUNC_ABORT;
+        return readCallbackImpl(ctx, ptr, size * nmemb);
+    } catch (...) {
+        // libcurl owns the completion path: never call user completion here.
+        if (ctx) ctx->recordCallbackError(CURLE_ABORTED_BY_CALLBACK);
+        return CURL_READFUNC_ABORT;
     }
-
-    size_t data_len = size * nmemb;
-    Logger::getInstance().debug("readCallback: requesting up to ", data_len, " bytes for URL: ", ctx->url);
-
-    return readCallbackImpl(ctx, ptr, data_len);
 }
 
 size_t AsyncHttpClient::readCallbackImpl(AsyncHttpClient::RequestContext* ctx, char* ptr, size_t data_len) {
@@ -1512,6 +1453,7 @@ size_t AsyncHttpClient::readCallbackImpl(AsyncHttpClient::RequestContext* ctx, c
         data_len = ctx->request->getContentLength() - ctx->send;
     }
 
+    const auto pause_generation = ctx->event_->pause_generation_.load(std::memory_order_acquire);
     size_t bytes_read = 0;
     if (ctx->on_data_send_with_event_) {
         bytes_read = ctx->on_data_send_with_event_(ptr, data_len, ctx->event_.get());
@@ -1535,6 +1477,14 @@ size_t AsyncHttpClient::readCallbackImpl(AsyncHttpClient::RequestContext* ctx, c
         ctx->send_crc64_value = CRC64::CalcCRC(ctx->send_crc64_value, ptr, bytes_read);
     }
 
+    if (bytes_read == 0 && pause_generation != ctx->event_->pause_generation_.load(std::memory_order_acquire)) {
+        // Pause -> Resume may finish on another thread before source returns.
+        // Still pause curl once: returning zero here would signal EOF, and a
+        // state-only check would lose the already completed downstream wake.
+        enqueuePausedRequest(*ctx->parent, ctx);
+        return CURL_READFUNC_PAUSE;
+    }
+
     if (bytes_read == 0 && !ctx->event_->isPaused() && !ctx->event_->isFailed() &&
         ctx->request->getContentLength() > 0 &&
         ctx->send < static_cast<size_t>(ctx->request->getContentLength())) {
@@ -1550,15 +1500,26 @@ size_t AsyncHttpClient::readCallbackImpl(AsyncHttpClient::RequestContext* ctx, c
 }
 
 size_t AsyncHttpClient::headerCallback(char* buffer, size_t size, size_t nitems, void* userdata) {
-    auto* ctx = static_cast<RequestContext*>(userdata);
-    if (!ctx) {
-        Logger::getInstance().error("headerCallback: null context");
-        return size * nitems;
+    if (size != 0 && nitems > static_cast<size_t>(-1) / size) return 0;
+    try {
+        auto* ctx = static_cast<RequestContext*>(userdata);
+        if (!ctx) return 0;
+        return headerCallbackImpl(buffer, size * nitems, ctx);
+    } catch (...) {
+        return 0;
     }
+}
 
-    size_t total_size = size * nitems;
+size_t AsyncHttpClient::headerCallbackImpl(char* buffer, size_t total_size, RequestContext* ctx) {
+    if (ctx->response_header_limit) {
+        if (total_size > ctx->response_header_limit - ctx->response_header_bytes) {
+            ctx->recordCallbackError(CURLE_WRITE_ERROR);
+            return 0;
+        }
+        ctx->response_header_bytes += total_size;
+    }
     std::string header(buffer, total_size);
-    Logger::getInstance().debug("headerCallback: received header (", total_size, " bytes): ", header);
+    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("headerCallback: received header (", total_size, " bytes): ", header); });
 
     // 空行（"\r\n"）标志着响应头结束（HTTP协议规定）
     const bool is_empty_line = (header == "\r\n" || header == "\n");
@@ -1576,9 +1537,9 @@ size_t AsyncHttpClient::headerCallback(char* buffer, size_t size, size_t nitems,
             value.erase(value.find_last_not_of(" \t\r\n") + 1);
 
             ctx->response->setHeader(name, value);
-            Logger::getInstance().debug("headerCallback: parsed header - ", name, ": ", value);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("headerCallback: parsed header - ", name, ": ", value); });
         } else {
-            Logger::getInstance().debug("headerCallback: non-standard header line: ", header);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("headerCallback: non-standard header line: ", header); });
         }
     } else {
         if (!ctx->headers_completed_) {
@@ -1591,8 +1552,8 @@ size_t AsyncHttpClient::headerCallback(char* buffer, size_t size, size_t nitems,
                 if (ctx->on_http_status_set_) {
                     ctx->on_http_status_set_(http_status);
                 }
-                Logger::getInstance().debug("headerCallback: all headers received for URL: ", ctx->url,
-                                            ", status code: ", status_code);
+                Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("headerCallback: all headers received for URL: ", ctx->url,
+                                            ", status code: ", status_code); });
             } else {
                 Logger::getInstance().error("headerCallback: failed to get status code: ",
                                             curl_easy_strerror(res));
@@ -1600,8 +1561,8 @@ size_t AsyncHttpClient::headerCallback(char* buffer, size_t size, size_t nitems,
 
             // 唤醒future（此时response已包含完整的头信息，body流将继续接收数据）
             try {
-                ctx->promise.set_value(ctx->response);
-                Logger::getInstance().debug("headerCallback: future notified - URL: ", ctx->url);
+                ctx->fulfillPromise();
+                Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("headerCallback: future notified - URL: ", ctx->url); });
             } catch (const std::exception& e) {
                 Logger::getInstance().error("headerCallback: future notify failed: ", e.what());
             }
@@ -1610,16 +1571,8 @@ size_t AsyncHttpClient::headerCallback(char* buffer, size_t size, size_t nitems,
                 const std::string value = MapUtils::findValueByKeyIgnoreCase(ctx->response->Headers(),
                                                                              http::HEADER_CONTENT_LENGTH);
                 if (!value.empty()) {
-                    try {
-                        const int64_t contentLength = std::stoll(value);
-                        ctx->on_content_length_set_(contentLength);
-                    } catch (const std::exception& e) {
-                        Logger::getInstance().warn("headerCallback: invalid Content-Length: ", value,
-                                                   ", err: ", e.what());
-                    } catch (...) {
-                        Logger::getInstance().warn("headerCallback: invalid Content-Length: ", value,
-                                                   ", err: unknown");
-                    }
+                    const int64_t contentLength = std::stoll(value);
+                    ctx->on_content_length_set_(contentLength);
                 }
             }
 
@@ -1635,7 +1588,13 @@ int AsyncHttpClient::debugCallback(CURL* curl, curl_infotype type, char* data, s
     (void)curl;
     (void)userdata;
 
-    std::string message(data, size);
+    if (!Logger::getInstance().enabled(DEBUG)) return 0;
+    try {
+    // Payload diagnostics only need byte counts, not a full body copy.
+    std::string message;
+    if (type != CURLINFO_DATA_IN && type != CURLINFO_DATA_OUT &&
+        type != CURLINFO_SSL_DATA_IN && type != CURLINFO_SSL_DATA_OUT)
+        message.assign(data, size);
     // 去除结尾的换行符，避免日志重复换行
     if (!message.empty() && message.back() == '\n') {
         message.pop_back();
@@ -1643,23 +1602,27 @@ int AsyncHttpClient::debugCallback(CURL* curl, curl_infotype type, char* data, s
 
     switch (type) {
         case CURLINFO_TEXT:
-            Logger::getInstance().debug("curl debug: ", message);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("curl debug: ", message); });
             break;
         case CURLINFO_HEADER_IN:
-            Logger::getInstance().debug("curl received header: ", message);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("curl received header: ", message); });
             break;
         case CURLINFO_HEADER_OUT:
-            Logger::getInstance().debug("curl sent header: ", message);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("curl sent header: ", message); });
             break;
         case CURLINFO_DATA_IN:
-            Logger::getInstance().debug("curl received data: (", size, " bytes)");
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("curl received data: (", size, " bytes)"); });
             break;
         case CURLINFO_DATA_OUT:
-            Logger::getInstance().debug("curl sent data: (", size, " bytes)");
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("curl sent data: (", size, " bytes)"); });
             break;
         default:
-            Logger::getInstance().debug("curl debug (type ", type, "): ", message);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("curl debug (type ", type, "): ", message); });
             break;
+    }
+
+    } catch (...) {
+        // Diagnostics must not unwind through libcurl.
     }
 
     return 0;
@@ -1690,8 +1653,10 @@ void AsyncHttpClient::workerThread(CurlMultiHandle& multi_handle) const {
         // 3、补充投递新的请求到 multi handle。
         processNewRequest(multi_handle, thread_id, multi_handle.curl_cache);
 
-        // 4、根据当前是否存在 runnable active 请求，分别走 active I/O poll 或 idle/pause wait。
-        if (hasRunnableActive(multi_handle)) {
+        // Paused transfers still have curl deadlines. Drive the multi handle
+        // whenever any transfer exists; wait on sockets/eventfd/the earliest
+        // timer, not a paused-queue polling loop. Only a truly idle multi uses CV.
+        if (multi_handle.active_count.load(std::memory_order_relaxed) > 0) {
             processActiveRequest(multi_handle, thread_id, multi_handle.extra_fds);
         } else {
             waitForWorkOrResume(multi_handle);

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vector>
+#include <limits>
+#include "external/json/json.hpp"
 #include "model/RequestInfo.h"
 #include "ListedCommonPrefix.h"
 #include "ListedObjectV2.h"
@@ -81,6 +83,10 @@ public:
     }
 
     void fromJsonString(const std::string& input);
+    // Reuse a parsed document; reject oversized arrays before typed allocation.
+    // Publication is atomic: failure preserves the previous output record.
+    void fromJson(const nlohmann::json& input,
+                  std::size_t max_entries = std::numeric_limits<std::size_t>::max());
 
 private:
     RequestInfo requestInfo_;

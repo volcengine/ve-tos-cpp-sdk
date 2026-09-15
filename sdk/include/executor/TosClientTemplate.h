@@ -10,7 +10,7 @@ namespace VolcengineTos {
 int extendMmap(int file_fd, void*& mmap_ptr, size_t& mmap_size, size_t file_offset, size_t need_add_size);
 size_t align_to_page(size_t size);
 
-bool checkShouldRetry(const std::string& funcName, int resCode, int curlErrCode, int flowBytes);
+bool checkShouldRetry(const std::string& funcName, int resCode, int curlErrCode, int64_t flowBytes);
 
 std::string getRequestID(const std::map<std::string, std::string>& headers);
 std::string getEcCode(const std::map<std::string, std::string>& headers);

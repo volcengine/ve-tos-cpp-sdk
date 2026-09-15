@@ -38,6 +38,16 @@ target_link_libraries(${PROJECT_NAME}
 
 #target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
 
+# This target includes HttpClient.cc to test its private callback. The static
+# archive supplies other SDK objects without linking HttpClient.cc a second time.
+add_executable(upload-read-callback-test UploadReadCallbackTest.cc)
+target_include_directories(upload-read-callback-test PRIVATE
+        ${CMAKE_SOURCE_DIR}/sdk/include ${CMAKE_SOURCE_DIR}/sdk/src
+        ${CMAKE_SOURCE_DIR}/sdk/src/external/spdlog
+        ${CLIENT_SSL_INCLUDE_DIRS} ${CLIENT_CURL_INCLUDE_DIRS})
+target_link_libraries(upload-read-callback-test PRIVATE gtest_main
+        ve-tos-cpp-sdk-lib ${CLIENT_SSL_LIBS} ${CLIENT_CURL_LIBS})
+
 install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

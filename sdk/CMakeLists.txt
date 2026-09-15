@@ -386,9 +386,11 @@ if (BUILD_ASYNC_SDK)
             "include/tos_async/*.h")
     list(APPEND SDK_HEADER
         include/TosAsyncClient.h
+        include/AsyncEngine.h
         include/transport/CurlStatsCollector.h
         include/utils/CachedQueue.h
         include/utils/ConcurrentCachedBlockQueue.h
+        include/utils/ConcurrentQueue.h
         include/utils/LinkedBufferQueue.h
         include/utils/LockFreeCacheMap.h
         include/utils/LockFreeQueue.h
@@ -478,6 +480,8 @@ install(TARGETS ${PROJECT_NAME}${STATIC_LIB_SUFFIX}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Both synchronous LIST and asynchronous public headers expose this dependency.
+install(FILES src/external/json/json.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/external/json)
 if (BUILD_ASYNC_SDK)
     install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
             PATTERN "executor" EXCLUDE
@@ -486,6 +490,7 @@ if (BUILD_ASYNC_SDK)
 else ()
     install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
             PATTERN "TosAsyncClient.h" EXCLUDE
+            PATTERN "AsyncEngine.h" EXCLUDE
             PATTERN "executor" EXCLUDE
             PATTERN "logger" EXCLUDE
             PATTERN "model/async" EXCLUDE
@@ -494,6 +499,7 @@ else ()
             PATTERN "external" EXCLUDE
             PATTERN "utils/CachedQueue.h" EXCLUDE
             PATTERN "utils/ConcurrentCachedBlockQueue.h" EXCLUDE
+            PATTERN "utils/ConcurrentQueue.h" EXCLUDE
             PATTERN "utils/LinkedBufferQueue.h" EXCLUDE
             PATTERN "utils/LockFreeCacheMap.h" EXCLUDE
             PATTERN "utils/LockFreeQueue.h" EXCLUDE

@@ -3,6 +3,7 @@
 // - 引入 executor/PipelineBase.h 的 AnyOutcome
 // - 新增 onAnyRequestDone(std::function<void(AnyOutcome)>) 用于协调器的类型擦除回调桥接
 // - 在 handleResponse 中于 typed 回调之后触发 AnyOutcome 回调，保持向后兼容
+#include "JsonResponseLimits.h"
 #include "Outcome.h"
 #include "PipelineBase.h"
 #include "TosError.h"
@@ -20,8 +21,11 @@
 #include <chrono>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <memory>
+#include <mutex>
 #include <sstream>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -29,6 +33,9 @@ namespace VolcengineTos {
 using json = nlohmann::json;
 
 namespace executor_detail {
+struct JsonLimitExceeded : std::exception {
+    const char* what() const noexcept override { return "JSON response shape limit exceeded"; }
+};
 inline void appendMessage(std::ostringstream&) {
 }
 
@@ -91,14 +98,14 @@ struct FileContext {
         if (mmap_ptr != MAP_FAILED && mmap_ptr != nullptr) {
             munmap(mmap_ptr, mmap_size);
             mmap_ptr = nullptr;
-            Logger::getInstance().debug("release_resources: munmap success");
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("release_resources: munmap success"); });
         }
 
         // 3. 关闭文件
         if (file_fd != -1) {
             close(file_fd);
             file_fd = -1;
-            Logger::getInstance().debug("release_resources: close file success");
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("release_resources: close file success"); });
         }
 
         // 4. 标记为已释放
@@ -167,6 +174,68 @@ class ProcessingPipline {
     using Json2Output = std::function<void(O&, json&)>;
 
     using Input2Json = std::function<std::string(T&)>;
+
+    // Submission and the transport completion may overlap on different
+    // threads. Gate admission/final cleanup together, without holding this
+    // mutex while invoking external code. This does not make concurrent
+    // response parsing or concurrent resetForReuse supported.
+    struct CompletionState {
+        bool enter() {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (finish_called) return false;
+            ++active_calls;
+            return true;
+        }
+        bool leave() {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (--active_calls != 0 || !finish_pending || finish_called) return false;
+            finish_called = true;
+            return true;
+        }
+        bool callbackCalled() {
+            std::lock_guard<std::mutex> lock(mutex);
+            return callback_called;
+        }
+        bool claimCallback() {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (callback_called || finish_called) return false;
+            callback_called = true;
+            return true;
+        }
+        void requestFinish() {
+            std::lock_guard<std::mutex> lock(mutex);
+            finish_pending = true;
+        }
+
+     private:
+        std::mutex mutex;
+        bool callback_called = false;
+        bool finish_called = false;
+        bool finish_pending = false;
+        size_t active_calls = 0;
+    };
+
+    class CompletionScope {
+     public:
+        CompletionScope(ProcessingPipline* pipeline, std::shared_ptr<CompletionState> state)
+                : pipeline_(pipeline), state_(std::move(state)), entered_(state_->enter()) {
+        }
+        ~CompletionScope() {
+            if (entered_ && state_->leave()) {
+                // No new scope can enter after leave claims final cleanup.
+                // runFinish may delete/recycle pipeline_. Do not use it again.
+                pipeline_->runFinish();
+            }
+        }
+        explicit operator bool() const { return entered_; }
+        CompletionScope(const CompletionScope&) = delete;
+        CompletionScope& operator=(const CompletionScope&) = delete;
+
+     private:
+        ProcessingPipline* pipeline_;
+        std::shared_ptr<CompletionState> state_;
+        bool entered_;
+    };
 
  public:
     explicit ProcessingPipline(const T& base_input) : input_(base_input), start_time_ms_(0) {
@@ -269,15 +338,50 @@ class ProcessingPipline {
 
     // todo:在不期待的code情况下，作为json解析body
     ProcessingPipline& responseJson(int size = 64 * 1024) {
+        return responseJson(size, false);
+    }
+
+    // Header-only success contracts still parse bounded service-error JSON.
+    // Preserve the original overload and opt in only for those operations.
+    ProcessingPipline& responseJson(int size, bool require_empty_success_body) {
+        if (size <= 0) throw std::invalid_argument("JSON buffer size must be positive");
         if (StringUtils::startsWithIgnoreCase(user_name_, "list")) {
             size = 1 * 1024 *
                    1024;  // 默认值增加，实际还是根据contentLength处理，但是如果服务端没携带，默认值尽量给大
         }
+        return configureJsonResponse(static_cast<size_t>(size), require_empty_success_body, {});
+    }
 
+    ProcessingPipline& responseJsonBounded(JsonResponseLimits limits) {
+        if (!limits.max_body_bytes || !limits.max_depth || limits.max_depth > 256 || !limits.max_events ||
+            limits.max_body_bytes > static_cast<size_t>(std::numeric_limits<int64_t>::max()) ||
+            limits.max_body_bytes > response_buffer_.max_size())
+            throw std::invalid_argument("invalid bounded JSON response limits");
+        return configureJsonResponse(limits.max_body_bytes, false, limits);
+    }
+
+ private:
+    // Internal builder shared by the legacy policy and explicit bounded users.
+    ProcessingPipline& configureJsonResponse(size_t size, bool require_empty_success_body,
+                                             JsonResponseLimits limits) {
         response_buffer_limit_ = static_cast<size_t>(size);
         response_buffer_truncated_ = false;
+        response_buffer_failed_ = false;
 
-        on_content_length_set_ = [this, size](const int64_t length) {
+        on_content_length_set_ = [this, size, require_empty_success_body, limits](const int64_t length) {
+            if (limits.max_body_bytes) {
+                // Never allocate from an untrusted Content-Length. Detect the
+                // oversize header now; the receive callback aborts any body.
+                if (length > 0 && static_cast<uint64_t>(length) > limits.max_body_bytes)
+                    response_buffer_truncated_ = true;
+                return;
+            }
+            if (require_empty_success_body) {
+                // Content-Length is untrusted and must not enlarge this sink.
+                response_buffer_limit_ = static_cast<size_t>(size);
+                this->response_buffer_.reserve(static_cast<size_t>(size));
+                return;
+            }
             if (length > 0) {
                 // 以 Content-Length 为准（避免默认 size 过小导致 JSON 截断）
                 response_buffer_limit_ = static_cast<size_t>(length);
@@ -288,23 +392,41 @@ class ProcessingPipline {
             }
         };
 
-        on_data_receive_ = [this, size](const char* data, const size_t length, AsyncEvent* ev) {
+        on_data_receive_ = [this, size, limits](const char* data, const size_t length, AsyncEvent* ev) {
             if (!data || length == 0) {
                 return static_cast<size_t>(0);  // 无有效数据，返回0
             }
 
             const size_t old_size = this->response_buffer_.size();
-            const size_t new_size = old_size + length;
             const size_t limit =
                 response_buffer_limit_ > 0 ? response_buffer_limit_ : static_cast<size_t>(size);
-            if (new_size > limit) {
-                flow_bytes_ += static_cast<int64_t>(length);
+            if (old_size > limit || length > limit - old_size || response_buffer_truncated_ ||
+                response_buffer_failed_) {
                 response_buffer_truncated_ = true;
+                if (limits.max_body_bytes) {
+                    if (ev) ev->markFailed();
+                    return static_cast<size_t>(0);
+                }
+                flow_bytes_ += static_cast<int64_t>(length);
                 return length;  // 继续消费数据，避免影响 curl；但标记为截断，后续不再解析
             }
 
             // 若超过预分配容量，vector会自动扩容
-            this->response_buffer_.resize(new_size);
+            const size_t new_size = old_size + length;
+            if (limits.max_body_bytes) {
+                try {
+                    // Reserve once under the validated local ceiling, never
+                    // from a server length; subsequent resize cannot grow it.
+                    if (response_buffer_.capacity() < size) response_buffer_.reserve(size);
+                    response_buffer_.resize(new_size);
+                } catch (...) {
+                    response_buffer_failed_ = true;
+                    if (ev) ev->markFailed();
+                    return static_cast<size_t>(0);  // No exception crosses libcurl's C callback.
+                }
+            } else {
+                response_buffer_.resize(new_size);
+            }
 
             memcpy(&this->response_buffer_[old_size], data, length);
             flow_bytes_ += static_cast<int64_t>(length);
@@ -312,11 +434,31 @@ class ProcessingPipline {
             return length;
         };
 
-        auto function = [this](Outcome<TosError, O>& outcome) {
+        auto function = [this, require_empty_success_body, limits](Outcome<TosError, O>& outcome) {
             O& result = outcome.result();
             TosError& error = outcome.error();
+            if (response_buffer_failed_) {
+                outcome.setSuccess(false);
+                error.setIsClientError(true);
+                error.setCode("ResponseBodyAllocationFailed");
+                error.setMessage("bounded JSON receive allocation failed");
+                return;
+            }
 
-            if (response_buffer_.empty()) {
+            // Check actual received bytes, including a first chunk larger
+            // than the cap, before the empty-buffer shortcut. Framing headers
+            // alone cannot prove an empty close-delimited/chunked response.
+            if (require_empty_success_body && outcome.isSuccess() &&
+                (!response_buffer_.empty() || response_buffer_truncated_)) {
+                outcome.setSuccess(false);
+                error.setIsClientError(true);
+                error.setCode("UnexpectedResponseBody");
+                error.setMessage("nonempty body in header-only success response");
+                return;
+            }
+
+            if (response_buffer_.empty() && !response_buffer_truncated_ &&
+                (!limits.max_body_bytes || !outcome.isSuccess())) {
                 return;
             }
 
@@ -329,9 +471,24 @@ class ProcessingPipline {
             }
 
             try {
+                json::parser_callback_t shape_guard;
+                if (limits.max_body_bytes) {
+                    shape_guard = [limits, events = size_t{0}](int depth, json::parse_event_t event,
+                                                              json&) mutable {
+                        const bool start = event == json::parse_event_t::object_start ||
+                                           event == json::parse_event_t::array_start;
+                        if (depth < 0 || (start && static_cast<size_t>(depth) >= limits.max_depth))
+                            throw executor_detail::JsonLimitExceeded{};
+                        if (event != json::parse_event_t::object_end && event != json::parse_event_t::array_end) {
+                            if (events == limits.max_events) throw executor_detail::JsonLimitExceeded{};
+                            ++events;
+                        }
+                        return true;
+                    };
+                }
                 // allow_exceptions=false: 解析失败时返回 discarded json，避免抛异常
-                json j = json::parse(response_buffer_.data(),
-                                     response_buffer_.data() + response_buffer_.size(), nullptr, false);
+                const char* begin = response_buffer_.empty() ? "" : response_buffer_.data();
+                json j = json::parse(begin, begin + response_buffer_.size(), shape_guard, false);
                 if (j.is_discarded()) {
                     outcome.setSuccess(false);
                     error.setIsClientError(true);
@@ -340,7 +497,7 @@ class ProcessingPipline {
                     return;
                 }
 
-                if (json2output_) {
+                if (outcome.isSuccess() && json2output_) {
                     json2output_(result, j);
                 }
 
@@ -365,6 +522,11 @@ class ProcessingPipline {
                     const auto cond = j.at("Condition").get<std::string>();
                     error.setCondition(cond);
                 }
+            } catch (const executor_detail::JsonLimitExceeded&) {
+                outcome.setSuccess(false);
+                error.setIsClientError(true);
+                error.setCode("JsonResponseLimitExceeded");
+                error.setMessage("JSON response depth or event limit exceeded");
             } catch (const std::exception& e) {
                 outcome.setSuccess(false);
                 error.setIsClientError(true);
@@ -382,6 +544,7 @@ class ProcessingPipline {
         return *this;
     }
 
+ public:
     ProcessingPipline& requestJson() {
         std::string json_str;
         if (input2_json_) {
@@ -529,11 +692,15 @@ class ProcessingPipline {
     }
 
     void resetForReuse(const T& input) {
+        auto state = std::make_shared<CompletionState>();
         input_ = input;
         resetRuntimeState();
+        completion_state_ = std::move(state);
         on_destroy_ = nullptr;
     }
 
+    // Pool recycling leaves the old completion gate closed. resetForReuse
+    // opens a new generation only after the previous request is quiescent.
     void recycle() { resetRuntimeState(); }
 
     ProcessingPipline& inputCheck(const InputCheck& function) {
@@ -670,8 +837,8 @@ class ProcessingPipline {
 
             // 4. 计算对齐后的映射大小（mmap长度必须是页大小整数倍）
             ctx.mmap_size = align_to_page(ctx.total_file_length);
-            Logger::getInstance().debug("enableReadFromFile: file length: ", ctx.total_file_length,
-                                        ", aligned mmap size: ", ctx.mmap_size);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("enableReadFromFile: file length: ", ctx.total_file_length,
+                                        ", aligned mmap size: ", ctx.mmap_size); });
 
             // 5. mmap映射整个文件（读取权限：PROT_READ，共享映射：MAP_SHARED）
             ctx.mmap_ptr = mmap(nullptr,        // 内核自动分配地址
@@ -693,7 +860,7 @@ class ProcessingPipline {
                 return;
             }
 
-            Logger::getInstance().debug("enableReadFromFile: init success, file: ", ctx.file_path);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("enableReadFromFile: init success, file: ", ctx.file_path); });
         };
 
         on_data_send_ = [this](char* data, size_t len, AsyncEvent* ev) {
@@ -715,8 +882,8 @@ class ProcessingPipline {
             // 计算剩余可读取长度（读取完成则返回0）
             const size_t remaining_len = ctx.total_file_length - ctx.file_offset;
             if (remaining_len == 0) {
-                Logger::getInstance().debug("on_data_send: read complete, total length: ",
-                                            ctx.total_file_length);
+                Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("on_data_send: read complete, total length: ",
+                                            ctx.total_file_length); });
                 return len;  // 返回0表示读取完成，框架停止调用
             }
 
@@ -739,9 +906,9 @@ class ProcessingPipline {
             // 更新读取偏移
             ctx.file_offset += read_len;
 
-            Logger::getInstance().debug("on_data_send: read ", read_len,
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("on_data_send: read ", read_len,
                                         " bytes, offset: ", ctx.file_offset,
-                                        ", remaining: ", ctx.total_file_length - ctx.file_offset);
+                                        ", remaining: ", ctx.total_file_length - ctx.file_offset); });
 
             return len;  // 返回实际读取长度，框架会继续调用直到返回0
         };
@@ -776,8 +943,8 @@ class ProcessingPipline {
             if (ctx.total_file_length > 0) {
                 // 模式1：已知文件长度 → 一次映射到位（无需extendMmap）
                 ctx.mmap_size = align_to_page(ctx.total_file_length);
-                Logger::getInstance().debug("known file length: ", ctx.total_file_length,
-                                            ", aligned mmap size: ", ctx.mmap_size);
+                Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("known file length: ", ctx.total_file_length,
+                                            ", aligned mmap size: ", ctx.mmap_size); });
 
                 // 扩展文件到总长度（确保文件大小足够）
                 if (ftruncate(ctx.file_fd, static_cast<off_t>(ctx.mmap_size)) == -1) {
@@ -818,8 +985,8 @@ class ProcessingPipline {
                 }
             }
 
-            Logger::getInstance().debug("mmap init success, file: ", ctx.file_path,
-                                        ", mmap size: ", ctx.mmap_size);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("mmap init success, file: ", ctx.file_path,
+                                        ", mmap size: ", ctx.mmap_size); });
         };
 
         on_data_receive_ = [this](char* data, size_t len, AsyncEvent* ev) {
@@ -877,12 +1044,12 @@ class ProcessingPipline {
                     Logger::getInstance().error("writeCallback: msync failed, err: ", strerror(errno));
                 } else {
                     ctx.last_sync_offset = ctx.file_offset;
-                    Logger::getInstance().debug("writeCallback: msync success, total written: ",
-                                                ctx.file_offset);
+                    Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("writeCallback: msync success, total written: ",
+                                                ctx.file_offset); });
                 }
             }
 
-            Logger::getInstance().debug("writeCallback: wrote ", len, " bytes, total: ", ctx.file_offset);
+            Logger::getInstance().debugLazy([&](Logger& logger) { logger.debug("writeCallback: wrote ", len, " bytes, total: ", ctx.file_offset); });
             return len;
         };
 
@@ -902,7 +1069,9 @@ class ProcessingPipline {
     }
 
     void callbackError(const std::string& error_string) {
-        if (is_callback_) {
+        auto state = completion_state_;
+        CompletionScope active(this, state);
+        if (!active || state->callbackCalled()) {
             return;
         }
         Outcome<TosError, O> outcome;
@@ -911,8 +1080,7 @@ class ProcessingPipline {
         error.setMessage(error_string);
         outcome.setE(error);
         outcome.setSuccess(false);
-        on_request_done_(outcome);
-        is_callback_ = true;
+        deliverOutcome(outcome);
     }
 
     ProcessingPipline& enableRetry(int max_retry_count, long retry_wait_scale) {
@@ -941,11 +1109,15 @@ class ProcessingPipline {
             }
 
             // 3.1 计算基础重试间隔：指数退避（和原逻辑一致：scale * 2^retry_count_）
-            int64_t retry_wait_time = retry_wait_scale * (1LL << retry_count);  // 1LL避免溢出
+            const int64_t max_delay = std::numeric_limits<int64_t>::max();
+            if (retry_wait_scale < 0 || retry_count < 0 || retry_count >= 63 ||
+                retry_wait_scale > (max_delay >> retry_count)) return;
+            int64_t retry_wait_time = retry_wait_scale * (int64_t(1) << retry_count);
 
             // 3.2 兼容HTTP协议：429/503时优先遵守Retry-After头
             if (statusCode == 429 || statusCode == 503) {
                 if (retry_after > 0) {
+                    if (retry_after > max_delay / 1000) return;
                     const int64_t retry_after_ms = retry_after * 1000;  // 转为毫秒
                     // 取「Retry-After计算值」和「指数退避值」的较大者
                     retry_wait_time = std::max(retry_wait_time, retry_after_ms);
@@ -956,6 +1128,7 @@ class ProcessingPipline {
             const int64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                        std::chrono::system_clock::now().time_since_epoch())
                                        .count();  // 需实现：获取当前毫秒时间戳
+            if (now_ms < 0 || retry_wait_time > max_delay - now_ms) return;
             not_send_util_ = now_ms + retry_wait_time;
 
             // 3.4 标记异步重试；当前响应回调收尾后再重新进入asyncExecute。
@@ -981,6 +1154,30 @@ class ProcessingPipline {
     }
 
     void asyncExecute() {
+        auto state = completion_state_;
+        CompletionScope active(this, state);
+        if (!active || state->callbackCalled()) {
+            return;
+        }
+        try {
+            executeAttempt(state);
+        } catch (const std::exception& error) {
+            callbackException(error.what());
+            finish();
+        } catch (...) {
+            callbackException("unknown exception in async pipeline");
+            finish();
+        }
+    }
+
+ private:
+    void executeAttempt(const std::shared_ptr<CompletionState>& state) {
+        if (run_count != 0) {
+            response_buffer_.clear();
+            response_buffer_truncated_ = false;
+            response_buffer_failed_ = false;
+            flow_bytes_ = 0;
+        }
         run_count++;
         const int64_t start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                           std::chrono::system_clock::now().time_since_epoch())
@@ -1043,15 +1240,18 @@ class ProcessingPipline {
         }
 
         std::function<void(std::shared_ptr<HttpResponse>)> handleResponse;
-        handleResponse = [this, http_request](std::shared_ptr<HttpResponse> http_response) {
-            if (is_callback_) {
+        handleResponse = [this, http_request, state](std::shared_ptr<HttpResponse> http_response) {
+            if (state->callbackCalled()) {
                 return;
             }
 
+            Outcome<TosError, O> outcome;
             try {
+                if (!http_response) {
+                    throw std::runtime_error("http sender returned a null response");
+                }
                 const bool expect = std::binary_search(expect_status_.begin(), expect_status_.end(),
                                                        http_response->statusCode());
-                Outcome<TosError, O> outcome;
                 TosError error;
                 O result;
                 if (expect && http_response->status() == 0) {
@@ -1079,64 +1279,86 @@ class ProcessingPipline {
                     return;
                 }
 
-                on_request_done_(outcome);
-                is_callback_ = true;
             } catch (const std::exception& e) {
-                Outcome<TosError, O> outcome;
-                TosError error;
-                error.setIsClientError(true);
-                error.setCode("UnhandledException");
-                error.setMessage(e.what());
-                if (http_response) {
-                    error.setStatusCode(http_response->statusCode());
-                }
-                error.setRequestUrl(http_request->url().toString());
-                outcome.setE(error);
-                outcome.setSuccess(false);
-                on_request_done_(outcome);
-                is_callback_ = true;
+                callbackException(e.what(), http_request, http_response);
+                return;
             } catch (...) {
-                Outcome<TosError, O> outcome;
-                TosError error;
-                error.setIsClientError(true);
-                error.setCode("UnhandledException");
-                error.setMessage("unknown exception in async pipeline");
-                if (http_response) {
-                    error.setStatusCode(http_response->statusCode());
-                }
-                error.setRequestUrl(http_request->url().toString());
-                outcome.setE(error);
-                outcome.setSuccess(false);
-                on_request_done_(outcome);
-                is_callback_ = true;
+                callbackException("unknown exception in async pipeline", http_request, http_response);
+                return;
             }
+            // User code is outside the parser/decorator catch boundary. A
+            // callback exception must never be turned into another outcome.
+            deliverOutcome(outcome);
         };
 
         sender_(http_request, on_data_receive_, on_data_send_,
-                [handleResponse, this](const std::shared_ptr<HttpResponse>& response) {
+                [handleResponse, this, state](const std::shared_ptr<HttpResponse>& response) {
+                    CompletionScope active(this, state);
+                    if (!active) {
+                        return;
+                    }
                     handleResponse(response);  // 第一次尝试
-                    if (is_callback_) {
+                    if (state->callbackCalled()) {
                         finish();
                     }
                 },
                 on_request_start_, nullptr, on_content_length_set_);
     }
 
- private:
     static constexpr size_t kReusableResponseBufferCapacity = 64 * 1024;
+
+    void deliverOutcome(Outcome<TosError, O>& outcome) {
+        // Publish the gate before invoking external code, including reentry.
+        if (!completion_state_->claimCallback()) {
+            return;
+        }
+        if (on_request_done_) {
+            try {
+                on_request_done_(outcome);
+            } catch (...) {
+                // Completion exceptions do not alter the operation's result
+                // and must not prevent transport completion/final cleanup.
+            }
+        }
+    }
+
+    void callbackException(const std::string& message, const std::shared_ptr<HttpRequest>& request = {},
+                           const std::shared_ptr<HttpResponse>& response = {}) {
+        if (completion_state_->callbackCalled()) {
+            return;
+        }
+        Outcome<TosError, O> outcome;
+        TosError error;
+        error.setIsClientError(true);
+        error.setCode("UnhandledException");
+        error.setMessage(message);
+        if (request) error.setRequestUrl(request->url().toString());
+        if (response) error.setStatusCode(response->statusCode());
+        outcome.setE(error);
+        outcome.setSuccess(false);
+        deliverOutcome(outcome);
+    }
 
     void resetRuntimeState() {
         run_count = 0;
         need_callback_ = true;
-        is_callback_ = false;
         retry_scheduled_ = false;
-        finish_called_ = false;
         ignore_input_check_ = false;
         start_time_ms_ = 0;
         not_send_util_ = 0;
         flow_bytes_ = 0;
         response_buffer_limit_ = 0;
         response_buffer_truncated_ = false;
+        response_buffer_failed_ = false;
+
+        // A callback capture may release the caller's raw-response budget.
+        // Discard payload storage before releasing any such capture; retain
+        // only the existing small per-pipeline capacity cache.
+        if (response_buffer_.capacity() > kReusableResponseBufferCapacity) {
+            std::vector<char>().swap(response_buffer_);
+        } else {
+            response_buffer_.clear();
+        }
 
         input_checks_.clear();
         input2_http_request_ = nullptr;
@@ -1160,28 +1382,26 @@ class ProcessingPipline {
         on_request_start_ = nullptr;
         on_content_length_set_ = nullptr;
         file_ctx_.clear();
-
-        if (response_buffer_.capacity() > kReusableResponseBufferCapacity) {
-            std::vector<char>().swap(response_buffer_);
-        } else {
-            response_buffer_.clear();
-        }
     }
 
     static void runFinalizers(std::vector<AfterPiplineFinish> finalizers) {
         for (auto it = finalizers.rbegin(); it != finalizers.rend(); ++it) {
             if (*it) {
-                (*it)();
+                try {
+                    (*it)();
+                } catch (...) {
+                    // One failing hook must not skip the remaining resource
+                    // release/pool finalizers. No pipeline access from here.
+                }
             }
         }
     }
 
     void finish() {
-        if (finish_called_) {
-            return;
-        }
+        completion_state_->requestFinish();
+    }
 
-        finish_called_ = true;
+    void runFinish() {
         auto finalizers = std::move(after_pipline_finishes_);
         after_pipline_finishes_.clear();
         runFinalizers(std::move(finalizers));
@@ -1190,9 +1410,8 @@ class ProcessingPipline {
     T input_;
     int run_count = 0;  // asyncExecute运行次数
     bool need_callback_ = true;
-    bool is_callback_ = false;
     bool retry_scheduled_ = false;
-    bool finish_called_ = false;
+    std::shared_ptr<CompletionState> completion_state_ = std::make_shared<CompletionState>();
 
     bool ignore_input_check_ = false;
     std::vector<InputCheck> input_checks_;
@@ -1216,6 +1435,7 @@ class ProcessingPipline {
     std::vector<char> response_buffer_;
     size_t response_buffer_limit_ = 0;
     bool response_buffer_truncated_ = false;
+    bool response_buffer_failed_ = false;
     InputDecorator input_decorator_;
     HttpRequestDecorator http_request_decorator_;
     OutComeDecorator out_come_decorator_;

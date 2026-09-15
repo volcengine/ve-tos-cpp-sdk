@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <mutex>
+#include <stdexcept>
 #include <type_traits>
 #include <vector>
 
@@ -26,6 +27,14 @@ using namespace VolcengineTos;
 namespace {
 
 constexpr size_t kMaxPooledPipelinesPerType = 64;
+
+std::shared_ptr<AsyncHttpClient> RequireAsyncTransport(const std::shared_ptr<TosClientBase>& client) {
+    // Atomic transport snapshot plus transport admission serializes close vs
+    // submission. A shared client close never stops another client's engine.
+    auto transport = client->getAsyncTransport();
+    if (!transport || transport->isClosed()) throw std::runtime_error("asynchronous client is closed");
+    return transport;
+}
 
 template <typename T, typename O>
 struct ShouldPoolPipeline : std::true_type {};
@@ -178,32 +187,45 @@ public:
     }
 
     ProcessingPipline<T, O>* acquire(const T& input, bool& created) {
-        std::lock_guard<std::mutex> guard(mu_);
-        if (!cache_.empty()) {
-            auto* pipeline = cache_.back();
-            cache_.pop_back();
+        std::unique_ptr<ProcessingPipline<T, O>> pipeline;
+        {
+            std::lock_guard<std::mutex> guard(mu_);
+            if (!cache_.empty()) {
+                pipeline.reset(cache_.back());
+                cache_.pop_back();
+            }
+        }
+        if (pipeline) {
+            // A new completion gate or input copy can throw. The popped
+            // instance remains owned until reset succeeds, outside the lock.
             pipeline->resetForReuse(input);
             created = false;
-            return pipeline;
+            return pipeline.release();
         }
 
         created = true;
         return new ProcessingPipline<T, O>(input);
     }
 
-    void recycle(ProcessingPipline<T, O>* pipeline) {
-        if (pipeline == nullptr) {
+    void recycle(ProcessingPipline<T, O>* pipeline) noexcept {
+        std::unique_ptr<ProcessingPipline<T, O>> owned(pipeline);
+        if (!owned) {
             return;
         }
 
-        std::lock_guard<std::mutex> guard(mu_);
-        if (cache_.size() >= kMaxPooledPipelinesPerType) {
-            delete pipeline;
-            return;
+        try {
+            // Clearing callback captures may notify their owners. Do not do
+            // that (or destroy a discarded instance) while holding the pool.
+            pipeline->recycle();
+            std::lock_guard<std::mutex> guard(mu_);
+            if (cache_.size() < kMaxPooledPipelinesPerType) {
+                cache_.push_back(pipeline);
+                owned.release();
+            }
+        } catch (...) {
+            // A full cache or failed cache allocation falls back to deletion.
+            // Finalizer exception containment must never orphan the instance.
         }
-
-        pipeline->recycle();
-        cache_.push_back(pipeline);
     }
 
 private:
@@ -220,14 +242,20 @@ BoundedPipelinePool<T, O>& getPipelinePool() {
 template <typename T, typename O>
 ProcessingPipline<T, O>* acquirePipelineInstance(const T& input, bool use_pool) {
     bool created = false;
-    ProcessingPipline<T, O>* pipeline = nullptr;
+    std::unique_ptr<ProcessingPipline<T, O>> pipeline;
     if (use_pool) {
-        pipeline = getPipelinePool<T, O>().acquire(input, created);
+        pipeline.reset(getPipelinePool<T, O>().acquire(input, created));
     } else {
         created = true;
-        pipeline = new ProcessingPipline<T, O>(input);
+        pipeline.reset(new ProcessingPipline<T, O>(input));
     }
 
+    // std::function's function-pointer target needs no allocation. Install
+    // physical-lifetime accounting before counting creation or logging, both
+    // for new objects and after resetForReuse clears the cached object's hook.
+    pipeline->onDestroy(+[]() noexcept {
+        TosAsyncClient::g_pipline_destroy_cnt.fetch_add(1, std::memory_order_acq_rel);
+    });
     if (created) {
         const uint32_t create_count = TosAsyncClient::g_pipline_create_cnt.fetch_add(1, std::memory_order_acq_rel);
         const uint32_t destroy_count = TosAsyncClient::g_pipline_destroy_cnt.load(std::memory_order_relaxed);
@@ -236,7 +264,7 @@ ProcessingPipline<T, O>* acquirePipelineInstance(const T& input, bool use_pool) 
         }
     }
 
-    return pipeline;
+    return pipeline.release();
 }
 
 template <typename T, typename O>
@@ -250,10 +278,9 @@ void attachPipelineFinalizer(ProcessingPipline<T, O>* pipeline, bool use_pool) {
 
 template <typename T, typename O>
 ProcessingPipline<T, O>* newBasePipeline(const T& input, bool use_pool) {
-    auto* pipeline = acquirePipelineInstance<T, O>(input, use_pool);
-    attachPipelineFinalizer(pipeline, use_pool);
-    pipeline->onDestroy([]() { TosAsyncClient::g_pipline_destroy_cnt.fetch_add(1, std::memory_order_acq_rel); });
-    return pipeline;
+    std::unique_ptr<ProcessingPipline<T, O>> pipeline(acquirePipelineInstance<T, O>(input, use_pool));
+    attachPipelineFinalizer(pipeline.get(), use_pool);
+    return pipeline.release();
 }
 
 }  // namespace
@@ -321,6 +348,25 @@ TosAsyncClient::~TosAsyncClient() {
     close();
 }
 
+TosAsyncClient::TosAsyncClient(const std::string& region, const std::shared_ptr<Credentials>& cred,
+                             const ClientConfig& config, std::shared_ptr<AsyncEngine> engine,
+                             const AsyncClientSharingOptions& sharing)
+    : tosClientBase_(std::make_shared<TosClientBase>(config.endPoint, region, cred, config,
+                                                   std::move(engine), sharing)),
+      fileTransferOptions_(MakeClientFileTransferOptions(config)) {}
+
+TosAsyncClient::TosAsyncClient(const std::string& region, const StaticCredentials& cred,
+                             const ClientConfig& config, std::shared_ptr<AsyncEngine> engine,
+                             const AsyncClientSharingOptions& sharing)
+    : TosAsyncClient(region, std::make_shared<StaticCredentials>(cred), config, std::move(engine), sharing) {}
+
+void TosAsyncClient::beginClose() const {
+    if (tosClientBase_) {
+        auto transport = tosClientBase_->getAsyncTransport();
+        if (transport) transport->beginClose();
+    }
+}
+
 void TosAsyncClient::close() const {
     if (tosClientBase_ == nullptr) {
         return;
@@ -331,6 +377,23 @@ void TosAsyncClient::close() const {
 static void setContentType(RequestBuilder& rb, const std::string& objectKey);
 
 template <typename T>
+void setGeneratedRange(RequestBuilder&, const T&, std::false_type) {}
+
+template <typename T>
+void setGeneratedRange(RequestBuilder& builder, const T& input, std::true_type) {
+    // Generic request headers intentionally cannot override Range/Host/etc.
+    // Async input2Headers previously put even the typed range into that
+    // filtered map. Promote only RangeBase's explicit API values, before
+    // signing; do not trust a caller-supplied generic "Range" header.
+    if (!input.getRange().empty()) {
+        builder.withHeader(http::HEADER_RANGE, input.getRange());
+    } else if (input.getRangeStart() != 0 || input.getRangeEnd() != 0) {
+        builder.withHeader(http::HEADER_RANGE,
+                           HttpRange(input.getRangeStart(), input.getRangeEnd()).toString());
+    }
+}
+
+template <typename T>
 std::function<std::shared_ptr<HttpRequest>(T&)> getDefaultInput2HttpRequest(
         const std::shared_ptr<TosClientBase>& tosClient, const std::string& method, const std::string& bucket,
         const std::string& key, const std::string& funcName) {
@@ -339,6 +402,7 @@ std::function<std::shared_ptr<HttpRequest>(T&)> getDefaultInput2HttpRequest(
         static_cast<PiplineInputInterface&>(input).input2Headers();
         auto rb = tosClient->newBuilder(bucket, key, input.getRequestDate(), input.getHeaders(), input.getQueries(),
                                         input.getContentLength());
+        setGeneratedRange(rb, input, std::is_base_of<RangeBase, T>{});
 
         if (StringUtils::startsWithIgnoreCase(funcName, "put") ||
             StringUtils::startsWithIgnoreCase(funcName, "modify") ||
@@ -360,7 +424,7 @@ ProcessingPipline<T, O>* getBasePipline(
         const OnDataReceiveWithEvent& on_data_receive, const OnDataSendWithEvent& on_data_send,
         const std::function<void(Outcome<TosError, O>&)>& on_request_done) {
     constexpr bool kUsePool = ShouldPoolPipeline<T, O>::value;
-    auto* pipline = newBasePipeline<T, O>(input, kUsePool);
+    std::unique_ptr<ProcessingPipline<T, O>> pipline(newBasePipeline<T, O>(input, kUsePool));
 
     auto default_valid = [](T& ipt) { return static_cast<PiplineInputInterface&>(ipt).valid(); };
 
@@ -382,7 +446,7 @@ ProcessingPipline<T, O>* getBasePipline(
                                            const std::function<void(std::shared_ptr<HttpResponse>)>& fi,
                                            const OnRequestStart& st, const OnHttpStatusSet& sts,
                                            const OnContentLengthSet& cls) {
-                (void)tosClient->getAsyncTransport()->send(request, dr, sd, fi, st, sts, cls);
+                RequireAsyncTransport(tosClient)->sendCallback(request, dr, sd, fi, st, sts, cls);
             })
             .OnDataReceiveWithEvent(on_data_receive)
             .OnDataSendWithEvent(on_data_send)
@@ -395,23 +459,24 @@ ProcessingPipline<T, O>* getBasePipline(
                          tosClient->getConfig().getRetrySleepScale())
             ;
 
-    return pipline;
+    return pipline.release();
 }
 
 ProcessingPipline<GetObjectAsyncInput, GetObjectAsyncOutput>* getObject(
         const std::shared_ptr<TosClientBase>& tosClient, const GetObjectAsyncInput& input,
         const OnDataReceiveWithEvent& on_data_receive,
         const std::function<void(Outcome<TosError, GetObjectAsyncOutput>&)>& on_request_done) {
-    auto* pipeline = getBasePipline<GetObjectAsyncInput, GetObjectAsyncOutput>(
-            {200, 203, 206}, input, tosClient, on_data_receive, nullptr, on_request_done);
-    pipeline->decorateInput([&tosClient](GetObjectAsyncInput& ipt) {
+    std::unique_ptr<ProcessingPipline<GetObjectAsyncInput, GetObjectAsyncOutput>> pipeline(
+            getBasePipline<GetObjectAsyncInput, GetObjectAsyncOutput>(
+                    {200, 203, 206}, input, tosClient, on_data_receive, nullptr, on_request_done));
+    pipeline->decorateInput([tosClient](GetObjectAsyncInput& ipt) {
                 ipt.setIsCustomDomain(tosClient->getConfig().isCustomDomain());
             })
             .tryEnableCrc64Check(tosClient->getConfig().isEnableCrc())
             .userName(__func__)
             .input2HttpRequest(getDefaultInput2HttpRequest<GetObjectAsyncInput>(
                     tosClient, http::MethodGet, input.getBucketName(), input.getKey(), __func__));
-    return pipeline;
+    return pipeline.release();
 }
 
 ProcessingPipline<GetObjectToFileAsyncInput, GetObjectToFileAsyncOutput>* getObjectToFile(
@@ -469,9 +534,10 @@ ProcessingPipline<PutObjectAsyncInput, PutObjectAsyncOutput>* putObject(
         const std::shared_ptr<TosClientBase>& tosClient, const PutObjectAsyncInput& input,
         const OnDataSendWithEvent& on_data_send,
         const std::function<void(Outcome<TosError, PutObjectAsyncOutput>&)>& on_request_done) {
-    auto* pipeline = getBasePipline<PutObjectAsyncInput, PutObjectAsyncOutput>({200}, input, tosClient, nullptr,
-                                                                               on_data_send, on_request_done);
-    pipeline->decorateInput([&tosClient](PutObjectAsyncInput& ipt) {
+    std::unique_ptr<ProcessingPipline<PutObjectAsyncInput, PutObjectAsyncOutput>> pipeline(
+            getBasePipline<PutObjectAsyncInput, PutObjectAsyncOutput>({200}, input, tosClient, nullptr,
+                                                                    on_data_send, on_request_done));
+    pipeline->decorateInput([tosClient](PutObjectAsyncInput& ipt) {
                 ipt.setIsCustomDomain(tosClient->getConfig().isCustomDomain());
             })
             .transferEncodingCheck()
@@ -479,7 +545,7 @@ ProcessingPipline<PutObjectAsyncInput, PutObjectAsyncOutput>* putObject(
             .userName(__func__)
             .input2HttpRequest(getDefaultInput2HttpRequest<PutObjectAsyncInput>(
                     tosClient, http::MethodPut, input.getBucketName(), input.getKey(), __func__));
-    return pipeline;
+    return pipeline.release();
 }
 
 ProcessingPipline<PutObjectFromFileAsyncInput, PutObjectFromFileAsyncOutput>* putObjectFromFile(
@@ -589,15 +655,16 @@ ProcessingPipline<CopyObjectAsyncInput, CopyObjectAsyncOutput>* copyObject(
 ProcessingPipline<DeleteObjectAsyncInput, DeleteObjectAsyncOutput>* deleteObject(
         const std::shared_ptr<TosClientBase>& tosClient, const DeleteObjectAsyncInput& input,
         const std::function<void(Outcome<TosError, DeleteObjectAsyncOutput>&)>& on_request_done) {
-    auto* pipeline = getBasePipline<DeleteObjectAsyncInput, DeleteObjectAsyncOutput>({204}, input, tosClient, nullptr,
-                                                                                     nullptr, on_request_done);
-    pipeline->decorateInput([&tosClient](DeleteObjectAsyncInput& ipt) {
+    std::unique_ptr<ProcessingPipline<DeleteObjectAsyncInput, DeleteObjectAsyncOutput>> pipeline(
+            getBasePipline<DeleteObjectAsyncInput, DeleteObjectAsyncOutput>({204}, input, tosClient, nullptr,
+                                                                          nullptr, on_request_done));
+    pipeline->decorateInput([tosClient](DeleteObjectAsyncInput& ipt) {
                 ipt.setIsCustomDomain(tosClient->getConfig().isCustomDomain());
             })
             .userName(__func__)
             .input2HttpRequest(getDefaultInput2HttpRequest<DeleteObjectAsyncInput>(
                     tosClient, http::MethodDelete, input.getBucketName(), input.getKey(), __func__));
-    return pipeline;
+    return pipeline.release();
 }
 
 ProcessingPipline<SetObjectMetaAsyncInput, SetObjectMetaAsyncOutput>* setObjectMeta(
@@ -759,16 +826,17 @@ ProcessingPipline<PutSymlinkAsyncInput, PutSymlinkAsyncOutput>* putSymlink(
 ProcessingPipline<GetSymlinkAsyncInput, GetSymlinkAsyncOutput>* getSymlink(
         const std::shared_ptr<TosClientBase>& tosClient, const GetSymlinkAsyncInput& input,
         const std::function<void(Outcome<TosError, GetSymlinkAsyncOutput>&)>& on_request_done) {
-    auto* pipeline = getBasePipline<GetSymlinkAsyncInput, GetSymlinkAsyncOutput>({200}, input, tosClient, nullptr,
-                                                                                 nullptr, on_request_done);
-    pipeline->decorateInput([&tosClient](GetSymlinkAsyncInput& ipt) {
+    std::unique_ptr<ProcessingPipline<GetSymlinkAsyncInput, GetSymlinkAsyncOutput>> pipeline(
+            getBasePipline<GetSymlinkAsyncInput, GetSymlinkAsyncOutput>(
+                    {200}, input, tosClient, nullptr, nullptr, on_request_done));
+    pipeline->decorateInput([tosClient](GetSymlinkAsyncInput& ipt) {
                 ipt.setIsCustomDomain(tosClient->getConfig().isCustomDomain());
             })
             .userName(__func__)
             .input2HttpRequest(getDefaultInput2HttpRequest<GetSymlinkAsyncInput>(
                     tosClient, http::MethodGet, input.getBucketName(), input.getKey(), __func__))
-            .responseJson();
-    return pipeline;
+            .responseJson(64 * 1024, true);
+    return pipeline.release();
 }
 
 ProcessingPipline<RenameObjectAsyncInput, RenameObjectAsyncOutput>* renameObject(
@@ -789,7 +857,11 @@ ProcessingPipline<RenameObjectAsyncInput, RenameObjectAsyncOutput>* renameObject
 void TosAsyncClient::getObjectAsync(
         const GetObjectAsyncInput& input, const OnDataReceiveWithEvent& on_data_receive,
         const std::function<void(Outcome<TosError, GetObjectAsyncOutput>&)>& on_request_done) const {
-    getObject(this->getTosClient(), input, on_data_receive, on_request_done)->asyncExecute();
+    std::unique_ptr<ProcessingPipline<GetObjectAsyncInput, GetObjectAsyncOutput>> pipeline(
+            getObject(this->getTosClient(), input, on_data_receive, on_request_done));
+    // asyncExecute owns completion/finalization from entry onward and may
+    // complete inline. Do not keep a deleting owner across that handoff.
+    pipeline.release()->asyncExecute();
 }
 
 void TosAsyncClient::getObjectToFdRangeAsync(
@@ -1065,21 +1137,24 @@ ProcessingPipline<HeadBucketAsyncInput, HeadBucketAsyncOutput>* headBucket(
 ProcessingPipline<HeadObjectAsyncInput, HeadObjectAsyncOutput>* headObject(
         const std::shared_ptr<TosClientBase>& tosClient, const HeadObjectAsyncInput& input,
         const std::function<void(Outcome<TosError, HeadObjectAsyncOutput>&)>& on_request_done) {
-    auto* pipeline = getBasePipline<HeadObjectAsyncInput, HeadObjectAsyncOutput>({200, 203, 206}, input, tosClient,
-                                                                                 nullptr, nullptr, on_request_done);
-    pipeline->decorateInput([&tosClient](HeadObjectAsyncInput& ipt) {
+    std::unique_ptr<ProcessingPipline<HeadObjectAsyncInput, HeadObjectAsyncOutput>> pipeline(
+            getBasePipline<HeadObjectAsyncInput, HeadObjectAsyncOutput>(
+                    {200, 203, 206}, input, tosClient, nullptr, nullptr, on_request_done));
+    pipeline->decorateInput([tosClient](HeadObjectAsyncInput& ipt) {
                 ipt.setIsCustomDomain(tosClient->getConfig().isCustomDomain());
             })
             .userName(__func__)
             .input2HttpRequest(getDefaultInput2HttpRequest<HeadObjectAsyncInput>(
                     tosClient, http::MethodHead, input.getBucketName(), input.getKey(), __func__));
-    return pipeline;
+    return pipeline.release();
 }
 
 void TosAsyncClient::headObjectAsync(
         const HeadObjectAsyncInput& input,
         const std::function<void(Outcome<TosError, HeadObjectAsyncOutput>&)>& on_request_done) const {
-    headObject(this->getTosClient(), input, on_request_done)->asyncExecute();
+    std::unique_ptr<ProcessingPipline<HeadObjectAsyncInput, HeadObjectAsyncOutput>> pipeline(
+            headObject(this->getTosClient(), input, on_request_done));
+    pipeline.release()->asyncExecute();
 }
 
 void TosAsyncClient::deleteObjectAsync(
@@ -1169,7 +1244,8 @@ void TosAsyncClient::listObjectsType2Async(
         const ListObjectsType2Input& input,
         const std::function<void(Outcome<TosError, ListObjectsType2Output>&)>& on_request_done) const {
     const std::shared_ptr<TosClientBase>& tosClient = this->getTosClient();
-    auto* pipeline = newBasePipeline<ListObjectsType2Input, ListObjectsType2Output>(input, true);
+    std::unique_ptr<ProcessingPipline<ListObjectsType2Input, ListObjectsType2Output>> pipeline(
+            newBasePipeline<ListObjectsType2Input, ListObjectsType2Output>(input, true));
 
     auto validate = [](ListObjectsType2Input& ipt) { return isValidBucketName(ipt.getBucket()); };
 
@@ -1196,16 +1272,8 @@ void TosAsyncClient::listObjectsType2Async(
     auto expect_response_to_outcome = [](const std::shared_ptr<HttpRequest>&,
                                          const std::shared_ptr<HttpResponse>& response, TosError&,
                                          ListObjectsType2Output& result) {
-        std::string body_text;
-        if (response->Body() != nullptr) {
-            std::stringstream ss;
-            ss << response->Body()->rdbuf();
-            body_text = ss.str();
-        }
-        if (!body_text.empty()) {
-            result.fromJsonString(body_text);
-        }
-
+        // The responseJson sink is the only body authority on this async path.
+        // A stream fallback would bypass its wire/shape limits and parse twice.
         RequestInfo request_info;
         request_info.setRequestId(MapUtils::findValueByKeyIgnoreCase(response->Headers(), HEADER_REQUEST_ID));
         request_info.setId2(MapUtils::findValueByKeyIgnoreCase(response->Headers(), HEADER_ID_2));
@@ -1214,8 +1282,12 @@ void TosAsyncClient::listObjectsType2Async(
         result.setRequestInfo(request_info);
     };
 
-    auto json_to_output = [](ListObjectsType2Output& result, json& j) {
-        result.fromJsonString(j.dump());
+    const auto limits = input.getAsyncResponseLimits();
+    const auto max_entries = limits.max_body_bytes
+                                 ? static_cast<size_t>(input.getMaxKeys() > 0 ? input.getMaxKeys() : 1000)
+                                 : std::numeric_limits<size_t>::max();
+    auto json_to_output = [max_entries](ListObjectsType2Output& result, json& j) {
+        result.fromJson(j, max_entries);
     };
 
     pipeline->inputCheck(validate)
@@ -1225,17 +1297,20 @@ void TosAsyncClient::listObjectsType2Async(
                                            const std::function<void(std::shared_ptr<HttpResponse>)>& fi,
                                            const OnRequestStart& st, const OnHttpStatusSet& sts,
                                            const OnContentLengthSet& cls) {
-                (void)tosClient->getAsyncTransport()->send(request, dr, sd, fi, st, sts, cls);
+                RequireAsyncTransport(tosClient)->sendCallback(request, dr, sd, fi, st, sts, cls);
             })
             .onRequestDone(on_request_done)
             .expectStatus({200})
             .defaultUnexpectResponse2Outcome()
-            .responseJson()
             .json2Output(json_to_output)
             .expectResponse2Outcome(expect_response_to_outcome)
             .userName(__func__)
             .input2HttpRequest(input_to_http_request);
-    pipeline->asyncExecute();
+    if (limits.max_body_bytes)
+        pipeline->responseJsonBounded(limits);
+    else
+        pipeline->responseJson();
+    pipeline.release()->asyncExecute();
 }
 
 void TosAsyncClient::listObjectVersionsAsync(
@@ -1296,7 +1371,7 @@ void TosAsyncClient::abortMultipartUploadAsync(
                                            const std::function<void(std::shared_ptr<HttpResponse>)>& fi,
                                            const OnRequestStart& st, const OnHttpStatusSet& sts,
                                            const OnContentLengthSet& cls) {
-                (void)tosClient->getAsyncTransport()->send(request, dr, sd, fi, st, sts, cls);
+                RequireAsyncTransport(tosClient)->sendCallback(request, dr, sd, fi, st, sts, cls);
             })
             .onRequestDone(on_request_done)
             .expectStatus({204})
@@ -1351,7 +1426,7 @@ void TosAsyncClient::setObjectTimeAsync(
                                            const std::function<void(std::shared_ptr<HttpResponse>)>& fi,
                                            const OnRequestStart& st, const OnHttpStatusSet& sts,
                                            const OnContentLengthSet& cls) {
-                (void)tosClient->getAsyncTransport()->send(request, dr, sd, fi, st, sts, cls);
+                RequireAsyncTransport(tosClient)->sendCallback(request, dr, sd, fi, st, sts, cls);
             })
             .onRequestDone(on_request_done)
             .expectStatus({200})
@@ -1416,7 +1491,9 @@ void TosAsyncClient::putSymlinkAsync(
 void TosAsyncClient::getSymlinkAsync(
         const GetSymlinkAsyncInput& input,
         const std::function<void(Outcome<TosError, GetSymlinkAsyncOutput>&)>& on_request_done) const {
-    getSymlink(this->getTosClient(), input, on_request_done)->asyncExecute();
+    std::unique_ptr<ProcessingPipline<GetSymlinkAsyncInput, GetSymlinkAsyncOutput>> pipeline(
+            getSymlink(this->getTosClient(), input, on_request_done));
+    pipeline.release()->asyncExecute();
 }
 
 void TosAsyncClient::renameObjectAsync(
