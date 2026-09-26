@@ -51,13 +51,19 @@ public:
     }
 
     // 回收节点（放入缓存或销毁）
-    void release(Node* node) {
+    void release(Node* node) noexcept {
         if (!node)
             return;
 
         node->reset();
         if (cache.size() < max_cache_size) {
-            cache.push_back(node);  // 缓存未满则复用
+            try {
+                cache.push_back(node);
+            } catch (...) {
+                // Recycling is best-effort; pop/erase/destruction must remain
+                // valid even when the cache cannot allocate another slot.
+                delete node;
+            }
         } else {
             delete node;  // 缓存已满则销毁
         }
@@ -108,7 +114,7 @@ public:
     }
 
     // 出队操作（单线程直接修改指针）
-    T* pop() {
+    T* pop() noexcept {
         if (size_ == 0) {
             return nullptr;  // 队列为空
         }
@@ -125,6 +131,23 @@ public:
 
         size_--;
         return data;
+    }
+
+    // Single-owner unlink: does not rebuild the queue or allocate new nodes.
+    bool erase(T* data) noexcept {
+        Node* previous = head;
+        while (Node* current = previous->next) {
+            if (current->data != data) {
+                previous = current;
+                continue;
+            }
+            previous->next = current->next;
+            if (tail == current) tail = previous;
+            --size_;
+            node_cache.release(current);
+            return true;
+        }
+        return false;
     }
 
     std::vector<T*> traverse() const {

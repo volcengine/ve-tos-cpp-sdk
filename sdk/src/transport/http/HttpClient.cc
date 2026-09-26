@@ -1,4 +1,7 @@
 #include <iostream>
+#include <array>
+#include <cstdlib>
+#include <limits>
 #include <set>
 #include <utility>
 #ifndef _WIN32
@@ -36,6 +39,72 @@ struct ResourceManager {
 
 namespace {
 std::atomic<uint64_t> g_dnsCacheStartOffset{0};
+constexpr size_t kMaxLastGoodHosts = 512;
+constexpr auto kLastGoodFailureCooldown = std::chrono::seconds(5);
+
+enum class DnsFallbackResult : size_t {
+    kSuccess,
+    kFailure,
+    kCacheDisabled,
+    kExplicitProxy,
+    kProxyEnvironment,
+    kNoLastGoodAddress,
+    kCooldown,
+    kTimeoutExhausted,
+    kSetupFailed,
+    kCount
+};
+
+std::array<std::atomic<uint64_t>, static_cast<size_t>(DnsFallbackResult::kCount)> gDnsFallbackResults{};
+std::atomic<uint64_t> gDnsFallbackLogWindow{0};
+
+bool hasProxyEnvironment() {
+    for (const char* name : {"http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"}) {
+        const char* value = std::getenv(name);
+        if (value != nullptr && value[0] != '\0')
+            return true;
+    }
+    return false;
+}
+
+void reportDnsFallback(DnsFallbackResult result, const std::string& hostname) {
+    static const char* const names[] = {"success",        "failure",           "cache_disabled",
+                                        "explicit_proxy", "proxy_env_present", "no_last_good",
+                                        "cooldown",       "timeout_exhausted", "setup_failed"};
+    static_assert(sizeof(names) / sizeof(names[0]) == static_cast<size_t>(DnsFallbackResult::kCount),
+                  "DNS fallback results must have log names");
+    gDnsFallbackResults[static_cast<size_t>(result)].fetch_add(1, std::memory_order_relaxed);
+    const auto window = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+                                                      std::chrono::steady_clock::now().time_since_epoch())
+                                                      .count()) /
+                        60;
+    auto previous = gDnsFallbackLogWindow.load(std::memory_order_relaxed);
+    if (previous == window ||
+        !gDnsFallbackLogWindow.compare_exchange_strong(previous, window, std::memory_order_relaxed))
+        return;
+    const auto take = [](DnsFallbackResult outcome) {
+        return gDnsFallbackResults[static_cast<size_t>(outcome)].exchange(0, std::memory_order_relaxed);
+    };
+    const auto success = take(DnsFallbackResult::kSuccess);
+    const auto failure = take(DnsFallbackResult::kFailure);
+    const auto cacheDisabled = take(DnsFallbackResult::kCacheDisabled);
+    const auto explicitProxy = take(DnsFallbackResult::kExplicitProxy);
+    const auto proxyEnvironment = take(DnsFallbackResult::kProxyEnvironment);
+    const auto noLastGood = take(DnsFallbackResult::kNoLastGoodAddress);
+    const auto cooldown = take(DnsFallbackResult::kCooldown);
+    const auto timeout = take(DnsFallbackResult::kTimeoutExhausted);
+    const auto setupFailed = take(DnsFallbackResult::kSetupFailed);
+    const auto logger = LogUtils::GetLogger();
+    if (logger != nullptr) {
+        logger->warn(
+                "event=tos_sdk_dns_last_good_fallback trigger_host={} trigger_result={} "
+                "attempts={} success={} failure={} skip_cache_disabled={} skip_explicit_proxy={} "
+                "skip_proxy_env_present={} skip_no_last_good={} skip_cooldown={} skip_timeout={} "
+                "skip_setup_failed={}",
+                hostname, names[static_cast<size_t>(result)], success + failure, success, failure, cacheDisabled,
+                explicitProxy, proxyEnvironment, noLastGood, cooldown, timeout, setupFailed);
+    }
+}
 
 std::string defaultPortForScheme(const std::string& scheme) {
     return scheme == "http" ? "80" : "443";
@@ -262,7 +331,7 @@ static void processHandler(const DataTransferStatusChange& handler, int64_t cons
     handler(data);
 }
 
-static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
+static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) try {
     auto* resourceMan = static_cast<ResourceManager*>(data);
 
     if (resourceMan == nullptr || resourceMan->httpReq == nullptr) {
@@ -272,10 +341,32 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
                            resourceMan->dataTransferType, resourceMan->userData);
         }
 
-        return 0;
+        return CURL_READFUNC_ABORT;
     }
     std::shared_ptr<std::iostream>& content = resourceMan->httpReq->Body();
+    if (size != 0 && nmemb > (std::numeric_limits<size_t>::max)() / size) {
+        return CURL_READFUNC_ABORT;
+    }
     const size_t wanted = size * nmemb;
+    if (resourceMan->send < 0 || (resourceMan->total > 0 && resourceMan->send > resourceMan->total)) {
+        return CURL_READFUNC_ABORT;
+    }
+    size_t read = wanted;
+    if (resourceMan->total > 0) {
+        const uint64_t remains = static_cast<uint64_t>(resourceMan->total - resourceMan->send);
+        if (remains < read) {
+            read = static_cast<size_t>(remains);
+        }
+    }
+    if (read == 0) {
+        return 0;
+    }
+    if (ptr == nullptr || read > static_cast<uintmax_t>((std::numeric_limits<std::streamsize>::max)())) {
+        return CURL_READFUNC_ABORT;
+    }
+    if (content == nullptr) {
+        return resourceMan->total > 0 ? CURL_READFUNC_ABORT : 0;
+    }
 
     auto rateLimiter = resourceMan->rateLimiter;
     if (rateLimiter != nullptr) {
@@ -293,20 +384,19 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
         resourceMan->dataTransferType = 2;
     }
 
-    size_t got = 0;
-    if (content != nullptr && wanted > 0) {
-        size_t read = wanted;
-        if (resourceMan->total > 0) {
-            int64_t remains = resourceMan->total - resourceMan->send;
-            if (remains < static_cast<int64_t>(wanted)) {
-                read = static_cast<size_t>(remains);
-            }
-        }
-        content->read(ptr, read);
-        got = static_cast<size_t>(content->gcount());
+    // Validate the signed count before it can reach progress accounting or CRC.
+    content->read(ptr, static_cast<std::streamsize>(read));
+    const std::streamsize count = content->gcount();
+    if (count < 0 || static_cast<uintmax_t>(count) > read || content->bad() || (content->fail() && !content->eof())) {
+        return CURL_READFUNC_ABORT;
+    }
+    const size_t got = static_cast<size_t>(count);
+    if ((resourceMan->total > 0 && got < read) ||
+        got > static_cast<uint64_t>((std::numeric_limits<int64_t>::max)() - resourceMan->send)) {
+        return CURL_READFUNC_ABORT;
     }
 
-    resourceMan->send += got;
+    resourceMan->send += static_cast<int64_t>(got);
     if (resourceMan->progress) {
         // 数据发送完成
         if (resourceMan->total == resourceMan->send) {
@@ -320,6 +410,9 @@ static size_t sendBody(char* ptr, size_t size, size_t nmemb, void* data) {
         resourceMan->sendCrc64Value = CRC64::CalcCRC(resourceMan->sendCrc64Value, (void*)ptr, got);
     }
     return got;
+} catch (...) {
+    // User streams and progress handlers must not unwind through libcurl.
+    return CURL_READFUNC_ABORT;
 }
 
 static size_t recvBody(char* ptr, size_t size, size_t nmemb, void* userdata) {
@@ -522,18 +615,26 @@ void HttpClient::setShareHandle(CURL* curl_handle, int cacheTime) {
     curl_easy_setopt(curl_handle, CURLOPT_DNS_CACHE_TIMEOUT, cacheTime * 60);
 }
 
-void HttpClient::removeDNS(void* curl, const std::shared_ptr<HttpRequest>& request) {
-    // 无法感知 IP 时，直接踢出该 host 对应的 curl DNS 映射信息，并清理 SDK 内缓存。
-    curl_slist* dns_list = nullptr;
+void HttpClient::scheduleDNSRemoval(const std::shared_ptr<HttpRequest>& request) {
     auto hostAndPort = splitHostAndPort(request->url());
-    auto servicehost = hostAndPort.first;
-    auto port = hostAndPort.second;
-    auto rmHost = "-" + servicehost + ":" + port;
-    dns_list = curl_slist_append(dns_list, rmHost.c_str());
     std::lock_guard<std::mutex> lock(mu_);
-    curl_easy_setopt(curl, CURLOPT_RESOLVE, dns_list);
-    dnsIpCache_.ClearHost(servicehost);
-    curl_slist_free_all(dns_list);
+    pendingDnsRemovals_.insert("-" + hostAndPort.first + ":" + hostAndPort.second);
+    dnsIpCache_.ClearHost(hostAndPort.first);
+}
+
+curl_slist* HttpClient::takePendingDNSRemovals() {
+    std::lock_guard<std::mutex> lock(mu_);
+    curl_slist* list = nullptr;
+    for (const auto& entry : pendingDnsRemovals_) {
+        curl_slist* appended = curl_slist_append(list, entry.c_str());
+        if (appended == nullptr) {
+            curl_slist_free_all(list);
+            return nullptr;
+        }
+        list = appended;
+    }
+    pendingDnsRemovals_.clear();
+    return list;
 }
 
 std::vector<std::string> HttpClient::lookupHostIpList(const std::string& host) const {
@@ -608,6 +709,44 @@ void HttpClient::removeFailedIp(const ResolveBinding& binding) {
         if (logger != nullptr) {
             logger->info("Evicted failed SDK DNS IP, host:{}, ip:{}", binding.host, binding.selectedIp);
         }
+    }
+}
+
+void HttpClient::rememberSuccessfulAddress(const std::string& host, const std::string& ip) {
+    if (host.empty() || ip.empty())
+        return;
+    std::lock_guard<std::mutex> lock(mu_);
+    if (lastGoodAddresses_.size() >= kMaxLastGoodHosts && lastGoodAddresses_.find(host) == lastGoodAddresses_.end()) {
+        const auto oldest = std::min_element(lastGoodAddresses_.begin(), lastGoodAddresses_.end(),
+                                             [](const std::map<std::string, LastGoodAddress>::value_type& lhs,
+                                                const std::map<std::string, LastGoodAddress>::value_type& rhs) {
+                                                 return lhs.second.lastSuccessfulAt < rhs.second.lastSuccessfulAt;
+                                             });
+        lastGoodAddresses_.erase(oldest);
+    }
+    lastGoodAddresses_[host] = {ip, std::chrono::steady_clock::now(), {}};
+}
+
+std::string HttpClient::lastGoodAddress(const std::string& host, bool* coolingDown) {
+    if (coolingDown != nullptr)
+        *coolingDown = false;
+    std::lock_guard<std::mutex> lock(mu_);
+    const auto it = lastGoodAddresses_.find(host);
+    if (it == lastGoodAddresses_.end())
+        return {};
+    if (it->second.cooldownUntil > std::chrono::steady_clock::now()) {
+        if (coolingDown != nullptr)
+            *coolingDown = true;
+        return {};
+    }
+    return it->second.ip;
+}
+
+void HttpClient::coolDownLastGoodAddressIfMatches(const std::string& host, const std::string& ip) {
+    std::lock_guard<std::mutex> lock(mu_);
+    const auto it = lastGoodAddresses_.find(host);
+    if (it != lastGoodAddresses_.end() && it->second.ip == ip) {
+        it->second.cooldownUntil = std::chrono::steady_clock::now() + kLastGoodFailureCooldown;
     }
 }
 
@@ -751,14 +890,75 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     curl_easy_setopt(curl, CURLOPT_READDATA, &resourceMan);
     curl_easy_setopt(curl, CURLOPT_READFUNCTION, sendBody);
 
+    curl_slist* dnsRemoveList = nullptr;
     // 使用缓存 dns
     if (dnsCacheTime_ > 0) {
         setShareHandle(curl, dnsCacheTime_);
+        dnsRemoveList = takePendingDNSRemovals();
         if (resolveBinding.active()) {
-            curl_easy_setopt(curl, CURLOPT_RESOLVE, resolveBinding.resolveList);
+            if (dnsRemoveList != nullptr) {
+                curl_slist* combined = curl_slist_append(dnsRemoveList, resolveBinding.resolveList->data);
+                if (combined != nullptr)
+                    dnsRemoveList = combined;
+            } else {
+                curl_easy_setopt(curl, CURLOPT_RESOLVE, resolveBinding.resolveList);
+            }
+        }
+        if (dnsRemoveList != nullptr)
+            curl_easy_setopt(curl, CURLOPT_RESOLVE, dnsRemoveList);
+    }
+    const auto hostAndPort = splitHostAndPort(request->url());
+    const std::string& hostname = hostAndPort.first;
+    const auto transferStart = std::chrono::steady_clock::now();
+    CURLcode res = curl_easy_perform(curl);
+    bool usedLastGoodAddress = false;
+    std::string fallbackIp;
+    curl_slist* connectTo = nullptr;
+    DnsFallbackResult fallbackResult = DnsFallbackResult::kCount;
+    if (res == CURLE_COULDNT_RESOLVE_HOST) {
+        if (dnsCacheTime_ <= 0) {
+            fallbackResult = DnsFallbackResult::kCacheDisabled;
+        } else if (proxyPort_ != -1 && !proxyHost_.empty()) {
+            fallbackResult = DnsFallbackResult::kExplicitProxy;
+        } else if (hasProxyEnvironment()) {
+            fallbackResult = DnsFallbackResult::kProxyEnvironment;
+        } else {
+            bool coolingDown = false;
+            fallbackIp = lastGoodAddress(hostname, &coolingDown);
+            if (fallbackIp.empty()) {
+                fallbackResult = coolingDown ? DnsFallbackResult::kCooldown : DnsFallbackResult::kNoLastGoodAddress;
+            } else {
+                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                             std::chrono::steady_clock::now() - transferStart)
+                                             .count();
+                if (requestTimeout_ <= 0 || elapsed < requestTimeout_) {
+                    const std::string address = formatResolveAddress(fallbackIp);
+                    const std::string rule =
+                            hostname + ":" + hostAndPort.second + ":" + address + ":" + hostAndPort.second;
+                    connectTo = curl_slist_append(nullptr, rule.c_str());
+                    if (connectTo != nullptr && curl_easy_setopt(curl, CURLOPT_CONNECT_TO, connectTo) == CURLE_OK) {
+                        if (requestTimeout_ > 0) {
+                            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, requestTimeout_ - static_cast<int>(elapsed));
+                        }
+                        res = curl_easy_perform(curl);
+                        usedLastGoodAddress = true;
+                        fallbackResult = res == CURLE_OK ? DnsFallbackResult::kSuccess : DnsFallbackResult::kFailure;
+                    } else {
+                        fallbackResult = DnsFallbackResult::kSetupFailed;
+                    }
+                } else {
+                    fallbackResult = DnsFallbackResult::kTimeoutExhausted;
+                }
+            }
         }
     }
-    CURLcode res = curl_easy_perform(curl);
+    if (connectTo != nullptr)
+        curl_easy_setopt(curl, CURLOPT_CONNECT_TO, nullptr);
+    curl_slist_free_all(connectTo);
+    if (fallbackResult != DnsFallbackResult::kCount)
+        reportDnsFallback(fallbackResult, hostname);
+    if (usedLastGoodAddress && res != CURLE_OK)
+        coolDownLastGoodAddressIfMatches(hostname, fallbackIp);
     if (res == CURLE_COULDNT_CONNECT) {
         response->setStatus(http::Refused);
         std::stringstream ss;
@@ -838,13 +1038,13 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         std::cout << ss.str() << std::endl;
     }
 
-    if (res != CURLE_OK && dnsCacheTime_ > 0) {
+    if (res != CURLE_OK && dnsCacheTime_ > 0 && !usedLastGoodAddress) {
         if (resolveBinding.active()) {
             if (shouldEvictResolvedIp(res)) {
                 removeFailedIp(resolveBinding);
             }
         } else {
-            removeDNS(curl, request);
+            scheduleDNSRemoval(request);
         }
     }
     long response_code = 0;
@@ -866,7 +1066,14 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     }
 
     request->setTransferedBytes(resourceMan.send);
-    curlContainer_->Release(curl, (res != CURLE_OK));
+    char* connectionPrimaryIp = nullptr;
+    curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &connectionPrimaryIp);
+    if (res == CURLE_OK && dnsCacheTime_ > 0 && connectionPrimaryIp != nullptr && connectionPrimaryIp[0] != '\0' &&
+        proxyPort_ == -1 && !hasProxyEnvironment()) {
+        rememberSuccessfulAddress(hostname, connectionPrimaryIp);
+    }
+    curlContainer_->Release(curl, (res != CURLE_OK || usedLastGoodAddress));
+    curl_slist_free_all(dnsRemoveList);
     releaseResolveBinding(resolveBinding);
     curl_slist_free_all(list);
     return response;

@@ -150,6 +150,10 @@ InitializeClient();
 TosClientV2 client(region, accessKey, secretKey, config);
 ```
 
+同步请求在 `dnsCacheTime > 0` 时，还会为每个 Client 保留最近成功连接的 IP（最多 512 个域名）。若连接建立前 DNS 解析失败，可用该 IP 重试，同时保持原始域名用于签名和 TLS；兜底失败后该 IP 冷却 5 秒，成功连接则刷新记录。代理场景不启用此兜底，独立的异步传输链路也不在此功能范围内。
+
+SDK 通过 CMake 的 `find_package(CURL)` 使用调用方提供的 libcurl，不自行编译 libcurl。要避免 libcurl 线程式 `getaddrinfo` 解析器的无界等待，调用方还需链接经过验证的 c-ares 版 libcurl；单独升级 SDK 不会改变现有 libcurl 包的解析器。
+
 ### 创建桶
 
 桶是TOS的全局唯一的命名空间，相当于数据的容器，用来储存对象数据。如下代码展示如何创建一个新桶：

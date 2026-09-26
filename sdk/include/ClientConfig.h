@@ -67,7 +67,8 @@ class ClientConfig {
     bool connection_reuse_ = true;
     bool detail_log_ = true;
     int detail_log_interval_s_ = 60;
-    int curl_multi_wait_timeout_ms_ = 10;
+    // Upper bound only: sockets, eventfd and curl/application timers wake early.
+    int curl_multi_wait_timeout_ms_ = 1000;
     AsyncTransportMode async_transport_mode_ = AsyncTransportMode::Isolated;
 
     std::string fileTransferBackend = "auto";

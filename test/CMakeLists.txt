@@ -22,6 +22,9 @@ file(GLOB test_object_src "src/Object/*")
 file(GLOB test_others_src "src/Others/*")
 file(GLOB test_valueadded_src "src/ValueAdded/*")
 add_executable(${PROJECT_NAME} src/Utils.cc ${test_bucket_src} ${test_others_src} ${test_object_src} ${test_valueadded_src})
+if (BUILD_ASYNC_SDK)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE VOLCENGINE_TOS_ASYNC_TEST=1)
+endif ()
 
 #target_include_directories(${PROJECT_NAME} PRIVATE gtest/include)
 target_include_directories(${PROJECT_NAME}
@@ -37,6 +40,16 @@ target_link_libraries(${PROJECT_NAME}
         PRIVATE ${CLIENT_CURL_LIBS})
 
 #target_compile_options(${PROJECT_NAME} PRIVATE "${SDK_COMPILER_FLAGS}")
+
+# This target includes HttpClient.cc to test its private callback. The static
+# archive supplies other SDK objects without linking HttpClient.cc a second time.
+add_executable(upload-read-callback-test UploadReadCallbackTest.cc)
+target_include_directories(upload-read-callback-test PRIVATE
+        ${CMAKE_SOURCE_DIR}/sdk/include ${CMAKE_SOURCE_DIR}/sdk/src
+        ${CMAKE_SOURCE_DIR}/sdk/src/external/spdlog
+        ${CLIENT_SSL_INCLUDE_DIRS} ${CLIENT_CURL_INCLUDE_DIRS})
+target_link_libraries(upload-read-callback-test PRIVATE gtest_main
+        ve-tos-cpp-sdk-lib ${CLIENT_SSL_LIBS} ${CLIENT_CURL_LIBS})
 
 install(TARGETS ${PROJECT_NAME}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

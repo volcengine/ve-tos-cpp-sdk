@@ -158,6 +158,10 @@ InitializeClient();
 TosClientV2 client(region, accessKey, secretKey, config);
 ```
 
+For synchronous requests, `dnsCacheTime > 0` also retains each client's last successful address for up to 512 hosts. If DNS resolution fails before a connection is made, a direct request may retry that address while preserving the original host for signing and TLS. A failed fallback cools the address for 5 seconds; successful connections refresh it. This fallback is disabled for proxy configurations and does not apply to the separate async transport.
+
+The SDK uses CMake's `find_package(CURL)` and does not build libcurl. To avoid an unbounded wait in libcurl's threaded `getaddrinfo` resolver, the consuming application must link a qualified libcurl built with c-ares. Updating this SDK alone does not change the resolver in an existing libcurl package.
+
 ### Creat a bucket
 
 The bucket is a kind of unique namespace in TOS, which is a container to store data.

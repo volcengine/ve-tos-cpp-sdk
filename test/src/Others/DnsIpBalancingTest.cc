@@ -10,10 +10,68 @@ class TestHttpClient : public HttpClient {
     explicit TestHttpClient(const HttpConfig& config) : HttpClient(config) {}
 
     using HttpClient::buildResolveBinding;
+    using HttpClient::coolDownLastGoodAddressIfMatches;
+    using HttpClient::lastGoodAddress;
     using HttpClient::releaseResolveBinding;
+    using HttpClient::rememberSuccessfulAddress;
     using HttpClient::removeFailedIp;
+    using HttpClient::scheduleDNSRemoval;
+    using HttpClient::takePendingDNSRemovals;
+    size_t lastGoodHostCount() {
+        std::lock_guard<std::mutex> lock(mu_);
+        return lastGoodAddresses_.size();
+    }
 };
 }  // namespace
+
+TEST(DnsIpBalancingTest, LastGoodFallbackIsBoundedAndRefreshes) {
+    HttpConfig config{};
+    config.maxConnections = 1;
+    config.socketTimeout = 1000;
+    config.connectTimeout = 1000;
+    config.proxyPort = -1;
+    config.dnsCacheTime = 1;
+    TestHttpClient client(config);
+    client.rememberSuccessfulAddress("first.example.com", "127.0.0.1");
+    for (int i = 0; i < 512; ++i) {
+        client.rememberSuccessfulAddress("host-" + std::to_string(i) + ".example.com", "127.0.0.1");
+    }
+    EXPECT_EQ(client.lastGoodHostCount(), 512U);
+    bool cooling = false;
+    EXPECT_TRUE(client.lastGoodAddress("first.example.com", &cooling).empty());
+    client.rememberSuccessfulAddress("active.example.com", "127.0.0.1");
+    client.coolDownLastGoodAddressIfMatches("active.example.com", "127.0.0.1");
+    EXPECT_TRUE(client.lastGoodAddress("active.example.com", &cooling).empty());
+    EXPECT_TRUE(cooling);
+    client.rememberSuccessfulAddress("active.example.com", "127.0.0.2");
+    client.coolDownLastGoodAddressIfMatches("active.example.com", "127.0.0.1");
+    EXPECT_EQ(client.lastGoodAddress("active.example.com", &cooling), "127.0.0.2");
+    EXPECT_FALSE(cooling);
+}
+
+TEST(DnsIpBalancingTest, DnsRemovalIsDeferredUntilNextTransfer) {
+    HttpConfig config{};
+    config.maxConnections = 1;
+    config.socketTimeout = 1000;
+    config.connectTimeout = 1000;
+    config.proxyPort = -1;
+    config.dnsCacheTime = 1;
+    TestHttpClient client(config);
+    auto request = std::make_shared<HttpRequest>(http::MethodGet);
+    Url url;
+    url.setScheme("https");
+    url.setHost("test.example.com");
+    url.setPath("/object");
+    request->setUrl(url);
+    client.scheduleDNSRemoval(request);
+    client.scheduleDNSRemoval(request);
+    curl_slist* pending = client.takePendingDNSRemovals();
+    ASSERT_NE(pending, nullptr);
+    EXPECT_STREQ(pending->data, "-test.example.com:443");
+    EXPECT_EQ(pending->next, nullptr);
+    curl_slist_free_all(pending);
+    EXPECT_EQ(client.takePendingDNSRemovals(), nullptr);
+}
 
 TEST(DnsIpBalancingTest, HostIpCacheSupportsRoundRobinAndExpiry) {
     HostIpCache cache;
