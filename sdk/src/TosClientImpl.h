@@ -419,6 +419,8 @@ protected:
     static const int64_t defaultSignExpires = 3600;   // 1 hour
 
 private:
+    friend class TosClientImplTestPeer;
+
     Outcome<TosError, std::shared_ptr<TosResponse>> roundTrip(const std::shared_ptr<TosRequest>& request,
                                                               int expectedCode);
     Outcome<TosError, std::shared_ptr<TosResponse>> roundTrip(const std::shared_ptr<TosRequest>& request,

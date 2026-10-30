@@ -22,6 +22,7 @@ class AsyncHttpClient;
 class AsyncEvent {
 public:
     friend class AsyncHttpClient;
+    friend class AsyncEngineCore;
 
     // 定义最大保留的原因数量（可按需调整）
     static constexpr size_t MAX_REASON_COUNT = 10;
@@ -44,6 +45,7 @@ public:
     // stopping在暂停队列中被发现，有数据则触发callback，消费完毕后还会持续等待信号
     void markStoping() {
         state_.store(State::Stopping, std::memory_order_release);
+        pause_generation_.fetch_add(1, std::memory_order_release);
         notify();
     }
 
@@ -55,19 +57,21 @@ public:
     // waiting在暂停队列中被发现，有数据则触发callback，一旦消费完缓存的数据则恢复
     void markWaiting() {
         state_.store(State::Waiting, std::memory_order_release);
+        pause_generation_.fetch_add(1, std::memory_order_release);
         notify();
     }
 
     void PauseFor(std::int64_t delay_ms) {
-        markWaiting();
-        if (delay_ms > 0) {
-            setResumeAt(NowMs() + delay_ms);
-        } else {
-            setResumeAt(0);
-        }
+        // Publish the deadline before Waiting and notify once; otherwise a
+        // worker can observe Waiting with the previous/zero deadline.
+        resume_at_ms_.store(delay_ms > 0 ? NowMs() + delay_ms : 0, std::memory_order_release);
+        state_.store(State::Waiting, std::memory_order_release);
+        pause_generation_.fetch_add(1, std::memory_order_release);
+        notify();
     }
 
     void markResumed() {
+        resume_at_ms_.store(0, std::memory_order_release);
         state_.store(State::Resumed, std::memory_order_release);
         notify();
     }
@@ -96,6 +100,7 @@ public:
     // 声明该事件已准备就绪，可以恢复
     void notifyReady() {
         state_.store(State::Waiting, std::memory_order_release);
+        pause_generation_.fetch_add(1, std::memory_order_release);
         notify();
     }
 
@@ -207,11 +212,16 @@ public:
             std::chrono::system_clock::time_point resumeTime =
                     std::chrono::system_clock::time_point() + std::chrono::milliseconds(resumeAtMs);
 
-            // 兼容不同平台的localtime线程安全问题（可选优化）
             std::time_t resumeTt = std::chrono::system_clock::to_time_t(resumeTime);
-            // 临时缓冲区避免localtime返回的指针被覆盖
+            // Each worker owns its tm: localtime() uses shared libc storage.
+            std::tm resumeTm{};
+#ifdef _WIN32
+            const bool converted = localtime_s(&resumeTm, &resumeTt) == 0;
+#else
+            const bool converted = localtime_r(&resumeTt, &resumeTm) != nullptr;
+#endif
             char timeBuf[64] = {0};
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", std::localtime(&resumeTt));
+            if (converted) std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &resumeTm);
 
             resumeAtStr = std::to_string(resumeAtMs) + " (" + timeBuf + ")";
         }
@@ -274,6 +284,10 @@ private:
     }
 
     std::atomic<State> state_;
+    // A callback can arm backpressure and get Resume before it returns.
+    // Keep that intent even after Resume clears state/deadline. Never reset
+    // this sequence: the worker compares it across one data callback.
+    std::atomic<uint64_t> pause_generation_{0};
     std::atomic<bool> failed_{false};
     std::atomic<std::int64_t> resume_at_ms_;
 

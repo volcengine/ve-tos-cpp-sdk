@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <queue>
 #include <utility>
+#include <stdexcept>
 #include <curl/curl.h>
 namespace VolcengineTos {
 class CurlCache {
@@ -61,27 +62,58 @@ public:
     }
 
     // 归还句柄到线程本地池（复用）
-    void Release(CURL* handle, bool force = false) {
+    void Release(CURL* handle, bool force = false) noexcept {
         if (!handle)
             return;
 
         if (force) {
             curl_easy_cleanup(handle);
             handle = curl_easy_init();
-            if (!handle)
+            if (!handle) {
+                if (poolSize_ > 0) --poolSize_;
                 return;
+            }
         }
 
-        // 手动重置请求相关选项（保留DNS缓存等全局状态）
-        resetRequestOptions(handle);
-        SetDefaultOptions(handle);  // 确保默认选项有效
+        try {
+            // 手动重置请求相关选项（保留DNS缓存等全局状态）
+            resetRequestOptions(handle);
+            SetDefaultOptions(handle);  // 确保默认选项有效
 
-        if (poolSize_ < maxPoolSize_) {
-            idleHandles_.push(handle);
-        } else {
+            if (poolSize_ <= maxPoolSize_) {
+                idleHandles_.push(handle);
+            } else {
+                curl_easy_cleanup(handle);
+                poolSize_--;
+            }
+        } catch (...) {
+            // Release is used by RequestContext's destructor. A failed proxy
+            // option string or idle-queue allocation must not terminate the
+            // worker or leak the detached handle.
             curl_easy_cleanup(handle);
-            poolSize_--;
+            if (poolSize_ > 0) --poolSize_;
         }
+    }
+
+    // Shared engine applies client/request options on every acquisition. The
+    // cache itself must never learn one client's timeout or callback captures.
+    void Configure(CURL* curl, const TransportConfig& config, CURLSH* shared,
+                   long remaining_ms, const std::string& environment_proxy,
+                   const std::string& environment_no_proxy) {
+        curl_easy_reset(curl);
+        auto check = [](CURLcode code) {
+            if (code != CURLE_OK) throw std::runtime_error("shared curl option setup failed");
+        };
+        if (shared) check(curl_easy_setopt(curl, CURLOPT_SHARE, shared));
+        SetDefaultOptions(curl, config, false);
+        check(curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, remaining_ms));
+        if (!config.getNetInterface().empty())
+            check(curl_easy_setopt(curl, CURLOPT_INTERFACE, config.getNetInterface().c_str()));
+        // Preserve environment proxy routing, frozen at engine creation. Empty
+        // snapshot values explicitly disable a later environment mutation.
+        if (config.getProxyPort() < 0 || config.getProxyHost().empty())
+            check(curl_easy_setopt(curl, CURLOPT_PROXY, environment_proxy.c_str()));
+        check(curl_easy_setopt(curl, CURLOPT_NOPROXY, environment_no_proxy.c_str()));
     }
 
 private:
@@ -109,35 +141,48 @@ private:
         for (unsigned i = 0; i < add; ++i) {
             CURL* h = curl_easy_init();
             if (h) {
-                SetDefaultOptions(h);
-                idleHandles_.push(h);
+                try {
+                    SetDefaultOptions(h);
+                    idleHandles_.push(h);
+                } catch (...) {
+                    curl_easy_cleanup(h);
+                    throw;
+                }
+                ++poolSize_;
                 added++;
             } else
                 break;
         }
-        poolSize_ += added;
         return added > 0;
     }
 
     // 设置句柄默认选项（与业务无关的全局配置）
     void SetDefaultOptions(CURL* curl) const {
+        SetDefaultOptions(curl, transport_config_, true);
+    }
+    void SetDefaultOptions(CURL* curl, const TransportConfig& transport_config_, bool local_share) const {
+        auto set = [&](CURLoption option, auto value) {
+            const auto code = curl_easy_setopt(curl, option, value);
+            if (!local_share && code != CURLE_OK)
+                throw std::runtime_error("shared curl profile option failed");
+        };
         if (transport_config_.getDnsCacheTime() > 0) {
-            if (share_handle_) {
-                curl_easy_setopt(curl, CURLOPT_SHARE, share_handle_);
+            if (local_share && share_handle_) {
+                set(CURLOPT_SHARE, share_handle_);
             }
-            curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, transport_config_.getDnsCacheTime() * 60);
+            set(CURLOPT_DNS_CACHE_TIMEOUT, transport_config_.getDnsCacheTime() * 60);
         }
 
-        curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 65535);  // libcurl内部缓存大小
-        curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
-        curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
-        curl_easy_setopt(curl, CURLOPT_NETRC, CURL_NETRC_IGNORED);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, transport_config_.getConnectTimeout());
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-        curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, transport_config_.getSocketTimeout() / 1000);
+        set(CURLOPT_BUFFERSIZE, 65535);  // libcurl内部缓存大小
+        set(CURLOPT_NOSIGNAL, 1L);
+        set(CURLOPT_TCP_NODELAY, 1L);
+        set(CURLOPT_NETRC, CURL_NETRC_IGNORED);
+        set(CURLOPT_CONNECTTIMEOUT_MS, transport_config_.getConnectTimeout());
+        set(CURLOPT_LOW_SPEED_LIMIT, 1L);
+        set(CURLOPT_LOW_SPEED_TIME, transport_config_.getSocketTimeout() / 1000);
 
         if (transport_config_.getRequestTimeout() != 0) {
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, transport_config_.getRequestTimeout());
+            set(CURLOPT_TIMEOUT_MS, transport_config_.getRequestTimeout());
         }
 
         if (transport_config_.getProxyPort() != -1 && !transport_config_.getProxyHost().empty()) {
@@ -145,54 +190,54 @@ private:
                     transport_config_.getProxyHost() + ":" + std::to_string(transport_config_.getProxyPort());
             const std::string proxyUserPwd =
                     transport_config_.getProxyUsername() + ":" + transport_config_.getProxyPassword();
-            curl_easy_setopt(curl, CURLOPT_PROXY, proxy.c_str());
-            curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, proxyUserPwd.c_str());
-            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+            set(CURLOPT_PROXY, proxy.c_str());
+            set(CURLOPT_PROXYUSERPWD, proxyUserPwd.c_str());
+            set(CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
         }
 
         // 支持忽略SSL证书校验
         if (!transport_config_.isEnableVerifySsl()) {
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            set(CURLOPT_SSL_VERIFYHOST, 0L);
+            set(CURLOPT_SSL_VERIFYPEER, 0L);
         } else {
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+            set(CURLOPT_SSL_VERIFYPEER, 1L);
+            set(CURLOPT_SSL_VERIFYHOST, 2L);
         }
         if (!transport_config_.getCaPath().empty()) {
-            curl_easy_setopt(curl, CURLOPT_CAPATH, transport_config_.getCaPath().c_str());
+            set(CURLOPT_CAPATH, transport_config_.getCaPath().c_str());
         }
         if (!transport_config_.getCaFile().empty()) {
-            curl_easy_setopt(curl, CURLOPT_CAINFO, transport_config_.getCaFile().c_str());
+            set(CURLOPT_CAINFO, transport_config_.getCaFile().c_str());
         }
         if (!transport_config_.getClientCrt().empty()) {
-            curl_easy_setopt(curl, CURLOPT_SSLCERT, transport_config_.getClientCrt().c_str());
+            set(CURLOPT_SSLCERT, transport_config_.getClientCrt().c_str());
         }
         if (!transport_config_.getClientKey().empty()) {
-            curl_easy_setopt(curl, CURLOPT_SSLKEY, transport_config_.getClientKey().c_str());
+            set(CURLOPT_SSLKEY, transport_config_.getClientKey().c_str());
         }
 
         if (!transport_config_.isConnectionReuse()) {
-            curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 1L);
+            set(CURLOPT_FORBID_REUSE, 1L);
         } else {
-            curl_easy_setopt(curl, CURLOPT_FORBID_REUSE, 0L);
-            // curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1L);
+            set(CURLOPT_FORBID_REUSE, 0L);
+            // set(CURLOPT_FRESH_CONNECT, 1L);
         }
 
         if (transport_config_.isDetailLog()) {
-            // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);  // 启用详细日志
+            // set(CURLOPT_VERBOSE, 1L);  // 启用详细日志
         }
 
         if (transport_config_.getKeepAlive() > 0) {
-            curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);  // 启用TCP保活
-            curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE,
+            set(CURLOPT_TCP_KEEPALIVE, 1L);  // 启用TCP保活
+            set(CURLOPT_TCP_KEEPIDLE,
                              transport_config_.getKeepAlive());  // 连接空闲30秒后发送保活探测
-            curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 10L);  // 保活探测间隔10秒
+            set(CURLOPT_TCP_KEEPINTVL, 10L);  // 保活探测间隔10秒
         }
 
-        //        curl_easy_setopt(curl, CURLOPT_MAXAGE_CONN, 1800L);       // 秒 // todo:某写配置应该跟libcurl版本有关
-        curl_easy_setopt(curl, CURLOPT_MAXCONNECTS, 100L);
-        curl_easy_setopt(curl, CURLOPT_SSL_SESSIONID_CACHE, 1L);  // 复用SSL会话
-        curl_easy_setopt(curl, CURLOPT_ACCEPTTIMEOUT_MS, transport_config_.getRequestTimeout());
+        //        set(CURLOPT_MAXAGE_CONN, 1800L);       // 秒 // todo:某写配置应该跟libcurl版本有关
+        set(CURLOPT_MAXCONNECTS, 100L);
+        set(CURLOPT_SSL_SESSIONID_CACHE, 1L);  // 复用SSL会话
+        set(CURLOPT_ACCEPTTIMEOUT_MS, transport_config_.getRequestTimeout());
     }
 
     // 重置仅与单次请求相关的选项（保留DNS缓存等）

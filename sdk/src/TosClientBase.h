@@ -24,6 +24,9 @@ public:
     TosClientBase(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred);
     TosClientBase(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred,
                   const ClientConfig& config);
+    TosClientBase(const std::string& endpoint, const std::string& region, const std::shared_ptr<Credentials>& cred,
+                  const ClientConfig& config, std::shared_ptr<AsyncEngine> engine,
+                  const AsyncClientSharingOptions& sharing);
 
     ~TosClientBase() = default;
 
@@ -46,7 +49,7 @@ public:
     LockFreeCache<std::string, BucketCache>& getBucketCache();
 
     std::shared_ptr<AsyncHttpClient> getAsyncTransport() {
-        return async_transport;
+        return std::atomic_load(&async_transport);
     }
     bool isSharedAsyncTransport() const {
         return shared_async_transport_;
@@ -67,6 +70,8 @@ private:
     std::string userAgent_ = DefaultUserAgent();
     std::shared_ptr<Credentials> credentials_;
     std::shared_ptr<AsyncHttpClient> async_transport;
+    std::shared_ptr<AsyncEngine> injected_engine_;
+    AsyncClientSharingOptions sharing_options_;
     bool shared_async_transport_{false};
     Config config_;
 

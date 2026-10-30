@@ -24,6 +24,7 @@
 #include <cstring>
 #include <fstream>
 #include <cstdio>
+#include <exception>
 #include <thread>
 #include <queue>
 #include <openssl/sha.h>
@@ -36,6 +37,99 @@
 #endif
 
 using namespace VolcengineTos;
+
+namespace {
+// Shared by upload, download and copy workers; later cleanup errors must not
+// replace the first failure that caused the transfer to fail.
+class TransferErrorRecorder {
+public:
+    void record(const TosError& error) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (!hasError_) {
+            error_ = error;
+            hasError_ = true;
+        }
+    }
+
+    void recordLocal(const std::string& message) {
+        TosError error;
+        error.setIsClientError(true);
+        error.setMessage(message);
+        record(error);
+    }
+
+    bool copyTo(TosError& error) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (hasError_) {
+            error = error_;
+        }
+        return hasError_;
+    }
+
+private:
+    std::mutex mutex_;
+    bool hasError_ = false;
+    TosError error_;
+};
+
+// Construct threads in owned storage and join them if a later launch fails.
+class TransferThreadPool {
+public:
+    TransferThreadPool(TransferErrorRecorder& errors, std::atomic<bool>& success, const char* operation)
+            : errors_(errors), success_(success), operation_(operation) {
+    }
+
+    ~TransferThreadPool() {
+        join();
+    }
+
+    template <typename Worker>
+    bool start(Worker worker) {
+        try {
+            workers_.emplace_back([this, worker]() {
+                try {
+                    worker();
+                } catch (...) {
+                    recordException(std::string(operation_) + " worker thread exception: ");
+                }
+            });
+            return true;
+        } catch (...) {
+            recordException(std::string("failed to create ") + operation_ + " worker thread: ");
+            return false;
+        }
+    }
+
+    void join() {
+        for (auto& worker : workers_) {
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
+    }
+
+    TransferThreadPool(const TransferThreadPool&) = delete;
+    TransferThreadPool& operator=(const TransferThreadPool&) = delete;
+
+private:
+    // Called only from a catch handler; preserve any previously recorded error.
+    void recordException(const std::string& prefix) {
+        success_ = false;
+        try {
+            throw;
+        } catch (const std::exception& e) {
+            errors_.recordLocal(prefix + e.what());
+        } catch (...) {
+            errors_.recordLocal(prefix + "unknown exception");
+        }
+    }
+
+    TransferErrorRecorder& errors_;
+    std::atomic<bool>& success_;
+    const char* operation_;
+    std::vector<std::thread> workers_;
+};
+}  // namespace
 
 // 初始化相关函数，分为携带Config和不带Config两种初始化方式
 TosClientImpl::TosClientImpl(const std::string& endpoint, const std::string& region, const StaticCredentials& cred) {
@@ -1592,6 +1686,7 @@ Outcome<TosError, int> validateInput(const std::string& bucket, const std::strin
         return ret;
     }
     if (partSize < 5 * 1024 * 1024 || partSize > 5 * 1024 * 1024 * 1024L) {
+        error.setIsClientError(true);
         error.setMessage("invalid part size, the size must be [5242880, 5368709120]");
         ret.setE(error);
         ret.setSuccess(false);
@@ -1646,6 +1741,7 @@ Outcome<TosError, UploadFileInfo> getUploadFileInfo(const std::string& uploadFil
     if (tos_stat(uploadFilePath.c_str(), &ufs) == 0) {
         if (ufs.st_mode & S_IFDIR) {
             e.setMessage("invalid file path, the file does not exist");
+            e.setIsClientError(true);
             ret.setE(e);
             ret.setSuccess(false);
             return ret;
@@ -1737,6 +1833,7 @@ Outcome<TosError, std::vector<UploadFilePartInfo>> getPartInfoFromFile(int64_t u
     if (partNum > 10000) {
         TosError error;
         error.setMessage("The split file parts number is larger than 10000, please increase your part size");
+        error.setIsClientError(true);
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -1804,7 +1901,7 @@ Outcome<TosError, UploadFileCheckpoint> TosClientImpl::initCheckpoint(const std:
     TosError error;
     auto partInfo = getPartInfoFromFile(info.getFileSize(), input.getPartSize());
     if (!partInfo.isSuccess()) {
-        error.setMessage(partInfo.error().getMessage());
+        error = partInfo.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -1817,7 +1914,7 @@ Outcome<TosError, UploadFileCheckpoint> TosClientImpl::initCheckpoint(const std:
     checkpoint.setCheckpointFilePath(checkpointFilePath);
     auto output = this->createMultipartUpload(bucket, input.getObjectKey());
     if (!output.isSuccess()) {
-        error.setMessage(output.error().getMessage());
+        error = output.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -1913,7 +2010,7 @@ Outcome<TosError, UploadFileCheckpointV2> TosClientImpl::initCheckpoint(
 
     auto partInfo = getPartInfoFromFileV2(info.getFileSize(), input.getPartSize());
     if (!partInfo.isSuccess()) {
-        error.setMessage(partInfo.error().getMessage());
+        error = partInfo.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -1931,7 +2028,7 @@ Outcome<TosError, UploadFileCheckpointV2> TosClientImpl::initCheckpoint(
     auto output = this->createMultipartUpload(input.getCreateMultipartUploadInput());
     if (!output.isSuccess()) {
         uploadEventCreateMultipartUploadFailed(event, input.getUploadEventListener().eventChange_);
-        error.setMessage(output.error().getMessage());
+        error = output.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -1975,15 +2072,17 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadPartConcurrent(const Up
                                                                         UploadFileCheckpoint checkpoint,
                                                                         const RequestOptionBuilder& builder) {
     Outcome<TosError, UploadFileOutput> ret;
-    TosError error;
     std::vector<Outcome<TosError, UploadPartOutput>> uploadedOutputs;
     uploadedOutputs.reserve(checkpoint.getUploadFilePartInfoList().size());
     std::vector<UploadFilePartInfo> toUpload = checkpoint.getUploadFilePartInfoList();
-    std::vector<std::thread> threadPool;
     std::mutex lock_;
+    auto logger = LogUtils::GetLogger();
+    TransferErrorRecorder partErrors;
+    std::atomic<bool> workersSuccess(true);
+    TransferThreadPool threadPool(partErrors, workersSuccess, "upload");
 
     for (int i = 0; i < input.getTaskNum(); i++) {
-        auto res = std::thread([&]() {
+        const bool started = threadPool.start([&]() {
             while (true) {
                 UploadFilePartInfo part;
                 {
@@ -2026,6 +2125,11 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadPartConcurrent(const Up
                             checkpoint.dump();
                         }
                     }
+                } else {
+                    partErrors.record(res.error());
+                    if (logger != nullptr) {
+                        logger->info("upload part {} failed: {}", part.getPartNum(), res.error().String());
+                    }
                 }
                 {
                     std::lock_guard<std::mutex> lck(lock_);
@@ -2033,34 +2137,42 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadPartConcurrent(const Up
                 }
             }
         });
-        threadPool.emplace_back(std::move(res));
-    }
-    for (auto& worker : threadPool) {
-        if (worker.joinable()) {
-            worker.join();
+        if (!started) {
+            break;
         }
     }
+    threadPool.join();
     std::vector<UploadPartOutput> uploadedList;
     for (auto& i : uploadedOutputs) {
         if (!i.isSuccess()) {
             AbortMultipartUploadInput abort;
             abort.setKey(checkpoint.getKey());
             abort.setUploadId(checkpoint.getUploadId());
-            this->abortMultipartUpload(checkpoint.getBucket(), abort);
+            const auto abortRes = this->abortMultipartUpload(checkpoint.getBucket(), abort);
+            if (!abortRes.isSuccess() && logger != nullptr) {
+                logger->info("abort multipart upload failed: {}", abortRes.error().String());
+            }
             // 静默abort，用户不感知
             ret.setSuccess(false);
-            error.setMessage("upload part failed");
+            TosError error = i.error();
+            partErrors.copyTo(error);
             ret.setE(error);
             return ret;
         }
         uploadedList.emplace_back(i.result());
     }
+    if (!workersSuccess) {
+        TosError error;
+        partErrors.copyTo(error);
+        ret.setSuccess(false);
+        ret.setE(error);
+        return ret;
+    }
     CompleteMultipartUploadInput complete(checkpoint.getKey(), checkpoint.getUploadId(), uploadedList);
     auto output = this->completeMultipartUpload(checkpoint.getBucket(), complete);
     if (!output.isSuccess()) {
         ret.setSuccess(false);
-        error.setMessage("complete multi part failed");
-        ret.setE(error);
+        ret.setE(output.error());
         return ret;
     }
     // 合并失败，根据情况选择是否删除
@@ -2083,7 +2195,7 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadFile(const std::string&
     auto check = validateInput(bucket, input.getObjectKey(), input.getPartSize(), input.getTaskNum(),
                                config_.isCustomDomain());
     if (!check.isSuccess()) {
-        error.setMessage(check.error().getMessage());
+        error = check.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2101,7 +2213,7 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadFile(const std::string&
     }
     auto ufi = getUploadFileInfo(input.getUploadFilePath());
     if (!ufi.isSuccess()) {
-        error.setMessage(ufi.error().getMessage());
+        error = ufi.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2109,7 +2221,7 @@ Outcome<TosError, UploadFileOutput> TosClientImpl::uploadFile(const std::string&
 
     auto cp = getCheckpoint(bucket, input, ufi.result(), checkpointFilePath, builder);
     if (!cp.isSuccess()) {
-        error.setMessage(cp.error().getMessage());
+        error = cp.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2146,7 +2258,6 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
     Outcome<TosError, UploadFileV2Output> ret;
     TosError error;
     std::vector<UploadFilePartInfoV2> toUpload = checkpoint.getPartsInfo();
-    std::vector<std::thread> threadPool;
     std::mutex lock_;
     int64_t partSize_ = input.getPartSize();
     auto eventChange = input.getUploadEventListener().eventChange_;
@@ -2154,6 +2265,8 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
     std::atomic<bool> isAbort(false);
     std::atomic<bool> isSuccess(true);
     auto logger = LogUtils::GetLogger();
+
+    TransferErrorRecorder partErrors;
 
     // 进度条相关参数
     UploadDownloadFileProcessStat processStat;
@@ -2175,8 +2288,9 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
         }
         pProcessStat->userData = (void*)pProcessStat;
     }
+    TransferThreadPool threadPool(partErrors, isSuccess, "upload");
     for (int i = 0; i < input.getTaskNum(); i++) {
-        auto res = std::thread([&]() {
+        const bool started = threadPool.start([&]() {
             while (true) {
                 // 开始时检查是否需要中断任务
                 if (cancel != nullptr) {
@@ -2253,8 +2367,14 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
 
                 } else {
                     // 失败
+                    partErrors.record(res.error());
+                    if (logger != nullptr) {
+                        logger->info("upload part {} failed: {}", part.getPartNum(), res.error().String());
+                    }
                     auto statusCode = res.error().getStatusCode();
                     if (statusCode == 403 || statusCode == 404 || statusCode == 405) {
+                        // Set before invoking user callbacks, which may throw.
+                        isAbort = true;
                         // 事件通知
                         UploadPartInfo partInfo{};
                         partInfo.partNumber_ = part.getPartNum();
@@ -2266,8 +2386,6 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                             std::lock_guard<std::mutex> lck(lock_);
                             uploadEventUploadPartAborted(event, eventChange, partInfo);
                         }
-                        // 出现 403、404、405 错误需要中断整个断点续传任务
-                        isAbort = true;
                         break;
                     }
                     // 事件通知
@@ -2285,20 +2403,18 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                 }
             }
         });
-        threadPool.emplace_back(std::move(res));
-    }
-    for (auto& worker : threadPool) {
-        if (worker.joinable()) {
-            worker.join();
+        if (!started) {
+            break;
         }
     }
+    threadPool.join();
     // 需要 abort 掉任务的场景
     if (isAbort) {
         AbortMultipartUploadInput abort(checkpoint.getBucket(), checkpoint.getKey(), checkpoint.getUploadId());
         auto abortRes = this->abortMultipartUpload(abort);
         if (!abortRes.isSuccess()) {
             if (logger != nullptr) {
-                logger->info("abort multipart upload failed");
+                logger->info("abort multipart upload failed: {}", abortRes.error().String());
             }
         }
 
@@ -2308,8 +2424,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
         }
 
         ret.setSuccess(false);
-        error.setIsClientError(true);
-        error.setMessage("the task is canceled");
+        partErrors.copyTo(error);
         ret.setE(error);
         return ret;
     }
@@ -2322,7 +2437,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
                 auto abortRes = this->abortMultipartUpload(abort);
                 if (!abortRes.isSuccess()) {
                     if (logger != nullptr) {
-                        logger->info("abort multipart upload failed");
+                        logger->info("abort multipart upload failed: {}", abortRes.error().String());
                     }
                 }
                 // 删除 checkPoint 文件
@@ -2340,8 +2455,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadPartConcurrent(const 
 
     // 有的段下载发生错误，直接返回
     if (!isSuccess) {
-        error.setMessage("some parts are upload incorrectly, you can try again");
-        error.setIsClientError(true);
+        partErrors.copyTo(error);
         ret.setE(error);
         ret.setSuccess(false);
         return ret;
@@ -2440,8 +2554,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     const auto& key = createMultipartInput.getKey();
     auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum(), config_.isCustomDomain());
     if (!check.isSuccess()) {
-        error.setMessage(check.error().getMessage());
-        error.setIsClientError(true);
+        error = check.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2459,8 +2572,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     }
     auto ufi = getUploadFileInfoV2(input.getFilePath());
     if (!ufi.isSuccess()) {
-        error.setMessage(ufi.error().getMessage());
-        error.setIsClientError(true);
+        error = ufi.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2469,8 +2581,7 @@ Outcome<TosError, UploadFileV2Output> TosClientImpl::uploadFile(const UploadFile
     initUploadEvent(input, checkpointFilePath, "", event);
     auto cp = getCheckpoint(input, ufi.result(), checkpointFilePath, event);
     if (!cp.isSuccess()) {
-        error.setMessage(cp.error().getMessage());
-        error.setIsClientError(true);
+        error = cp.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -2581,6 +2692,7 @@ Outcome<TosError, std::vector<DownloadFilePartInfo>> getDownloadFilePartsInfo(in
 
     if (partNum > 10000) {
         TosError error;
+        error.setIsClientError(true);
         error.setMessage("The split file parts number is larger than 10000, please increase your part size");
         ret.setSuccess(false);
         ret.setE(error);
@@ -2609,7 +2721,7 @@ Outcome<TosError, DownloadFileCheckpoint> TosClientImpl::initCheckpoint(const Do
     TosError error;
     auto partsInfo = getDownloadFilePartsInfo(headOutput.getContentLength(), input.getPartSize());
     if (!partsInfo.isSuccess()) {
-        error.setMessage(partsInfo.error().getMessage());
+        error = partsInfo.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -2835,6 +2947,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
     std::atomic<bool> isAbort(false);
     std::atomic<bool> isSuccess(true);
     auto logger = LogUtils::GetLogger();
+    TransferErrorRecorder partErrors;
     int taskNum = input.getTaskNum();
     if (taskNum > 10000)
         taskNum = 10000;
@@ -2861,7 +2974,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
     }
     try {
         for (int i = 0; i < taskNum; i++) {
-            auto res = std::thread([&]() {
+            threadPool.emplace_back([&]() {
                 try {
                     while (true) {
                         // 开始时检查是否需要中断任务
@@ -2923,6 +3036,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                             // 成功则写入数据到文件
                             auto content = res.result().getContent();
                             if (content == nullptr) {
+                                partErrors.recordLocal("download part returned no content");
                                 DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(), part.getRangeEnd()};
                                 downloadEventDownloadPartAborted(event, eventChange, partInfo);
                                 if (logger != nullptr) {
@@ -2941,6 +3055,9 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                                         tempFile << content->rdbuf();
                                         // 读流失败
                                         if (tempFile.bad() || tempFile.fail()) {
+                                            partErrors.recordLocal(
+                                                    "failed to write downloaded part to temporary file: " +
+                                                    tempFilePath);
                                             DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(),
                                                                       part.getRangeEnd()};
                                             downloadEventDownloadPartAborted(event, eventChange, partInfo);
@@ -2957,10 +3074,13 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                                         tempFile.close();
                                     } else {
                                         // 打开文件失败
+                                        partErrors.recordLocal("failed to open download temporary file: " +
+                                                               tempFilePath);
                                         DownloadPartInfo partInfo{part.getPartNum(), part.getRangeStart(),
                                                                   part.getRangeEnd()};
                                         downloadEventDownloadPartFailed(event, eventChange, partInfo);
                                         isSuccess = false;
+                                        continue;
                                     }
                                 }
                                 // 更新 checkpoint 信息, 把更新后的 part 放到 checkpoint 的 vector 中，赋值并发安全
@@ -2977,6 +3097,10 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                             }  // else (content != nullptr)
                         } else {
                             // 下载段失败
+                            partErrors.record(res.error());
+                            if (logger != nullptr) {
+                                logger->info("download part {} failed: {}", part.getPartNum(), res.error().String());
+                            }
                             auto statusCode = res.error().getStatusCode();
                             if (statusCode == 403 || statusCode == 404 || statusCode == 405) {
                                 std::lock_guard<std::mutex> lck(lock_);
@@ -2993,18 +3117,25 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
                         }
                     }
                 } catch (const std::exception& e) {
+                    partErrors.recordLocal(std::string("download worker thread exception: ") + e.what());
                     if (logger != nullptr) {
                         logger->info("download worker thread exception: {}", e.what());
                     }
                     isAbort = true;
+                } catch (...) {
+                    partErrors.recordLocal("download worker thread exception: unknown exception");
+                    isAbort = true;
                 }
             });
-            threadPool.emplace_back(std::move(res));
         }
     } catch (const std::exception& e) {
+        partErrors.recordLocal(std::string("failed to create download worker thread: ") + e.what());
         if (logger != nullptr) {
             logger->info("failed to create download worker thread: {}", e.what());
         }
+        isAbort = true;
+    } catch (...) {
+        partErrors.recordLocal("failed to create download worker thread: unknown exception");
         isAbort = true;
     }
     for (auto& worker : threadPool) {
@@ -3017,8 +3148,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
             deleteCheckpointFile(checkpointPath);
         }
         remove(dfi.getTempFilePath().c_str());
-        error.setMessage("the task is canceled");
-        error.setIsClientError(true);
+        partErrors.copyTo(error);
         ret.setE(error);
         ret.setSuccess(false);
         return ret;
@@ -3045,8 +3175,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadPartConcurrent(
     }
     // 有的段下载发生错误，直接返回
     if (!isSuccess) {
-        error.setMessage("some parts are downloaded incorrectly, you can try again");
-        error.setIsClientError(true);
+        partErrors.copyTo(error);
         ret.setE(error);
         ret.setSuccess(false);
         return ret;
@@ -3111,8 +3240,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     auto check = validateInput(headInput.getBucket(), headInput.getKey(), input.getPartSize(), input.getTaskNum(),
                                config_.isCustomDomain());
     if (!check.isSuccess()) {
-        error.setIsClientError(true);
-        error.setMessage(check.error().getMessage());
+        error = check.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -3125,8 +3253,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     }
     auto dfi = getDownloadFileFileInfo(input);
     if (!dfi.isSuccess()) {
-        error.setIsClientError(true);
-        error.setMessage(dfi.error().getMessage());
+        error = dfi.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -3157,8 +3284,7 @@ Outcome<TosError, DownloadFileOutput> TosClientImpl::downloadFile(const Download
     // 检查 checkpoint 文件是否存在 + 检查 checkpoint 文件有效性 + 无效则创建临时文件
     auto cp = getCheckpoint(input, checkpointFilePath, dfi.result(), checkObjectExists.result(), event);
     if (!cp.isSuccess()) {
-        error.setMessage(cp.error().getMessage());
-        error.setIsClientError(true);
+        error = cp.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -6160,6 +6286,7 @@ Outcome<TosError, std::vector<ResumableCopyPartInfo>> getResumableCopyPartInfoFr
 
     if (partNum > 10000) {
         TosError error;
+        error.setIsClientError(true);
         error.setMessage("The split file parts number is larger than 10000, please increase your part size");
         ret.setSuccess(false);
         ret.setE(error);
@@ -6275,7 +6402,7 @@ Outcome<TosError, ResumableCopyCheckpoint> TosClientImpl::initCheckpoint(const R
     TosError error;
     auto partInfo = getResumableCopyPartInfoFromSrcObject(headOutput.getContentLength(), input.getPartSize());
     if (!partInfo.isSuccess()) {
-        error.setMessage(partInfo.error().getMessage());
+        error = partInfo.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -6329,7 +6456,7 @@ Outcome<TosError, ResumableCopyCheckpoint> TosClientImpl::initCheckpoint(const R
     auto output = this->createMultipartUpload(createMultipartUploadInput);
     if (!output.isSuccess()) {
         copyEventCreateMultipartUploadFailed(event, input.getCopyEventListener().eventChange_);
-        error.setMessage(output.error().getMessage());
+        error = output.error();
         ret.setSuccess(false);
         ret.setE(error);
         return ret;
@@ -6376,7 +6503,6 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
     Outcome<TosError, ResumableCopyObjectOutput> ret;
     TosError error;
     std::vector<ResumableCopyPartInfo> toCopy = checkpoint.getPartsInfo();
-    std::vector<std::thread> threadPool;
     std::mutex lock_;
     int64_t partSize_ = input.getPartSize();
     auto eventChange = input.getCopyEventListener().eventChange_;
@@ -6384,9 +6510,11 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
     std::atomic<bool> isAbort(false);
     std::atomic<bool> isSuccess(true);
     auto logger = LogUtils::GetLogger();
+    TransferErrorRecorder partErrors;
+    TransferThreadPool threadPool(partErrors, isSuccess, "copy");
 
     for (int i = 0; i < input.getTaskNum(); i++) {
-        auto res = std::thread([&]() {
+        const bool started = threadPool.start([&]() {
             while (true) {
                 // 开始时检查是否需要中断任务
                 if (cancel != nullptr) {
@@ -6467,8 +6595,14 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
 
                 } else {
                     // 失败
+                    partErrors.record(res.error());
+                    if (logger != nullptr) {
+                        logger->info("copy part {} failed: {}", part.getPartNum(), res.error().String());
+                    }
                     auto statusCode = res.error().getStatusCode();
                     if (statusCode == 403 || statusCode == 404 || statusCode == 405) {
+                        // Set before invoking user callbacks, which may throw.
+                        isAbort = true;
                         // 事件通知
                         auto eTag_ = std::make_shared<std::string>(res.result().getETag());
                         CopyPartInfo partInfo{part.getPartNum(), part.getCopySourceRangeStart(),
@@ -6477,8 +6611,6 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
                             std::lock_guard<std::mutex> lck(lock_);
                             copyEventUploadPartCopyAborted(event, eventChange, partInfo);
                         }
-                        // 出现 403、404、405 错误需要中断整个断点续传任务
-                        isAbort = true;
                         break;
                     }
                     // 事件通知
@@ -6493,20 +6625,18 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
                 }
             }
         });
-        threadPool.emplace_back(std::move(res));
-    }
-    for (auto& worker : threadPool) {
-        if (worker.joinable()) {
-            worker.join();
+        if (!started) {
+            break;
         }
     }
+    threadPool.join();
     // 需要 abort 掉任务的场景
     if (isAbort) {
         AbortMultipartUploadInput abort(checkpoint.getBucket(), checkpoint.getKey(), checkpoint.getUploadId());
         auto abortRes = this->abortMultipartUpload(abort);
         if (!abortRes.isSuccess()) {
             if (logger != nullptr) {
-                logger->info("abort multipart upload failed");
+                logger->info("abort multipart upload failed: {}", abortRes.error().String());
             }
         }
 
@@ -6516,8 +6646,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
         }
 
         ret.setSuccess(false);
-        error.setIsClientError(true);
-        error.setMessage("the task is canceled");
+        partErrors.copyTo(error);
         ret.setE(error);
         return ret;
     }
@@ -6530,7 +6659,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
                 auto abortRes = this->abortMultipartUpload(abort);
                 if (!abortRes.isSuccess()) {
                     if (logger != nullptr) {
-                        logger->info("abort multipart upload failed");
+                        logger->info("abort multipart upload failed: {}", abortRes.error().String());
                     }
                 }
                 // 删除 checkPoint 文件
@@ -6548,8 +6677,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
 
     // 有的段下载发生错误，直接返回
     if (!isSuccess) {
-        error.setMessage("some parts are upload incorrectly, you can try again");
-        error.setIsClientError(true);
+        partErrors.copyTo(error);
         ret.setE(error);
         ret.setSuccess(false);
         return ret;
@@ -6565,8 +6693,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyConcurr
     if (!output.isSuccess()) {
         copyEventCompleteMultipartUploadFailed(event, eventChange);
         ret.setSuccess(false);
-        error.setMessage("complete multi part failed");
-        ret.setE(error);
+        ret.setE(output.error());
         return ret;
     }
     // 合并成功，删除 checkpoint 文件
@@ -6638,8 +6765,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
     const auto& key = input.getKey();
     auto check = validateInput(bucket, key, input.getPartSize(), input.getTaskNum(), config_.isCustomDomain());
     if (!check.isSuccess()) {
-        error.setMessage(check.error().getMessage());
-        error.setIsClientError(true);
+        error = check.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -6671,8 +6797,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
     auto rcpi =
             getResumableCopyPartInfoFromSrcObject(checkObjectExists.result().getContentLength(), input.getPartSize());
     if (!rcpi.isSuccess()) {
-        error.setMessage(rcpi.error().getMessage());
-        error.setIsClientError(true);
+        error = rcpi.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -6681,8 +6806,7 @@ Outcome<TosError, ResumableCopyObjectOutput> TosClientImpl::resumableCopyObject(
     initCopyEvent(input, checkpointFilePath, "", event);
     auto cp = getCheckpoint(input, headInput, checkObjectExists.result(), event, checkpointFilePath);
     if (!cp.isSuccess()) {
-        error.setMessage(cp.error().getMessage());
-        error.setIsClientError(true);
+        error = cp.error();
         res.setE(error);
         res.setSuccess(false);
         return res;
@@ -7740,6 +7864,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         se.setIsClientError(true);
         se.setMessage("please do not use ip:port to access");
         ret.setE(se);
+        auto response = std::make_shared<TosResponse>(nullptr);
+        response->setStatusCode(se.getStatusCode());
+        ret.setR(response);
         return ret;
     }
     if (connectWithS3EndPoint_) {
@@ -7747,6 +7874,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         se.setIsClientError(true);
         se.setMessage("please do not use s3 endpoint to access");
         ret.setE(se);
+        auto response = std::make_shared<TosResponse>(nullptr);
+        response->setStatusCode(se.getStatusCode());
+        ret.setR(response);
         return ret;
     }
     if (findInHighLatencyLogMethods(request->getFuncName())) {
@@ -7810,6 +7940,8 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             TosError se;
             std::string requestUrl = request->toUrl().toString();
             se.setRequestUrl(requestUrl);
+            se.setStatusCode(resp->getStatusCode());
+            se.setCurlErrCode(resp->getCurlErrCode());
 
             RequestInfo reqInfo;
             auto headers = resp->getHeaders();
@@ -7827,6 +7959,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                 se.setMessage("http request timeout");
                 se.setCode("operation timeout");
                 se.setCurlErrCode(resp->getCurlErrCode());
+                se.setRequestId(resp->getRequestID());
                 ret.setE(se);
                 logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                 return ret;
@@ -7846,6 +7979,10 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                         se.setCode("unable to do serialization");
                         se.setIsClientError(true);
                     }
+                    // Only use the header after checking whether the body contains an error.
+                    if (se.getRequestId().empty()) {
+                        se.setRequestId(resp->getRequestID());
+                    }
                     se.setStatusCode(resp->getStatusCode());
                     ret.setE(se);
 
@@ -7862,7 +7999,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     return ret;
                 }
             }
-            if (resp->getStatusCode() == -2) {
+            if (resp->getStatusCode() == -1 || resp->getStatusCode() == -2) {
                 se.setIsClientError(true);
                 se.setCurlErrCode(resp->getCurlErrCode());
             }
@@ -7885,6 +8022,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         se.setIsClientError(true);
         se.setMessage("please do not use ip:port to access");
         ret.setE(se);
+        auto response = std::make_shared<TosResponse>(nullptr);
+        response->setStatusCode(se.getStatusCode());
+        ret.setR(response);
         return ret;
     }
     if (connectWithS3EndPoint_) {
@@ -7892,6 +8032,9 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
         se.setIsClientError(true);
         se.setMessage("please do not use s3 endpoint to access");
         ret.setE(se);
+        auto response = std::make_shared<TosResponse>(nullptr);
+        response->setStatusCode(se.getStatusCode());
+        ret.setR(response);
         return ret;
     }
     if (findInHighLatencyLogMethods(request->getFuncName())) {
@@ -7955,6 +8098,8 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
             TosError se;
             std::string requestUrl = request->toUrl().toString();
             se.setRequestUrl(requestUrl);
+            se.setStatusCode(resp->getStatusCode());
+            se.setCurlErrCode(resp->getCurlErrCode());
 
             RequestInfo reqInfo;
             auto headers = resp->getHeaders();
@@ -7970,6 +8115,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                 se.setMessage("http request timeout");
                 se.setCode("operation timeout");
                 se.setCurlErrCode(resp->getCurlErrCode());
+                se.setRequestId(resp->getRequestID());
                 ret.setE(se);
                 logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
                 return ret;
@@ -7989,6 +8135,10 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                         se.setCode("unable to do serialization");
                         se.setIsClientError(true);
                     }
+                    // Only use the header after checking whether the body contains an error.
+                    if (se.getRequestId().empty()) {
+                        se.setRequestId(resp->getRequestID());
+                    }
                     se.setStatusCode(resp->getStatusCode());
                     ret.setE(se);
                     logErrRes(resp->getStatusCode(), se.getCode(), isHighLatencyReq, logger);
@@ -8004,7 +8154,7 @@ Outcome<TosError, std::shared_ptr<TosResponse>> TosClientImpl::roundTrip(const s
                     return ret;
                 }
             }
-            if (resp->getStatusCode() == -2) {
+            if (resp->getStatusCode() == -1 || resp->getStatusCode() == -2) {
                 se.setIsClientError(true);
                 se.setCurlErrCode(resp->getCurlErrCode());
             }
