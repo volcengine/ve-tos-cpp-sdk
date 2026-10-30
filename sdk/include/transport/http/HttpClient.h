@@ -264,12 +264,16 @@ class HttpClient {
 
    protected:
     void setShareHandle(void* curl_handle, int cacheTime);
-    void removeDNS(void* curl_handle, const std::shared_ptr<HttpRequest>& request);
+    void scheduleDNSRemoval(const std::shared_ptr<HttpRequest>& request);
+    curl_slist* takePendingDNSRemovals();
     ResolveBinding buildResolveBinding(const std::shared_ptr<HttpRequest>& request);
     void releaseResolveBinding(ResolveBinding& binding) const;
     void removeFailedIp(const ResolveBinding& binding);
     std::vector<std::string> getHostIpList(const std::string& host);
     std::vector<std::string> lookupHostIpList(const std::string& host) const;
+    void rememberSuccessfulAddress(const std::string& host, const std::string& ip);
+    std::string lastGoodAddress(const std::string& host, bool* coolingDown);
+    void coolDownLastGoodAddressIfMatches(const std::string& host, const std::string& ip);
     CURLSH* share_handle = nullptr;
 
    protected:
@@ -297,5 +301,12 @@ class HttpClient {
     void* sslCtxCallbackUserData_ = nullptr;
     HostIpCache dnsIpCache_;
     std::function<std::vector<std::string>(const std::string&)> dnsLookupCallback_;
+    struct LastGoodAddress {
+        std::string ip;
+        std::chrono::steady_clock::time_point lastSuccessfulAt;
+        std::chrono::steady_clock::time_point cooldownUntil;
+    };
+    std::map<std::string, LastGoodAddress> lastGoodAddresses_;
+    std::set<std::string> pendingDnsRemovals_;
 };
 }  // namespace VolcengineTos

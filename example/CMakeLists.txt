@@ -1,10 +1,11 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.1...3.10)
 project(ve-tos-cpp-sdk-example
-        VERSION 2.6.28
+        VERSION 2.6.31
         LANGUAGES CXX)
 
 function(ve_tos_link_example target)
     target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include)
+    target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src)
     target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/sdk/src/external)
     target_link_libraries(${target} ve-tos-cpp-sdk-lib)
     target_link_libraries(${target} ${CLIENT_SSL_LIBS})

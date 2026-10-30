@@ -100,6 +100,17 @@ void TosClientBase::initWithConfig(const std::string& endpoint, const std::strin
     init(tmpEndpoint, tmpControlEndpoint, region, config);
 }
 
+TosClientBase::TosClientBase(const std::string& endpoint, const std::string& region,
+                           const std::shared_ptr<Credentials>& cred, const ClientConfig& config,
+                           std::shared_ptr<AsyncEngine> engine, const AsyncClientSharingOptions& sharing)
+    : injected_engine_(std::move(engine)), sharing_options_(sharing) {
+    if (!injected_engine_) throw std::invalid_argument("null async engine");
+    initWithConfig(endpoint, region, config);
+    credentials_ = cred;
+    signer_ = std::make_shared<SignV4>(credentials_, region);
+    injected_engine_.reset(); // the transport owns the client lease and engine
+}
+
 void TosClientBase::init(const std::string& endpoint, const std::string& controlEndpoint,
                          const std::string& region, const ClientConfig& config) {
     TransportConfig conf;
@@ -132,7 +143,12 @@ void TosClientBase::init(const std::string& endpoint, const std::string& control
     conf.setAsyncTransportMode(config.async_transport_mode_);
 
     shared_async_transport_ = (config.async_transport_mode_ == AsyncTransportMode::Shared);
-    async_transport = AcquireAsyncHttpClient(conf, config.enableCRC);
+    if (injected_engine_) {
+        shared_async_transport_ = true;
+        async_transport = std::make_shared<AsyncHttpClient>(conf, injected_engine_, sharing_options_);
+    } else {
+        async_transport = AcquireAsyncHttpClient(conf, config.enableCRC);
+    }
 
     config_.setTransportConfig(conf);
     config_.setEndpoint(endpoint);
@@ -187,17 +203,11 @@ void TosClientBase::init(const std::string& endpoint, const std::string& control
 }
 
 void TosClientBase::closeAsyncTransport(const bool force_close) {
-    if (async_transport == nullptr) {
-        return;
-    }
-
-    if (shared_async_transport_ && !force_close) {
-        async_transport.reset();
-        return;
-    }
-
-    async_transport->closeClient();
-    async_transport.reset();
+    (void)force_close;
+    auto transport = std::atomic_load(&async_transport);
+    if (!transport) return;
+    transport->closeClient();
+    std::atomic_compare_exchange_strong(&async_transport, &transport, std::shared_ptr<AsyncHttpClient>{});
 }
 
 SchemeHostParameter TosClientBase::initSchemeAndHost(const std::string& endpoint) {

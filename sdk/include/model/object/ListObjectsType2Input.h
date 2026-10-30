@@ -3,6 +3,7 @@
 #include <string>
 #include <utility>
 #include "model/GenericInput.h"
+#include "JsonResponseLimits.h"
 
 namespace VolcengineTos {
 class ListObjectsType2Input : public GenericInput {
@@ -74,6 +75,8 @@ public:
     void setFetchMeta(bool fetchMeta) {
         fetchMeta_ = fetchMeta;
     }
+    const JsonResponseLimits& getAsyncResponseLimits() const { return asyncResponseLimits_; }
+    void setAsyncResponseLimits(JsonResponseLimits limits) { asyncResponseLimits_ = limits; }
 
 private:
     std::string bucket_;
@@ -85,5 +88,6 @@ private:
     std::string encodingType_;
     bool listOnlyOnce_ = false;
     bool fetchMeta_ = false;
+    JsonResponseLimits asyncResponseLimits_;
 };
 }  // namespace VolcengineTos

@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.1...3.10)
 
 project(ve-tos-cpp-sdk
-        VERSION 2.6.30
+        VERSION 2.6.31
         LANGUAGES CXX)
 
 # project settings
@@ -16,6 +16,8 @@ option(BUILD_UNITTEST "Build unittest" OFF)
 option(BUILD_DEMO "Build demo" OFF)
 option(BUILD_SHARED_LIB "Build shared library" OFF)
 option(BUILD_ASYNC_SDK "Build async SDK sources and public async APIs" OFF)
+option(BUILD_ASYNC_CONTRACT_TESTS "Build credential-free async pipeline and loopback HTTP contracts" OFF)
+option(BUILD_ASYNC_BUCKET_SMOKE "Build opt-in real-bucket async smoke/benchmark executable (not in CTest)" OFF)
 set(BUILD_ASYNC_SDK_IO_URING "AUTO" CACHE STRING
         "Build async SDK io_uring file transfer support: AUTO, ON, OFF")
 set_property(CACHE BUILD_ASYNC_SDK_IO_URING PROPERTY STRINGS AUTO ON OFF)
@@ -148,10 +150,19 @@ MESSAGE(${CLIENT_SSL_INCLUDE_DIRS})
 
 add_subdirectory(sdk)
 
+if (BUILD_ASYNC_CONTRACT_TESTS OR BUILD_ASYNC_BUCKET_SMOKE)
+    if (NOT BUILD_ASYNC_SDK OR NOT OS_PLATFORM STREQUAL "LINUX")
+        message(FATAL_ERROR "Async contracts require BUILD_ASYNC_SDK=ON on Linux")
+    endif ()
+    enable_testing()
+    include(test/async-contracts.cmake)
+endif ()
+
 if (BUILD_DEMO)
     add_subdirectory(example)
 endif ()
 
 if (BUILD_UNITTEST)
+    enable_testing()
     add_subdirectory(test)
 endif ()

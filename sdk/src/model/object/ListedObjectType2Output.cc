@@ -1,7 +1,32 @@
 #include "model/object/ListObjectsType2Output.h"
 #include "../src/external/json/json.hpp"
 
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+
 using namespace nlohmann;
+
+namespace {
+template <typename Integer>
+Integer parseNonnegativeInteger(const json& value) {
+    uint64_t number = 0;
+    if (value.is_number_unsigned()) {
+        number = value.get<uint64_t>();
+    } else if (value.is_number_integer()) {
+        const auto signed_number = value.get<int64_t>();
+        if (signed_number < 0) throw std::out_of_range("LIST integer must be nonnegative");
+        number = static_cast<uint64_t>(signed_number);
+    } else {
+        // json.get<int>() also accepts floats and silently narrows integers.
+        // Validate type and range before any conversion to the wire model.
+        throw std::invalid_argument("LIST count or size must be an integer");
+    }
+    if (number > static_cast<uint64_t>(std::numeric_limits<Integer>::max()))
+        throw std::out_of_range("LIST integer exceeds model range");
+    return static_cast<Integer>(number);
+}
+}  // namespace
 
 VolcengineTos::ListedObjectV2 parseListedObjectV2(const json& object) {
     VolcengineTos::ListedObjectV2 lo;
@@ -16,7 +41,7 @@ VolcengineTos::ListedObjectV2 parseListedObjectV2(const json& object) {
     if (object.contains("ETag"))
         lo.setETag(object.at("ETag").get<std::string>());
     if (object.contains("Size"))
-        lo.setSize(object.at("Size").get<int64_t>());
+        lo.setSize(parseNonnegativeInteger<int64_t>(object.at("Size")));
     if (object.contains("Owner")) {
         VolcengineTos::Owner owner;
         if (object.at("Owner").contains("ID")) {
@@ -27,8 +52,11 @@ VolcengineTos::ListedObjectV2 parseListedObjectV2(const json& object) {
         }
         lo.setOwner(owner);
     }
-    if (object.contains("StorageClass"))
-        lo.setStorageClass(VolcengineTos::StringtoStorageClassType[object.at("StorageClass").get<std::string>()]);
+    if (object.contains("StorageClass")) {
+        const auto value = object.at("StorageClass").get<std::string>();
+        const auto found = VolcengineTos::StringtoStorageClassType.find(value);
+        if (found != VolcengineTos::StringtoStorageClassType.end()) lo.setStorageClass(found->second);
+    }
     if (object.contains("HashCrc64ecma")) {
         auto hashCrc_ = object.at("HashCrc64ecma").get<std::string>();
         if (!hashCrc_.empty()) {
@@ -40,42 +68,58 @@ VolcengineTos::ListedObjectV2 parseListedObjectV2(const json& object) {
 }
 
 void VolcengineTos::ListObjectsType2Output::fromJsonString(const std::string& input) {
-    auto j = nlohmann::json::parse(input);
-    if (j.is_discarded()) {
-        return;
+    fromJson(nlohmann::json::parse(input));
+}
+
+void VolcengineTos::ListObjectsType2Output::fromJson(const nlohmann::json& j, std::size_t max_entries) {
+    ListObjectsType2Output parsed;
+    parsed.requestInfo_ = requestInfo_;
+    std::size_t entries = 0;
+    for (const char* name : {"Contents", "CommonPrefixes"}) {
+        if (!j.contains(name)) continue;
+        const auto& array = j.at(name);
+        if (!array.is_array()) throw std::invalid_argument("LIST entries must be arrays");
+        if (array.size() > max_entries - entries) throw std::length_error("LIST entry limit exceeded");
+        entries += array.size();
     }
+    // A missing flag cannot mean the final page: that would silently truncate
+    // an otherwise valid listing. at/get_to also reject null and non-booleans.
+    j.at("IsTruncated").get_to(parsed.isTruncated_);
     if (j.contains("Name"))
-        j.at("Name").get_to(name_);
+        j.at("Name").get_to(parsed.name_);
     if (j.contains("Prefix"))
-        j.at("Prefix").get_to(prefix_);
+        j.at("Prefix").get_to(parsed.prefix_);
     if (j.contains("ContinuationToken"))
-        j.at("ContinuationToken").get_to(continuationToken_);
+        j.at("ContinuationToken").get_to(parsed.continuationToken_);
     if (j.contains("MaxKeys"))
-        j.at("MaxKeys").get_to(maxKeys_);
+        parsed.maxKeys_ = parseNonnegativeInteger<int>(j.at("MaxKeys"));
     if (j.contains("Delimiter"))
-        j.at("Delimiter").get_to(delimiter_);
+        j.at("Delimiter").get_to(parsed.delimiter_);
     if (j.contains("EncodingType"))
-        j.at("EncodingType").get_to(encodingType_);
+        j.at("EncodingType").get_to(parsed.encodingType_);
     if (j.contains("KeyCount"))
-        j.at("KeyCount").get_to(keyCount_);
-    if (j.contains("IsTruncated"))
-        j.at("IsTruncated").get_to(isTruncated_);
+        parsed.keyCount_ = parseNonnegativeInteger<int>(j.at("KeyCount"));
     if (j.contains("NextContinuationToken"))
-        j.at("NextContinuationToken").get_to(nextContinuationToken_);
+        j.at("NextContinuationToken").get_to(parsed.nextContinuationToken_);
     if (j.contains("CommonPrefixes")) {
-        auto commonPrefixes = j.at("CommonPrefixes");
-        for (auto& cp : commonPrefixes) {
+        const auto& commonPrefixes = j.at("CommonPrefixes");
+        parsed.commonPrefixes_.reserve(commonPrefixes.size());
+        for (const auto& cp : commonPrefixes) {
+            if (!cp.is_object()) throw std::invalid_argument("LIST prefix must be an object");
             ListedCommonPrefix listedCommonPrefix;
             if (cp.contains("Prefix")) {
                 listedCommonPrefix.setPrefix(cp.at("Prefix").get<std::string>());
             }
-            commonPrefixes_.emplace_back(listedCommonPrefix);
+            parsed.commonPrefixes_.emplace_back(std::move(listedCommonPrefix));
         }
     }
     if (j.contains("Contents")) {
-        nlohmann::json contents = j.at("Contents");
-        for (auto& ct : contents) {
-            contents_.push_back(parseListedObjectV2(ct));
+        const auto& contents = j.at("Contents");
+        parsed.contents_.reserve(contents.size());
+        for (const auto& ct : contents) {
+            if (!ct.is_object()) throw std::invalid_argument("LIST item must be an object");
+            parsed.contents_.push_back(parseListedObjectV2(ct));
         }
     }
+    *this = std::move(parsed);
 }

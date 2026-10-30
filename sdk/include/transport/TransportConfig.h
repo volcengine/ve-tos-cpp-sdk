@@ -121,7 +121,7 @@ class TransportConfig {
     bool connection_reuse_ = true;
     bool detail_log_ = true;
     int detail_log_interval_s_ = 60;
-    int curlMultiWaitTimeoutMs_ = 10;
+    int curlMultiWaitTimeoutMs_ = 1000;
     AsyncTransportMode asyncTransportMode_ = AsyncTransportMode::Isolated;
 };
 }  // namespace VolcengineTos

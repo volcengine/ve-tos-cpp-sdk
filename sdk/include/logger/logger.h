@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/LockFreeQueue.h"
+#include "utils/ConcurrentQueue.h"
 
 #include <string>
 #include <thread>
@@ -9,6 +9,7 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <memory>
 
 namespace VolcengineTos {
 
@@ -35,8 +36,23 @@ public:
     // 设置日志文件路径
     void setLogFile(const std::string& file_path);
 
-    // 设置最大队列长度（超过则忙等等待）
+    // Saturation drops messages instead of blocking a network worker. Zero disables enqueue.
     void setMaxQueueSize(size_t max_size);
+    bool enabled(AsyncLogLevel level) const noexcept {
+        return running_.load(std::memory_order_relaxed) &&
+               level >= current_level_.load(std::memory_order_relaxed);
+    }
+    uint64_t droppedMessages() const noexcept { return dropped_messages_.load(std::memory_order_relaxed); }
+    template <typename MakeMessage>
+    void debugLazy(MakeMessage make_message) noexcept {
+        if (!enabled(DEBUG)) return;
+        try { make_message(*this); } catch (...) { ++dropped_messages_; }
+    }
+    template <typename MakeMessage>
+    void infoLazy(MakeMessage make_message) noexcept {
+        if (!enabled(INFO)) return;
+        try { make_message(*this); } catch (...) { ++dropped_messages_; }
+    }
 
     // 分片相关接口
     void setLogRollType(LogRollType type);
@@ -82,39 +98,31 @@ private:
 
     // 格式化日志内容（核心入队逻辑）
     template <typename... Args>
-    void log(AsyncLogLevel level, Args&&... args) {
-        if (level < current_level_) {
-            return;  // 低于当前日志级别，直接过滤
-        }
-
-        // 1. 格式化日志内容
-        std::stringstream ss;
-        appendLogArgs(ss, std::forward<Args>(args)...);
-
+    void log(AsyncLogLevel level, Args&&... args) noexcept {
+        if (!enabled(level)) return;
         try {
-            // 2. 构造日志消息（动态分配，通过无锁队列传递指针）
-            auto* msg = new LogMessage();
+            const size_t limit = max_queue_size_.load(std::memory_order_relaxed);
+            if (log_queue_.unsafeSize() >= limit) {
+                ++dropped_messages_;
+                return;
+            }
+            std::stringstream ss;
+            appendLogArgs(ss, std::forward<Args>(args)...);
+            std::unique_ptr<LogMessage> msg(new LogMessage());
             msg->level = level;
             msg->time = getCurrentTimeWithMs();
             msg->thread_id = std::this_thread::get_id();
             msg->content = ss.str();
 
-            // 3. 无锁入队（队列满则忙等，yield减少CPU占用）
-            while (log_queue_.unsafeSize() >= max_queue_size_) {
-                std::this_thread::yield();  // 让出CPU，避免忙等消耗
-                if (!running_) {            // 线程退出信号，释放内存
-                    delete msg;
-                    return;
-                }
+            if (!log_queue_.tryPush(msg.get(), limit)) {
+                ++dropped_messages_;
+                return;
             }
-            log_queue_.push(msg);
+            msg.release();
             queue_cv_.notify_one();  // 唤醒后台工作线程
-        } catch (const std::exception& e) {
-            // 捕获标准异常，打印详细错误信息
-            std::cout << "unknown log error:" << e.what() << std::endl;
         } catch (...) {
-            // 捕获所有非标准异常，防止程序崩溃
-            std::cout << "unknown log error." << std::endl;
+            // No allocation, recursive logging, or blocking output on failure.
+            ++dropped_messages_;
         }
     }
 
@@ -141,13 +149,14 @@ private:
     bool checkAndRollFile();
 
     // 成员变量
-    AsyncLogLevel current_level_;          // 当前日志级别
+    std::atomic<AsyncLogLevel> current_level_;
     mutable std::mutex mutex_;             // 保护日志级别/队列配置的修改
-    LockFreeQueue<LogMessage> log_queue_;  // 核心：无锁日志队列
+    ConcurrentQueue<LogMessage> log_queue_;
+    std::atomic<uint64_t> dropped_messages_{0};
     std::condition_variable queue_cv_;     // 唤醒工作线程（避免空轮询）
     std::atomic<bool> running_;            // 工作线程运行标志
     std::thread worker_thread_;            // 后台日志处理线程
-    size_t max_queue_size_;                // 队列最大长度（默认10000）
+    std::atomic<size_t> max_queue_size_;
 
     // 文件输出相关
     std::string log_file_path_;      // 日志文件路径

@@ -3,6 +3,7 @@
 //
 #pragma once
 #include "TosClient.h"
+#include "AsyncEngine.h"
 #include "auth/StaticCredentials.h"
 #include "model/async/bucket/input/CreateBucketAsyncInput.h"
 #include "model/async/bucket/input/HeadBucketAsyncInput.h"
@@ -91,9 +92,18 @@ public:
     // Credentials
     TosAsyncClient(const std::string& region, const std::shared_ptr<Credentials>& cred);
     TosAsyncClient(const std::string& region, const std::shared_ptr<Credentials>& cred, const ClientConfig& config);
+    TosAsyncClient(const std::string& region, const std::shared_ptr<Credentials>& cred, const ClientConfig& config,
+                   std::shared_ptr<AsyncEngine> engine, const AsyncClientSharingOptions& sharing = {});
+    TosAsyncClient(const std::string& region, const StaticCredentials& cred, const ClientConfig& config,
+                   std::shared_ptr<AsyncEngine> engine, const AsyncClientSharingOptions& sharing = {});
 
     ~TosAsyncClient();
     void close() const;
+    // Shared engine: stop this client's admission and request cancellation
+    // without waiting; subsequently call close() on the control plane to drain.
+    // Isolated mode: falls back to blocking close/join. Call only from a control
+    // thread, never from that client's IO callback.
+    void beginClose() const;
 
     void getObjectAsync(const GetObjectAsyncInput& input, const OnDataReceiveWithEvent& on_data_receive,
                         const std::function<void(Outcome<TosError, GetObjectAsyncOutput>&)>& on_request_done) const;

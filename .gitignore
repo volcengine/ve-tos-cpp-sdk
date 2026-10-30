@@ -1,7 +1,10 @@
 .vscode
 build
+build-contract*/
+build-shared-*/
 cmake-build-debug*/
 .idea
 .DS_Store
 mylogfile_log
 test/src/TestConfig.h
+/build-review-release/

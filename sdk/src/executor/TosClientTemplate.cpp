@@ -12,12 +12,10 @@ bool findInCanRetryCurlErr(int curlErrCode) {
     switch (curlErrCode) {
         case (7):   // CURLE_COULDNT_CONNECT
         case (18):  // CURLE_PARTIAL_FILE
-        case (23):  // CURLE_WRITE_ERROR
         case (28):  // CURLE_OPERATION_TIMEDOUT
         case (52):  // CURLE_GOT_NOTHING
         case (55):  // CURLE_SEND_ERROR
         case (56):  // CURLE_RECV_ERROR
-        case (65):  // CURLE_SEND_FAIL_REWIND
             return true;
         default:
             return false;
@@ -46,8 +44,15 @@ bool findInCanRetryMethods(const std::string& method) {
     return false;
 }
 
-bool checkShouldRetry(const std::string& funcName, const int resCode, const int curlErrCode, const int flowBytes) {
+bool checkShouldRetry(const std::string& funcName, const int resCode, const int curlErrCode, const int64_t flowBytes) {
     const bool curlErrShouldRetry = (curlErrCode != 0) && findInCanRetryCurlErr(curlErrCode);
+
+    // Local sink/source/setup failures are terminal, even if HTTP headers
+    // already reported 429/503. A consumer can mutate its sink and then throw
+    // before returning a byte count: flowBytes == 0 does not prove replay is
+    // safe. WRITE_ERROR, READ_ERROR, ABORTED_BY_CALLBACK and rewind failures
+    // must not be treated as transient network failures.
+    if (curlErrCode != 0 && !curlErrShouldRetry) return false;
 
     if (resCode != 429 && resCode < 500 && !curlErrShouldRetry) {
         // 三项不满足任何，不重试
@@ -60,8 +65,10 @@ bool checkShouldRetry(const std::string& funcName, const int resCode, const int 
     }
 
     // 裸下载返回了数据不重试
-    if (funcName == "getObjectAsync" && flowBytes > 0) {
-        return false;
+    if (funcName == "getObject" || funcName == "getObjectAsync") {
+        // Native builder uses getObject, legacy callers may use getObjectAsync.
+        // Never replay a stream once any bytes have reached its consumer.
+        return flowBytes == 0;
     }
 
     // 其他情况下看重试列表是否能重试
