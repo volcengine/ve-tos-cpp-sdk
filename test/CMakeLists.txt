@@ -56,6 +56,27 @@ target_link_libraries(sync-error-propagation-test PRIVATE gtest_main
 add_test(NAME sync-error-propagation COMMAND sync-error-propagation-test)
 set_tests_properties(sync-error-propagation PROPERTIES TIMEOUT 90 LABELS "sync;regression")
 
+add_executable(checkpoint-regression-test CheckpointRegressionTest.cc
+        src/Others/UploadFileCheckpointV2Test.cc src/Others/LegacyCheckpointTest.cc)
+target_include_directories(checkpoint-regression-test PRIVATE
+        ${CMAKE_SOURCE_DIR}/sdk/include ${CMAKE_SOURCE_DIR}/sdk/src
+        ${CMAKE_SOURCE_DIR}/sdk/src/external/spdlog
+        ${CLIENT_SSL_INCLUDE_DIRS} ${CLIENT_CURL_INCLUDE_DIRS})
+target_link_libraries(checkpoint-regression-test PRIVATE gtest_main
+        ve-tos-cpp-sdk-lib ${CLIENT_SSL_LIBS} ${CLIENT_CURL_LIBS})
+add_test(NAME checkpoint-regression COMMAND checkpoint-regression-test)
+set_tests_properties(checkpoint-regression PROPERTIES TIMEOUT 30 LABELS "sync;regression;checkpoint")
+
+add_executable(http-timing-log-test HttpTimingLogTest.cc)
+target_include_directories(http-timing-log-test PRIVATE
+        ${CMAKE_SOURCE_DIR}/sdk/include ${CMAKE_SOURCE_DIR}/sdk/src
+        ${CMAKE_SOURCE_DIR}/sdk/src/external/spdlog
+        ${CLIENT_SSL_INCLUDE_DIRS} ${CLIENT_CURL_INCLUDE_DIRS})
+target_link_libraries(http-timing-log-test PRIVATE gtest_main
+        ve-tos-cpp-sdk-lib ${CLIENT_SSL_LIBS} ${CLIENT_CURL_LIBS})
+add_test(NAME http-timing-log COMMAND http-timing-log-test)
+set_tests_properties(http-timing-log PROPERTIES TIMEOUT 30 LABELS "sync;regression;logging")
+
 add_executable(tos-response-header-test TosResponseHeaderTest.cc)
 target_include_directories(tos-response-header-test PRIVATE ${CMAKE_SOURCE_DIR}/sdk/include)
 add_test(NAME tos-response-header COMMAND tos-response-header-test)

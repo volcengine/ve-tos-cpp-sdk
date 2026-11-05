@@ -1,5 +1,6 @@
 #include "model/object/ResumableCopyCheckpoint.h"
 #include "../src/external/json/json.hpp"
+#include "utils/CheckpointJson.h"
 
 #include <cstdio>
 #include <exception>
@@ -16,7 +17,7 @@ void VolcengineTos::ResumableCopyCheckpoint::load(const std::string& checkpointF
         return;
     }
     try {
-        auto j = nlohmann::json::parse(str);
+        auto j = CheckpointJson::parse(str);
         if (j.contains("Bucket"))
             j.at("Bucket").get_to(bucket_);
         if (j.contains("Key"))
@@ -27,20 +28,32 @@ void VolcengineTos::ResumableCopyCheckpoint::load(const std::string& checkpointF
             j.at("UploadId").get_to(uploadID_);
         if (j.contains("CopySourceIfMatch"))
             j.at("CopySourceIfMatch").get_to(copySourceIfMatch_);
+        else if (j.contains("IfMatch"))
+            j.at("IfMatch").get_to(copySourceIfMatch_);
         if (j.contains("CopySourceIfModifiedSince"))
             j.at("CopySourceIfModifiedSince").get_to(copySourceIfModifiedSince_);
+        else if (j.contains("IfModifiedSince"))
+            j.at("IfModifiedSince").get_to(copySourceIfModifiedSince_);
         if (j.contains("CopySourceIfNoneMatch"))
             j.at("CopySourceIfNoneMatch").get_to(copySourceIfNoneMatch_);
+        else if (j.contains("IfNoneMatch"))
+            j.at("IfNoneMatch").get_to(copySourceIfNoneMatch_);
         if (j.contains("CopySourceIfUnmodifiedSince"))
             j.at("CopySourceIfUnmodifiedSince").get_to(copySourceIfUnmodifiedSince_);
+        else if (j.contains("IfUnmodifiedSince"))
+            j.at("IfUnmodifiedSince").get_to(copySourceIfUnmodifiedSince_);
         if (j.contains("CopySourceSSECAlgorithm"))
             j.at("CopySourceSSECAlgorithm").get_to(copySourceSsecAlgorithm_);
         if (j.contains("CopySourceSSECKeyMD5"))
             j.at("CopySourceSSECKeyMD5").get_to(copySourceSsecKeyMd5_);
         if (j.contains("SSECAlgorithm"))
             j.at("SSECAlgorithm").get_to(ssecAlgorithm_);
+        else if (j.contains("SSECustomerAlgorithm"))
+            j.at("SSECustomerAlgorithm").get_to(ssecAlgorithm_);
         if (j.contains("SSECKeyMD5"))
             j.at("SSECKeyMD5").get_to(ssecKeyMd5_);
+        else if (j.contains("SSECustomerMD5"))
+            j.at("SSECustomerMD5").get_to(ssecKeyMd5_);
         if (j.contains("EncodingType"))
             j.at("EncodingType").get_to(encodingType_);
 
@@ -81,7 +94,8 @@ void VolcengineTos::ResumableCopyCheckpoint::dump(const std::string& checkpointF
         jParts.emplace_back(part.dump());
     }
     j["PartsInfo"] = jParts;
+    const auto content = CheckpointJson::dump(j);
     std::ofstream ofs(checkpointFilePath_, std::ios::out | std::ios::trunc);
-    ofs << j.dump();
+    ofs << content;
     ofs.close();
 }

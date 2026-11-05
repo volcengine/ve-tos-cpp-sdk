@@ -1,5 +1,6 @@
 #include "model/object/ResumableCopyPartInfo.h"
 #include "../src/external/json/json.hpp"
+#include "utils/CheckpointJson.h"
 
 std::string VolcengineTos::ResumableCopyPartInfo::dump() {
     nlohmann::json j;
@@ -8,10 +9,10 @@ std::string VolcengineTos::ResumableCopyPartInfo::dump() {
     j["CopySourceRangeEnd"] = copySourceRangeEnd_;
     j["ETag"] = eTag_;
     j["IsCompleted"] = isCompleted_;
-    return j.dump();
+    return CheckpointJson::dump(j);
 }
 void VolcengineTos::ResumableCopyPartInfo::load(const std::string& info) {
-    auto j = nlohmann::json::parse(info);
+    auto j = CheckpointJson::parse(info);
     if (j.contains("PartNum"))
         j.at("PartNum").get_to(partNum_);
     if (j.contains("CopySourceRangeStart"))

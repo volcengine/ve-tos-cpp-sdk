@@ -1,6 +1,7 @@
 #include "../src/external/json/json.hpp"
 
 #include "model/object/DownloadFileObjectInfo.h"
+#include "utils/CheckpointJson.h"
 
 std::string VolcengineTos::DownloadFileObjectInfo::dump() {
     nlohmann::json j;
@@ -8,10 +9,10 @@ std::string VolcengineTos::DownloadFileObjectInfo::dump() {
     j["HashCrc64ecma"] = hashCrc64ecma_;
     j["LastModified"] = lastModified_;
     j["ObjectSize"] = objectSize_;
-    return j.dump();
+    return CheckpointJson::dump(j);
 }
 void VolcengineTos::DownloadFileObjectInfo::load(const std::string& info) {
-    auto j = nlohmann::json::parse(info);
+    auto j = CheckpointJson::parse(info);
     if (j.contains("ETag"))
         j.at("ETag").get_to(eTag_);
     if (j.contains("HashCrc64ecma"))

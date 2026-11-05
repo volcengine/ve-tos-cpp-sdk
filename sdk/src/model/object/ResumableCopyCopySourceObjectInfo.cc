@@ -1,5 +1,6 @@
 #include "model/object/ResumableCopyCopySourceObjectInfo.h"
 #include "../src/external/json/json.hpp"
+#include "utils/CheckpointJson.h"
 
 using namespace nlohmann;
 
@@ -9,10 +10,10 @@ std::string VolcengineTos::ResumableCopyCopySourceObjectInfo::dump() {
     j["HashCrc64ecma"] = hashCrc64ecma_;
     j["LastModified"] = lastModified_;
     j["ObjectSize"] = objectSize_;
-    return j.dump();
+    return VolcengineTos::CheckpointJson::dump(j);
 }
 void VolcengineTos::ResumableCopyCopySourceObjectInfo::load(const std::string& info) {
-    auto j = nlohmann::json::parse(info);
+    auto j = VolcengineTos::CheckpointJson::parse(info);
     if (j.contains("ETag"))
         j.at("ETag").get_to(eTag_);
     if (j.contains("HashCrc64ecma"))

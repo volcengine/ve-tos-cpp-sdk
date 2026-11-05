@@ -1701,6 +1701,23 @@ Outcome<TosError, int> validateInput(const std::string& bucket, const std::strin
     ret.setSuccess(true);
     return ret;
 }
+static std::string resolveCheckpointPath(const std::string& path, const std::string& generatedName) {
+    struct tos_stat info {};
+    if (tos_stat(path.c_str(), &info) != 0) {
+        if (errno != ENOENT || !FileUtils::CreateDir(path, true)) {
+            return "";
+        }
+        if (tos_stat(path.c_str(), &info) != 0) {
+            // An explicit checkpoint filename does not have to exist yet.
+            return errno == ENOENT && path.back() != TOS_PATH_DELIMITER ? path : "";
+        }
+    }
+    if (info.st_mode & S_IFDIR) {
+        return path + TOS_PATH_DELIMITER + generatedName;
+    }
+    return path;
+}
+
 std::string getCheckpointPath(const std::string& bucket, const std::string& key, const std::string& checkPointFile,
                               const std::string& uploadFilePath) {
     std::stringstream ret;
@@ -1713,23 +1730,7 @@ std::string getCheckpointPath(const std::string& bucket, const std::string& key,
         ret << uploadFilePath << "." << base64md5Path << ".upload";
         return ret.str();
     } else {
-        struct tos_stat cfs{};
-        if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
-            bool res = FileUtils::CreateDir(checkPointFile, true);
-            if (!res) {
-                // 错误处理，创建文件夹失败的场景
-                return "";
-            }
-        }
-        if (tos_stat(checkPointFile.c_str(), &cfs) == 0) {
-            if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".upload";
-                return ret.str();
-            } else {
-                ret << checkPointFile;
-                return ret.str();
-            }
-        }
+        return resolveCheckpointPath(checkPointFile, base64md5Path + ".upload");
     }
     return "";
 }
@@ -2768,23 +2769,7 @@ std::string getDownloadCheckpointPath(const std::string& bucket, const std::stri
         ret << filePath << "." << base64md5Path << ".download";
         return ret.str();
     } else {
-        struct tos_stat cfs{};
-        if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
-            bool res = FileUtils::CreateDir(checkPointFile, true);
-            if (!res) {
-                // 错误处理，创建文件夹失败的场景
-                return "";
-            }
-        }
-        if (tos_stat(checkPointFile.c_str(), &cfs) == 0) {
-            if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".download";
-                return ret.str();
-            } else {
-                ret << checkPointFile;
-                return ret.str();
-            }
-        }
+        return resolveCheckpointPath(checkPointFile, base64md5Path + ".download");
     }
     return "";
 }
@@ -3763,6 +3748,12 @@ static void setCopySourceSSECHeader(const std::string& CopySourceSSECAlgorithm, 
     rb.withHeader(HEADER_COPY_SOURCE_SSE_CUSTOMER_KEY_MD5, CopySourceSSECKeyMd5);
 }
 static void copyObjectSetOptionHeader(RequestBuilder& rb, const CopyObjectV2Input& input) {
+    rb.withHeader(http::HEADER_CONTENT_TYPE, input.getContentType());
+    rb.withHeader(http::HEADER_CACHE_CONTROL, input.getCacheControl());
+    rb.withHeader(http::HEADER_CONTENT_DISPOSITION, CryptoUtils::UrlEncodeChinese(input.getContentDisposition()));
+    rb.withHeader(http::HEADER_CONTENT_ENCODING, input.getContentEncoding());
+    rb.withHeader(http::HEADER_CONTENT_LANGUAGE, input.getContentLanguage());
+    rb.withHeader(http::HEADER_EXPIRES, TimeUtils::transTimeToGmtTime(input.getExpires()));
     rb.withHeader(HEADER_ACL, ACLTypetoString[input.getAcl()]);
     rb.withHeader(HEADER_COPY_SOURCE_IF_MATCH, input.getCopySourceIfMatch());
     rb.withHeader(HEADER_COPY_SOURCE_IF_MODIFIED_SINCE,
@@ -4798,9 +4789,18 @@ Outcome<TosError, CompleteMultipartUploadV2Output> TosClientImpl::completeMultip
             res.setSuccess(false);
             return res;
         }
-        std::string jsonParts(input.toJsonString());
-        if (jsonParts != "null") {
-            ss = std::make_shared<std::stringstream>(jsonParts);
+        try {
+            std::string jsonParts(input.toJsonString());
+            if (jsonParts != "null") {
+                ss = std::make_shared<std::stringstream>(jsonParts);
+            }
+        } catch (const std::exception& exception) {
+            TosError error;
+            error.setIsClientError(true);
+            error.setMessage(std::string("failed to serialize multipart completion parts: ") + exception.what());
+            res.setE(error);
+            res.setSuccess(false);
+            return res;
         }
     }
 
@@ -6737,23 +6737,7 @@ std::string getCheckpointPath(const ResumableCopyObjectInput& input) {
         ret << tmpPath << base64md5Path << ".copy";
         return ret.str();
     } else {
-        struct tos_stat cfs{};
-        if (tos_stat(checkPointFile.c_str(), &cfs) != 0) {
-            bool res = FileUtils::CreateDir(checkPointFile, true);
-            if (!res) {
-                // 错误处理，创建文件夹失败的场景
-                return "";
-            }
-        }
-        if (tos_stat(checkPointFile.c_str(), &cfs) == 0) {
-            if (cfs.st_mode & S_IFDIR) {
-                ret << checkPointFile << TOS_PATH_DELIMITER << base64md5Path << ".copy";
-                return ret.str();
-            } else {
-                ret << checkPointFile;
-                return ret.str();
-            }
-        }
+        return resolveCheckpointPath(checkPointFile, base64md5Path + ".copy");
     }
     return "";
 }

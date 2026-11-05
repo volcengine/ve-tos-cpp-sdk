@@ -21,6 +21,13 @@ using Clock = std::chrono::steady_clock;
 using Ms = std::chrono::milliseconds;
 using Server = tos_test::AsyncLoadHttpFixture;
 std::atomic<int> setup_fault{0};
+std::atomic<unsigned> setup_fault_hits{0};
+bool InjectSetupFault(int fault) {
+    if (setup_fault != fault)
+        return false;
+    ++setup_fault_hits;
+    return true;
+}
 std::atomic<int> global_curl_gate{0};
 std::atomic<bool> global_curl_entered{false}, global_curl_release{false};
 std::atomic<bool> global_curl_timed_out{false};
@@ -56,23 +63,23 @@ extern "C" CURLMcode __real_curl_multi_add_handle(CURLM*, CURL*);
 extern "C" int __real_eventfd(unsigned, int);
 extern "C" int __real_epoll_ctl(int, int, int, epoll_event*);
 extern "C" CURL* __wrap_curl_easy_init() {
-    return setup_fault == 1 ? nullptr : __real_curl_easy_init();
+    return InjectSetupFault(1) ? nullptr : __real_curl_easy_init();
 }
 extern "C" CURLM* __wrap_curl_multi_init() {
-    return setup_fault == 2 ? nullptr : __real_curl_multi_init();
+    return InjectSetupFault(2) ? nullptr : __real_curl_multi_init();
 }
 extern "C" CURLMcode __wrap_curl_multi_add_handle(CURLM* multi, CURL* easy) {
-    return setup_fault == 3 ? CURLM_OUT_OF_MEMORY : __real_curl_multi_add_handle(multi, easy);
+    return InjectSetupFault(3) ? CURLM_OUT_OF_MEMORY : __real_curl_multi_add_handle(multi, easy);
 }
 extern "C" int __wrap_eventfd(unsigned initial, int flags) {
-    if (setup_fault == 4) {
+    if (InjectSetupFault(4)) {
         errno = EMFILE;
         return -1;
     }
     return __real_eventfd(initial, flags);
 }
 extern "C" int __wrap_epoll_ctl(int epoll, int op, int fd, epoll_event* event) {
-    if (setup_fault == 5 && op == EPOLL_CTL_ADD && event && event->data.u64) {
+    if (op == EPOLL_CTL_ADD && event && event->data.u64 && InjectSetupFault(5)) {
         errno = ENOSPC;
         return -1;
     }
@@ -527,18 +534,34 @@ void GlobalLifetimeFailurePaths() {
 void SetupFailures() {
     Server server;
     for (int fault : {1, 2, 3, 5}) {
+        using Script = tos_test::LoopbackHttpFixture;
+        Script::Response response;
+        response.body = std::string(4096, 'x');
+        response.gate = std::make_shared<Script::Gate>();
+        response.allow_peer_disconnect = true;
+        // A fast loopback reply can finish without registering a socket in
+        // older curl. Hold it until the setup fault has actually been tested.
+        Script blocked({{"GET", "/setup", response}});
         auto e = AsyncEngine::Create();
         AsyncHttpClient c(MakeTransportConfig(), e);
+        auto req = std::make_shared<HttpRequest>("GET");
+        req->setUrl(Url(blocked.Endpoint() + "/setup"));
+        setup_fault_hits = 0;
         setup_fault = fault;
-        auto r = Send(c, Request(server));
+        auto r = Send(c, req);
         Until([&] { return r->calls.load() != 0; });
-        CHECK(r->calls == 1 && r->code != 0);
         setup_fault = 0;
+        if (r->calls != 1 || r->code == CURLE_OK || r->code == CURLE_OPERATION_TIMEDOUT || setup_fault_hits == 0)
+            throw std::runtime_error(
+                    "setup fault=" + std::to_string(fault) + " calls=" + std::to_string(r->calls.load()) +
+                    " curl_code=" + std::to_string(r->code) + " injected=" + std::to_string(setup_fault_hits.load()));
+        response.gate->Release();
         Drained(e);
         Send(c, Request(server))->Wait();
         Drained(e);
         e->close();
     }
+    setup_fault_hits = 0;
     setup_fault = 4;
     bool threw = false;
     try {
@@ -547,7 +570,7 @@ void SetupFailures() {
         threw = true;
     }
     setup_fault = 0;
-    CHECK(threw);
+    CHECK(threw && setup_fault_hits > 0);
     auto e = AsyncEngine::Create();
     {
         AsyncHttpClient c(MakeTransportConfig(), e);

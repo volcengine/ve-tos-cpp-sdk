@@ -1,5 +1,6 @@
 #include "model/object/DownloadFileCheckpoint.h"
 #include "../src/external/json/json.hpp"
+#include "utils/CheckpointJson.h"
 
 #include <cstdio>
 #include <exception>
@@ -14,7 +15,7 @@ void VolcengineTos::DownloadFileCheckpoint::load(const std::string& checkpointFi
         return;
     }
     try {
-        auto j = nlohmann::json::parse(str);
+        auto j = CheckpointJson::parse(str);
         if (j.contains("Bucket"))
             j.at("Bucket").get_to(bucket_);
         if (j.contains("Key"))
@@ -33,6 +34,8 @@ void VolcengineTos::DownloadFileCheckpoint::load(const std::string& checkpointFi
             j.at("IfUnmodifiedSince").get_to(ifUnmodifiedSince_);
         if (j.contains("SSEAlgorithm"))
             j.at("SSEAlgorithm").get_to(sseAlgorithm_);
+        else if (j.contains("SSECustomerAlgorithm"))
+            j.at("SSECustomerAlgorithm").get_to(sseAlgorithm_);
         if (j.contains("SSECustomerMD5"))
             j.at("SSECustomerMD5").get_to(sseKeyMd5_);
         if (j.contains("ObjectInfo")) {
@@ -74,7 +77,8 @@ void VolcengineTos::DownloadFileCheckpoint::dump(const std::string& checkpointFi
         jParts.emplace_back(part.dump());
     }
     j["PartsInfo"] = jParts;
+    const auto content = CheckpointJson::dump(j);
     std::ofstream ofs(checkpointFilePath_, std::ios::out | std::ios::trunc);
-    ofs << j.dump();
+    ofs << content;
     ofs.close();
 }

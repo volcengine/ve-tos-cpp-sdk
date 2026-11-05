@@ -983,12 +983,16 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
     double speed = 0;
     bool isHighLatencyReq = false;
     char* primaryIp = nullptr;
+    long localPort = -1;
     curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &nameLookUp);
     curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connectTime);
     curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &tlsConnect);
     curl_easy_getinfo(curl, CURLINFO_PRETRANSFER_TIME, &startTrans);
     curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &totalTime);
     curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &primaryIp);
+    if (curl_easy_getinfo(curl, CURLINFO_LOCAL_PORT, &localPort) != CURLE_OK || localPort <= 0) {
+        localPort = -1;
+    }
     if (request->method() == http::MethodPut || request->method() == http::MethodPost) {
         curl_easy_getinfo(curl, CURLINFO_SPEED_UPLOAD, &speed);
     } else if (request->method() == http::MethodGet) {
@@ -1007,20 +1011,20 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
             logger->warn(
                 "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, "
                 "TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
-                "time:{} ms, Selected IP:{}, Primary IP:{}",
+                "time:{} ms, Selected IP:{}, Primary IP:{}, Local Port:{}",
                 request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
                 (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
                 (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000), resolveBinding.selectedIp,
-                primaryIp == nullptr ? "" : primaryIp);
+                primaryIp == nullptr ? "" : primaryIp, localPort);
         } else {
             logger->debug(
                 "Method:{}, Host:{}, request uri:{}, DNS resolution time:{} ms, TCP establish connection time:{} ms, "
                 "TLS handshake time:{} ms, start transfer time:{} ms, Data sending time:{} ms, Total HTTP request "
-                "time:{} ms, Selected IP:{}, Primary IP:{}",
+                "time:{} ms, Selected IP:{}, Primary IP:{}, Local Port:{}",
                 request->method(), request->url().host(), request->url().path(), (long)(nameLookUp * 1000),
                 (long)(connectTime * 1000), (long)(tlsConnect * 1000), (long)(startTrans * 1000),
                 (long)((totalTime - startTrans) * 1000), (long)(totalTime * 1000), resolveBinding.selectedIp,
-                primaryIp == nullptr ? "" : primaryIp);
+                primaryIp == nullptr ? "" : primaryIp, localPort);
         }
     } else if (isHighLatencyReq) {
         std::ostringstream ss;
@@ -1034,7 +1038,8 @@ std::shared_ptr<HttpResponse> HttpClient::doRequest(const std::shared_ptr<HttpRe
         ss << "Data sending time:" << (long)((totalTime - startTrans) * 1000) << " ms, ";
         ss << "Total HTTP request time:" << (long)(totalTime * 1000) << " ms, ";
         ss << "Selected IP:" << resolveBinding.selectedIp << ", ";
-        ss << "Primary IP:" << (primaryIp == nullptr ? "" : primaryIp);
+        ss << "Primary IP:" << (primaryIp == nullptr ? "" : primaryIp) << ", ";
+        ss << "Local Port:" << localPort;
         std::cout << ss.str() << std::endl;
     }
 

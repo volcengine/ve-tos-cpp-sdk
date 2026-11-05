@@ -1,9 +1,10 @@
 #include "../src/external/json/json.hpp"
 #include "model/object/DownloadFileFileInfo.h"
 #include "utils/BaseUtils.h"
+#include "utils/CheckpointJson.h"
 
 void VolcengineTos::DownloadFileFileInfo::load(const std::string& info) {
-    auto j = nlohmann::json::parse(info);
+    auto j = CheckpointJson::parse(info);
     if (j.contains("FilePath"))
         j.at("FilePath").get_to(filePath_);
     if (j.contains("TempFilePath"))
@@ -13,5 +14,5 @@ std::string VolcengineTos::DownloadFileFileInfo::dump() {
     nlohmann::json j;
     j["FilePath"] = FileUtils::stringToUTF8(filePath_);
     j["TempFilePath"] = FileUtils::stringToUTF8(tempFilePath_);
-    return j.dump();
+    return CheckpointJson::dump(j);
 }

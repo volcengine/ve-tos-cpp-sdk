@@ -2,6 +2,7 @@
 
 #include "model/object/UploadFileCheckpointV2.h"
 #include "utils/BaseUtils.h"
+#include "utils/CheckpointJson.h"
 
 #include <cstdio>
 #include <exception>
@@ -108,7 +109,7 @@ void VolcengineTos::UploadFileCheckpointV2::dump(std::string checkpointFilePath)
         jParts.emplace_back(part.dump());
     }
     j["PartsInfo"] = jParts;
-    writeCheckpointFile(checkpointFilePath, j.dump());
+    writeCheckpointFile(checkpointFilePath, CheckpointJson::dump(j));
 }
 void VolcengineTos::UploadFileCheckpointV2::load(std::string checkpointFilePath) {
     if (checkpointFilePath.empty()) {
@@ -128,7 +129,7 @@ void VolcengineTos::UploadFileCheckpointV2::load(std::string checkpointFilePath)
     }
 
     try {
-        auto j = nlohmann::json::parse(str);
+        auto j = CheckpointJson::parse(str);
         UploadFileCheckpointV2 checkpoint;
         if (j.contains("Bucket"))
             j.at("Bucket").get_to(checkpoint.bucket_);

@@ -1,9 +1,10 @@
 #include "../src/external/json/json.hpp"
 
 #include "model/object/UploadFilePartInfoV2.h"
+#include "utils/CheckpointJson.h"
 
 void VolcengineTos::UploadFilePartInfoV2::load(const std::string& info) {
-    auto j = nlohmann::json::parse(info);
+    auto j = CheckpointJson::parse(info);
     if (j.contains("PartNum"))
         j.at("PartNum").get_to(partNum_);
     if (j.contains("PartSize"))
@@ -25,5 +26,5 @@ std::string VolcengineTos::UploadFilePartInfoV2::dump() {
     j["ETag"] = eTag_;
     j["HashCrc64ecma"] = hashCrc64Result_;
     j["IsCompleted"] = isCompleted_;
-    return j.dump();
+    return CheckpointJson::dump(j);
 }

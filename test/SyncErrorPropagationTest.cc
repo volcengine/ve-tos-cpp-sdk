@@ -23,6 +23,7 @@
 #include "TosClientImpl.h"
 #include "TosClientV2.h"
 #include "external/json/json.hpp"
+#include "model/object/UploadFileCheckpointV2.h"
 
 namespace VolcengineTos {
 class TosClientImplTestPeer {
@@ -1045,6 +1046,108 @@ TEST_F(SyncErrorPropagationTest, ConcurrentFailuresKeepOneCompleteErrorAcrossUpl
         EXPECT_EQ(409, error.getRequestInfo().getStatusCode());
         EXPECT_FALSE(error.getRequestUrl().empty());
     }
+}
+
+TEST_F(SyncErrorPropagationTest, CopyObjectForwardsReplacementMetadata) {
+    int calls = 0;
+    transport->handler = [&](const std::shared_ptr<TosRequest>& request) {
+        ++calls;
+        const auto header = [&](const std::string& name) {
+            return MapUtils::findValueByKeyIgnoreCase(request->getHeaders(), name);
+        };
+        EXPECT_EQ("REPLACE", header(HEADER_METADATA_DIRECTIVE));
+        EXPECT_EQ("application/x-sdk-copy-test", header(http::HEADER_CONTENT_TYPE));
+        EXPECT_EQ("no-cache", header(http::HEADER_CACHE_CONTROL));
+        EXPECT_EQ("gzip", header(http::HEADER_CONTENT_ENCODING));
+        EXPECT_EQ("zh-CN", header(http::HEADER_CONTENT_LANGUAGE));
+        EXPECT_EQ(CryptoUtils::UrlEncodeChinese("attachment; filename=report.txt"),
+                  header(http::HEADER_CONTENT_DISPOSITION));
+        EXPECT_EQ(TimeUtils::transTimeToGmtTime(2000000000), header(http::HEADER_EXPIRES));
+        return response(200, "{\"ETag\":\"copied-etag\",\"LastModified\":\"2026-01-01T00:00:00.000Z\"}");
+    };
+    CopyObjectV2Input input("test-bucket", "target.txt", "source-bucket", "source");
+    input.setMetadataDirective(MetadataDirectiveType::REPLACE);
+    input.setContentType("application/x-sdk-copy-test");
+    input.setCacheControl("no-cache");
+    input.setContentEncoding("gzip");
+    input.setContentLanguage("zh-CN");
+    input.setContentDisposition("attachment; filename=report.txt");
+    input.setExpires(2000000000);
+    EXPECT_TRUE(client->copyObject(input).isSuccess());
+    EXPECT_EQ(1, calls);
+}
+
+TEST_F(SyncErrorPropagationTest, CopyObjectDoesNotSynthesizeReplacementMetadata) {
+    int calls = 0;
+    transport->handler = [&](const std::shared_ptr<TosRequest>& request) {
+        ++calls;
+        EXPECT_EQ("COPY", MapUtils::findValueByKeyIgnoreCase(request->getHeaders(), HEADER_METADATA_DIRECTIVE));
+        for (const auto* name :
+             {http::HEADER_CONTENT_TYPE, http::HEADER_CACHE_CONTROL, http::HEADER_CONTENT_ENCODING,
+              http::HEADER_CONTENT_LANGUAGE, http::HEADER_CONTENT_DISPOSITION, http::HEADER_EXPIRES}) {
+            EXPECT_TRUE(MapUtils::findValueByKeyIgnoreCase(request->getHeaders(), name).empty()) << name;
+        }
+        return response(200, "{\"ETag\":\"copied-etag\",\"LastModified\":\"2026-01-01T00:00:00.000Z\"}");
+    };
+    CopyObjectV2Input input("test-bucket", "target.txt", "source-bucket", "source");
+    input.setMetadataDirective(MetadataDirectiveType::COPY);
+    EXPECT_TRUE(client->copyObject(input).isSuccess());
+    EXPECT_EQ(1, calls);
+}
+
+TEST_F(SyncErrorPropagationTest, InvalidCompletionETagReturnsLocalErrorWithoutSendingChangedBytes) {
+    int calls = 0;
+    transport->handler = [&](const std::shared_ptr<TosRequest>&) {
+        ++calls;
+        return response(200);
+    };
+    CompleteMultipartUploadV2Input input("test-bucket", "key", "upload-id", {UploadedPartV2(1, "etag-\xc1")});
+    ASSERT_NO_THROW({
+        const auto result = client->completeMultipartUpload(input);
+        EXPECT_FALSE(result.isSuccess());
+        EXPECT_TRUE(result.error().isClientError());
+        EXPECT_NE(std::string::npos, result.error().getMessage().find("failed to serialize multipart completion"));
+    });
+    EXPECT_EQ(0, calls);
+}
+
+TEST_F(SyncErrorPropagationTest, InvalidUploadETagPreservesCheckpointAndReturnsErrorOnResume) {
+    const std::string etag = "etag-\xc1";
+    const auto fallback = transport->handler;
+    int creates = 0;
+    transport->handler = [&](const std::shared_ptr<TosRequest>& request) {
+        if (operation(request) == "createMultipartUpload") {
+            ++creates;
+        }
+        auto result = fallback(request);
+        if (operation(request) == "uploadPart") {
+            auto headers = result->getHeaders();
+            headers["ETag"] = etag;
+            result->setHeaders(headers);
+        }
+        return result;
+    };
+    auto input = uploadInput();
+    input.setEnableCheckpoint(true);
+    input.setCheckpointFile(path + ".upload");
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        ASSERT_NO_THROW({
+            const auto result = client->uploadFile(input);
+            EXPECT_FALSE(result.isSuccess());
+            EXPECT_TRUE(result.error().isClientError());
+            EXPECT_NE(std::string::npos, result.error().getMessage().find("failed to serialize multipart completion"));
+        });
+        ASSERT_TRUE(std::ifstream(path + ".upload").good());
+        UploadFileCheckpointV2 checkpoint;
+        checkpoint.load(path + ".upload");
+        EXPECT_EQ("upload-id", checkpoint.getUploadId());
+        ASSERT_EQ(1u, checkpoint.getPartsInfo().size());
+        EXPECT_EQ(etag, checkpoint.getPartsInfo()[0].getETag());
+        EXPECT_TRUE(checkpoint.getPartsInfo()[0].isCompleted());
+    }
+    EXPECT_EQ(1, creates);
+    EXPECT_EQ(1, partCalls.load());
+    EXPECT_EQ(0, abortCalls.load());
 }
 
 #ifndef _WIN32
